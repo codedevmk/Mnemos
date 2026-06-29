@@ -6,7 +6,8 @@ mnemos_fetch_sdl3()
 # pick which systems it supports, and so adapters can be unit-tested in
 # isolation. Cross-system primitives (video_region, market) live in
 # `chips/shared/region.hpp`; system-specific cart-header parsers live in each
-# manifest. Currently wired: Genesis, SMS, C64, Sega CD, 32X, M72, Taito F2,
+# manifest. Currently wired: Genesis, SMS, C64, Sega CD, 32X, M10, M14, M15, M27, M47, M52, M57, M58,
+# M62, M63, travrusa, Red Alert, M72, M75, M78, M81, M82, M84, M85, M90, M92, M102, M107, M119, Taito F2,
 # Taito G-NET, CPS1, CPS2, Spectrum, NES, MSX, MSX2, Amiga 500.
 add_subdirectory(adapters/common)
 add_subdirectory(adapters/genesis)
@@ -14,7 +15,30 @@ add_subdirectory(adapters/sms)
 add_subdirectory(adapters/c64)
 add_subdirectory(adapters/segacd)
 add_subdirectory(adapters/sega32x)
+add_subdirectory(adapters/irem_m10)
+add_subdirectory(adapters/irem_m14)
+add_subdirectory(adapters/irem_m15)
+add_subdirectory(adapters/irem_m27)
+add_subdirectory(adapters/irem_m47)
+add_subdirectory(adapters/irem_m52)
+add_subdirectory(adapters/irem_m57)
+add_subdirectory(adapters/irem_m58)
+add_subdirectory(adapters/irem_m62)
+add_subdirectory(adapters/irem_m63)
+add_subdirectory(adapters/irem_travrusa)
+add_subdirectory(adapters/irem_redalert)
 add_subdirectory(adapters/irem_m72)
+add_subdirectory(adapters/irem_m75)
+add_subdirectory(adapters/irem_m78)
+add_subdirectory(adapters/irem_m81)
+add_subdirectory(adapters/irem_m82)
+add_subdirectory(adapters/irem_m84)
+add_subdirectory(adapters/irem_m85)
+add_subdirectory(adapters/irem_m90)
+add_subdirectory(adapters/irem_m92)
+add_subdirectory(adapters/irem_m102)
+add_subdirectory(adapters/irem_m107)
+add_subdirectory(adapters/irem_m119)
 add_subdirectory(adapters/taito_f2)
 add_subdirectory(adapters/taito_gnet)
 add_subdirectory(adapters/capcom_cps1)
@@ -58,7 +82,30 @@ target_link_libraries(
         mnemos::apps::player::c64_adapter
         mnemos::apps::player::segacd_adapter
         mnemos::apps::player::sega32x_adapter
+        mnemos::apps::player::irem_m10_adapter
+        mnemos::apps::player::irem_m14_adapter
+        mnemos::apps::player::irem_m15_adapter
+        mnemos::apps::player::irem_m27_adapter
+        mnemos::apps::player::irem_m47_adapter
+        mnemos::apps::player::irem_m52_adapter
+        mnemos::apps::player::irem_m57_adapter
+        mnemos::apps::player::irem_m58_adapter
+        mnemos::apps::player::irem_m62_adapter
+        mnemos::apps::player::irem_m63_adapter
+        mnemos::apps::player::irem_travrusa_adapter
+        mnemos::apps::player::irem_redalert_adapter
         mnemos::apps::player::irem_m72_adapter
+        mnemos::apps::player::irem_m75_adapter
+        mnemos::apps::player::irem_m78_adapter
+        mnemos::apps::player::irem_m81_adapter
+        mnemos::apps::player::irem_m82_adapter
+        mnemos::apps::player::irem_m84_adapter
+        mnemos::apps::player::irem_m85_adapter
+        mnemos::apps::player::irem_m90_adapter
+        mnemos::apps::player::irem_m92_adapter
+        mnemos::apps::player::irem_m102_adapter
+        mnemos::apps::player::irem_m107_adapter
+        mnemos::apps::player::irem_m119_adapter
         mnemos::apps::player::taito_f2_adapter
         mnemos::apps::player::taito_gnet_adapter
         mnemos::apps::player::capcom_cps1_adapter
@@ -129,7 +176,30 @@ if(BUILD_TESTING)
             mnemos::apps::player::c64_adapter
             mnemos::apps::player::segacd_adapter
             mnemos::apps::player::sega32x_adapter
+            mnemos::apps::player::irem_m10_adapter
+            mnemos::apps::player::irem_m14_adapter
+            mnemos::apps::player::irem_m15_adapter
+            mnemos::apps::player::irem_m27_adapter
+            mnemos::apps::player::irem_m47_adapter
+            mnemos::apps::player::irem_m52_adapter
+            mnemos::apps::player::irem_m57_adapter
+            mnemos::apps::player::irem_m58_adapter
+            mnemos::apps::player::irem_m62_adapter
+            mnemos::apps::player::irem_m63_adapter
+            mnemos::apps::player::irem_travrusa_adapter
+            mnemos::apps::player::irem_redalert_adapter
             mnemos::apps::player::irem_m72_adapter
+            mnemos::apps::player::irem_m75_adapter
+            mnemos::apps::player::irem_m78_adapter
+            mnemos::apps::player::irem_m81_adapter
+            mnemos::apps::player::irem_m82_adapter
+            mnemos::apps::player::irem_m84_adapter
+            mnemos::apps::player::irem_m85_adapter
+            mnemos::apps::player::irem_m90_adapter
+            mnemos::apps::player::irem_m92_adapter
+            mnemos::apps::player::irem_m102_adapter
+            mnemos::apps::player::irem_m107_adapter
+            mnemos::apps::player::irem_m119_adapter
             mnemos::apps::player::taito_f2_adapter
             mnemos::apps::player::taito_gnet_adapter
             mnemos::apps::player::capcom_cps1_adapter

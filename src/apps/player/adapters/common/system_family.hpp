@@ -13,7 +13,30 @@ namespace mnemos::apps::player::adapters {
         c64,
         segacd,
         sega32x,
+        irem_m10,
+        irem_m14,
+        irem_m15,
+        irem_m27,
+        irem_m47,
+        irem_m52,
+        irem_m57,
+        irem_m58,
+        irem_m62,
+        irem_m63,
+        irem_travrusa,
+        irem_redalert,
         irem_m72,
+        irem_m75,
+        irem_m78,
+        irem_m81,
+        irem_m82,
+        irem_m84,
+        irem_m85,
+        irem_m90,
+        irem_m92,
+        irem_m102,
+        irem_m107,
+        irem_m119,
         taito_f2,
         taito_gnet,
         capcom_cps1,
@@ -26,11 +49,13 @@ namespace mnemos::apps::player::adapters {
     };
 
     // Map a `--system` name to its family. The accepted names are exactly the
-    // adapter-registry family ids -- genesis, sms, gg, c64, segacd, sega32x,
-    // irem_m72, taito_f2, taito_gnet, cps1, cps2, spectrum, nes, msx, msx2,
-    // amiga500 --
-    // case-insensitive. nullopt for anything else. The engine is always chosen by
-    // this name, never inferred from the ROM filename.
+    // adapter-registry family ids -- genesis, sms, gg, c64, segacd, sega32x, irem_m10,
+    // irem_m14, irem_m15, irem_m27, irem_m47, irem_m52, irem_m57, irem_m58, irem_m62,
+    // irem_m63, irem_travrusa, irem_redalert, irem_m72, irem_m75, irem_m78, irem_m81,
+    // irem_m82, irem_m84, irem_m85, irem_m90, irem_m92, irem_m102, irem_m107,
+    // irem_m119, taito_f2, taito_gnet, cps1, cps2, spectrum, nes, msx, msx2,
+    // amiga500 -- case-insensitive. nullopt for anything else. The engine is
+    // always chosen by this name, never inferred from the ROM filename.
     [[nodiscard]] std::optional<system_family> family_from_name(const std::string& name) noexcept;
 
     // The adapter-registry id for `family` ("genesis", "sms", ...).

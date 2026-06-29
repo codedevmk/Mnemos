@@ -1,0 +1,170 @@
+# Thunder Blaster (Japan) -- Irem M92-C-B clone of lethalth.
+# The local split clone carries changed program/sound ROMs and C-board PLDs;
+# shared graphics, samples, common A-board PLDs, and the second program pair
+# resolve from the sibling lethalth parent wrapper.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "thndblst"
+parent      = "lethalth"
+board       = "irem_m92"
+orientation = "vertical"
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "lt_c-h0-.ic28"
+offset = 0x000001
+stride = 2
+size   = 0x20000
+crc32  = 0xdc218a18
+
+[[region.file]]
+name   = "lt_c-l0-.ic25"
+offset = 0x000000
+stride = 2
+size   = 0x20000
+crc32  = 0xae9a3f81
+
+[[region.file]]
+name    = "lt_c-h1-.ic27"
+aliases = ["lt_d-h1-.ic24"]
+offset  = 0x040001
+stride  = 2
+size    = 0x20000
+crc32   = 0xd7dd3d48
+
+[[region.file]]
+name    = "lt_c-l1-.ic26"
+aliases = ["lt_d-l1-.ic37"]
+offset  = 0x040000
+stride  = 2
+size    = 0x20000
+crc32   = 0xb94b3bd8
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+fill = 0x00
+
+[[region.file]]
+name   = "lt_c-sh0-a.ic14"
+offset = 0x00001
+stride = 2
+size   = 0x08000
+crc32  = 0xcb76fd08
+
+[[region.file]]
+name   = "lt_c-sl0-a.ic17"
+offset = 0x00000
+stride = 2
+size   = 0x08000
+crc32  = 0xabea2071
+
+[[region]]
+name = "tiles"
+size = 0x100000
+
+[[region.file]]
+name   = "lt_c0.ic9"
+offset = 0x000000
+size   = 0x40000
+crc32  = 0xada0fd50
+
+[[region.file]]
+name   = "lt_c1.ic10"
+offset = 0x040000
+size   = 0x40000
+crc32  = 0xd2596883
+
+[[region.file]]
+name   = "lt_c2.ic11"
+offset = 0x080000
+size   = 0x40000
+crc32  = 0x2de637ef
+
+[[region.file]]
+name   = "lt_c3.ic12"
+offset = 0x0C0000
+size   = 0x40000
+crc32  = 0x9f6585cd
+
+[[region]]
+name = "sprites"
+size = 0x100000
+
+[[region.file]]
+name    = "lt_000.ic38"
+aliases = ["lt_000.ic33"]
+offset  = 0x000000
+size    = 0x40000
+crc32   = 0xbaf8863e
+
+[[region.file]]
+name    = "lt_010.ic39"
+aliases = ["lt_010.ic34"]
+offset  = 0x040000
+size    = 0x40000
+crc32   = 0x40fd50af
+
+[[region.file]]
+name    = "lt_020.ic40"
+aliases = ["lt_020.ic35"]
+offset  = 0x080000
+size    = 0x40000
+crc32   = 0xc8e970df
+
+[[region.file]]
+name    = "lt_030.ic41"
+aliases = ["lt_030.ic36"]
+offset  = 0x0C0000
+size    = 0x40000
+crc32   = 0xf5436708
+
+[[region]]
+name = "samples"
+size = 0x040000
+
+[[region.file]]
+name    = "lt_da.ic8"
+aliases = ["lt_da.ic11"]
+offset  = 0x000000
+size    = 0x40000
+crc32   = 0x357762a2
+
+[[region]]
+name = "plds"
+size = 0x000C00
+
+[[region.file]]
+name   = "m92_a-3m-.ic11"
+offset = 0x0000
+size   = 0x0117
+crc32  = 0xfc718efe
+
+[[region.file]]
+name   = "m92_a-7j-.ic41"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0x5730b25a
+
+[[region.file]]
+name   = "m92_a-9j-.ic51"
+offset = 0x0400
+size   = 0x0117
+crc32  = 0x92d477cf
+
+[[region.file]]
+name   = "m92_c-2l-.ic7"
+offset = 0x0600
+size   = 0x0117
+crc32  = 0x67a4cc04
+
+[[region.file]]
+name   = "m92_c-7h-c.ic43"
+offset = 0x0800
+size   = 0x0117
+crc32  = 0xebea28fe

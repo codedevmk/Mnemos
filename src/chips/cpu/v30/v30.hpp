@@ -40,6 +40,12 @@ namespace mnemos::chips::cpu {
     // 8086-family values), REP interruptibility, and real BRKEM mode switch.
     class v30 final : public icpu, public cpu_catch_up<v30> {
       public:
+        enum class model : std::uint8_t {
+            v30,
+            v33,
+            v35,
+        };
+
         // PSW (FLAGS) bits.
         static constexpr std::uint16_t flag_c = 0x0001U; // carry
         static constexpr std::uint16_t flag_p = 0x0004U; // parity (even)
@@ -89,6 +95,9 @@ namespace mnemos::chips::cpu {
 
         [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override;
 
+        void set_model(model cpu_model) noexcept { model_ = cpu_model; }
+        [[nodiscard]] model cpu_model() const noexcept { return model_; }
+
         // icpu: the memory address space the CPU reads/writes.
         void attach_bus(ibus& bus) noexcept override { bus_ = &bus; }
 
@@ -119,6 +128,8 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
+        model model_{model::v30};
+
         // Bridges the chip's diagnostic surface into the generic
         // `instrumentation::ichip_introspection`: a trace target (per-
         // instruction PC + cycles hook) and a register view.

@@ -36,6 +36,10 @@ namespace mnemos::manifests::common {
     // relative to the region.
     struct rom_set_file final {
         std::string name;
+        // Alternate dump names accepted for the same bytes. This keeps
+        // split-parent zips and standalone archives loadable when they carry
+        // CRC-identical dumps under board-location-specific labels.
+        std::vector<std::string> aliases;
         std::size_t offset{};                 // first destination byte
         std::size_t stride{1U};               // destination step per source unit
         std::size_t unit{1U};                 // source bytes per chunk (contiguous)
@@ -96,10 +100,18 @@ namespace mnemos::manifests::common {
     // non-cycle-accurate/HLE chip path to be visible in the manifest rather than
     // hidden in a board implementation. `profile` is optional (empty when the
     // substitution needs no profile id, e.g. CPS2 sets).
+    struct rom_set_hle_sample_trigger final {
+        std::uint8_t trigger{};
+        std::uint32_t start{};
+    };
+
     struct rom_set_hle_decl final {
         std::string chip;
         std::string profile;
         std::string rationale;
+        // Optional board-interpreted sample cursor declarations carried by the
+        // same explicit HLE profile that consumes them.
+        std::vector<rom_set_hle_sample_trigger> sample_triggers;
     };
 
     struct rom_set_decl final {
@@ -111,11 +123,11 @@ namespace mnemos::manifests::common {
         // own files first, then the parent's) -- every file is still CRC-verified
         // regardless of which zip supplied it. Absent => a standalone set.
         // Constrained to a plain set id by the loader (no path separators).
-        // NOTE: capcom_cps1 and taito_f2 consume this by threading
-        // adapter_options.rom_path and composing the fallback. Other boards parse
-        // it but ignore it, so a `parent` there would report the shared files
-        // missing. Single level only -- the parent set must be standalone, not
-        // itself a clone.
+        // NOTE: capcom_cps1, taito_f2, irem_m52, and irem_m62 consume this by
+        // composing a clone-first fallback provider from the ROM path. Other boards
+        // parse it but ignore it, so a `parent` there would report the shared files
+        // missing. Single level only -- the parent set must be standalone, not itself
+        // a clone.
         std::optional<std::string> parent;
         // Optional CPS-B board / PAL profile id: capcom_cps1 boards select their
         // hardware profile by this numeric id; absent on families that don't use it.

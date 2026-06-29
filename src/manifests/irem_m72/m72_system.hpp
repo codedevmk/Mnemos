@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bus.hpp"            // topology bus
+#include "chip.hpp"           // chips::iperipheral
 #include "dac8.hpp"           // sample-playback DAC
 #include "irem_m72_video.hpp" // tilemap video unit
 #include "mcs51.hpp"          // optional protection MCU
@@ -28,6 +29,9 @@ namespace mnemos::manifests::irem_m72 {
     // at the top of the 1 MiB "maincpu" region (a reload in the game
     // declaration) so the V30's FFFF0 reset vector lands in ROM.
     inline constexpr std::size_t main_rom_size = 0x100000U; // V30 program, full 20-bit space
+    // Whole-board save-state format. The player save-target manifest revision
+    // follows this value so stale rollback states fail before board restore.
+    inline constexpr std::uint32_t m72_system_state_version = 11U;
 
     // M72 memory map. The program ROM backs the whole space at low priority;
     // the RAM blocks overlay it at higher priority. Original M72 boards such
@@ -83,10 +87,11 @@ namespace mnemos::manifests::irem_m72 {
     // raster compare, both pulsed for one scanline.
     inline constexpr std::uint16_t port_pic_a0 = 0x40U;
     inline constexpr std::uint16_t port_pic_a1 = 0x42U;
-    // V30 <-> protection-MCU latch pair. An OUT writes the main-to-MCU latch;
-    // real MCU boards pulse INT1, while declared no-dump HLE profiles only
-    // acknowledge the board-facing command and sample trigger. An IN reads the
-    // reply latch.
+    // V30 <-> protection-MCU latch pair. On protected boards an OUT writes the
+    // main-to-MCU latch and asserts INT1 until the MCU writes its acknowledge
+    // response; declared no-dump HLE profiles only acknowledge the board-facing
+    // command and sample trigger. Unprotected boards leave the absent latch as
+    // open bus.
     inline constexpr std::uint16_t port_mcu_latch = 0xC0U;
     // Scroll registers as four little-endian words: +0/+2 = playfield A Y/X,
     // +4/+6 = playfield B Y/X.
@@ -115,6 +120,10 @@ namespace mnemos::manifests::irem_m72 {
     inline constexpr std::uint16_t z80_port_sample_addr_hi = 0x81U;
     inline constexpr std::uint16_t z80_port_dac = 0x82U;
     inline constexpr std::uint16_t z80_port_sample_read = 0x84U;
+    // MAME's reference driver documents the external sample pump/fake-NMI rate
+    // as MASTER_CLOCK / 8 / 512. The M72 board master is 32 MHz, so the
+    // scheduler divider is 4096 master cycles per sample pump tick.
+    inline constexpr std::uint32_t sample_pump_master_divider = 4096U;
 
     // The Z80's IM 0 vectors, jammed during IACK by the board's negative RST
     // buffer: the sound latch drives RST 18h, the YM2151 drives RST 28h; the
@@ -123,6 +132,11 @@ namespace mnemos::manifests::irem_m72 {
     inline constexpr std::uint8_t z80_rst_latch = 0xDFU; // RST 18h
     inline constexpr std::uint8_t z80_rst_ym = 0xEFU;    // RST 28h
 
+    struct no_dump_hle_sample_trigger final {
+        std::uint8_t trigger{};
+        std::uint32_t start{};
+    };
+
     // Per-game board wiring the ROM-set declaration's name selects: the work
     // RAM base differs between M72 wiring variants, and each game carries its
     // factory DIP defaults.
@@ -130,6 +144,27 @@ namespace mnemos::manifests::irem_m72 {
         std::uint32_t work_ram_base{0xA0000U};
         std::uint16_t dip_default{0xFFFFU};
         std::optional<std::string> protection_hle_profile{};
+        std::vector<no_dump_hle_sample_trigger> protection_hle_sample_triggers{};
+    };
+
+    struct m72_system;
+
+    class m72_sample_pump final : public chips::iperipheral {
+      public:
+        void attach(m72_system& system) noexcept { system_ = &system; }
+
+        [[nodiscard]] chips::chip_metadata metadata() const noexcept override;
+        void tick(std::uint64_t cycles) override;
+        void reset(chips::reset_kind /*kind*/) override {}
+        void save_state(chips::state_writer& /*writer*/) const override {}
+        void load_state(chips::state_reader& /*reader*/) override {}
+        [[nodiscard]] instrumentation::ichip_introspection& introspection() noexcept override {
+            return introspection_;
+        }
+
+      private:
+        m72_system* system_{};
+        instrumentation::ichip_introspection introspection_{};
     };
 
     // The board parameters for a declared set name; the base-map defaults
@@ -140,6 +175,14 @@ namespace mnemos::manifests::irem_m72 {
     // consume. Unknown profiles are invalid data, not hidden unprotected mode.
     [[nodiscard]] bool supported_protection_hle_profile(std::string_view profile) noexcept;
 
+    // Validates that a declared no-dump MCU profile's sample-trigger table can
+    // address the loaded sample region. Missing or out-of-range sample data is
+    // a media issue because it would otherwise activate only part of the HLE
+    // profile.
+    [[nodiscard]] std::optional<std::string> protection_hle_sample_trigger_issue(
+        const common::rom_set_image& image,
+        const std::vector<no_dump_hle_sample_trigger>& sample_triggers);
+
     // Heap-allocated, never-moved M72 board. Built like sega32x_system: chips
     // and RAM blocks as value members, the buses holding spans into them, the
     // port handlers capturing `this`.
@@ -149,6 +192,7 @@ namespace mnemos::manifests::irem_m72 {
         chips::video::irem_m72_video video;
         chips::audio::ym2151 fm;
         chips::audio::dac8 dac;
+        m72_sample_pump sample_pump;
         chips::bus_controller::pic_8259 pic;
         chips::cpu::mcs51 mcu; // live only when the set carries an "mcu" region
         topology::bus main_bus{20U, topology::endianness::little};
@@ -179,7 +223,7 @@ namespace mnemos::manifests::irem_m72 {
         std::uint8_t input_p2{0xFFU};     // active low
         std::uint8_t input_system{0xFFU}; // start/coin/service, active low
         std::uint16_t dip_switches{0xFFFFU};
-        std::uint8_t control_register{}; // port 0x02 latch (coin/flip/blank/reset)
+        std::uint8_t control_register{};              // port 0x02 latch (coin/flip/blank/reset)
         std::array<std::uint32_t, 2> coin_counters{}; // rising edges on control bits 0/1
         std::array<std::uint8_t, 8> scroll_regs{};
         std::array<std::uint8_t, 2> raster_regs{};
@@ -198,7 +242,13 @@ namespace mnemos::manifests::irem_m72 {
         // V30 <-> protection-MCU latch pair.
         std::uint8_t main_to_mcu{};
         std::uint8_t mcu_to_main{};
+        bool mcu_latch_irq_pending{};
         std::uint32_t mcu_sample_address{};
+        bool protection_hle_startup_invert_active{};
+        std::uint16_t protection_hle_startup_next_offset{};
+        bool protection_hle_startup_fill_completed{};
+        std::uint16_t protection_hle_entry_write_next_offset{};
+        bool protection_hle_entry_stub_active{};
         bool mcu_present{};
         bool protection_hle_present{};
         bool sound_rom_present{};
@@ -206,8 +256,10 @@ namespace mnemos::manifests::irem_m72 {
         void update_sound_irq() noexcept {
             sound_cpu.set_irq_line(sound_latch_irq || fm.irq_asserted());
         }
+        void pump_sample_once();
         void record_dac_write(std::uint8_t value);
         void discard_dac_write_events_before(std::uint64_t sound_clock);
+        void write_protection_hle_shared(std::size_t offset, std::uint8_t value) noexcept;
 
         explicit m72_system(common::rom_set_image image, m72_board_params board_params = {});
 

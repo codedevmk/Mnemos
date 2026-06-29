@@ -1,0 +1,181 @@
+# Air Duel (World, M82 hardware) -- Irem M82 parent set.
+# The local corpus names these files with an explicit M82 marker while sharing
+# Major Title tile/PROM ROMs in the same set archive.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "airduel"
+board       = "irem_m82"
+orientation = "vertical"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "ad_=m82=_a-h0-d.ic52"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0xdbecc726
+
+[[region.file]]
+name   = "ad_=m82=_a-l0-d.ic60"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0x6a9fcf59
+
+[[region.file]]
+name   = "ad_=m82=_a-h1-d.ic51"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0xbafc152a
+
+[[region.file]]
+name   = "ad_=m82=_a-l1-d.ic59"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x9e2b1ae7
+
+[[region.file]]
+name   = "ad_=m82=_a-h1-d.ic51"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0xbafc152a
+
+[[region.file]]
+name   = "ad_=m82=_a-l1-d.ic59"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0x9e2b1ae7
+
+[[region]]
+name = "soundcpu"
+size = 0x010000
+
+[[region.file]]
+name   = "ad_=m82=_a-sp-d.ic15"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x16a858a3
+
+[[region]]
+name = "samples"
+size = 0x020000
+
+[[region.file]]
+name   = "ad_=m82=_a-vo-d.ic12"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x339f474d
+
+[[region]]
+name = "tiles"
+size = 0x080000
+
+[[region.file]]
+name   = "mt_f0.ic38"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x2d5e05d5
+
+[[region.file]]
+name   = "mt_f1.ic39"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0xc68cd65f
+
+[[region.file]]
+name   = "mt_f2.ic40"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0xa71feb2d
+
+[[region.file]]
+name   = "mt_f3.ic41"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x179f7562
+
+[[region]]
+name = "backgrounds"
+size = 0x080000
+
+[[region.file]]
+name   = "ad_=m82=_a-c0-d.ic49"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xce134b47
+
+[[region.file]]
+name   = "ad_=m82=_a-c1-d.ic48"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x097fd853
+
+[[region.file]]
+name   = "ad_=m82=_a-c2-d.ic57"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0x6a94c1b9
+
+[[region.file]]
+name   = "ad_=m82=_a-c3-d.ic56"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x6637c349
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "ad_=m82=_b-n0-d.ic44"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x2f0d599b
+
+[[region.file]]
+name   = "ad_=m82=_b-n1-d.ic45"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x9865856b
+
+[[region.file]]
+name   = "ad_=m82=_b-n2-d.ic46"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0xd392aef2
+
+[[region.file]]
+name   = "ad_=m82=_b-n3-d.ic36"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x923240c3
+
+[[region]]
+name = "proms"
+size = 0x0800
+
+[[region.file]]
+name   = "mt_a-2h-.ic5"
+offset = 0x0000
+size   = 0x0117
+crc32  = 0x21ede612
+
+[[region.file]]
+name   = "mt_a-5l-.ic31"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0xe3064bfe
+
+[[region.file]]
+name   = "mt_a-7d-.ic43"
+offset = 0x0400
+size   = 0x0117
+crc32  = 0xd7ec1cc6

@@ -29,12 +29,24 @@ namespace mnemos::chips::cpu {
         constexpr int alu_sub = 5;
         constexpr int alu_xor = 6;
         constexpr int alu_cmp = 7;
+
+        [[nodiscard]] constexpr const char* part_number_for(v30::model cpu_model) noexcept {
+            switch (cpu_model) {
+            case v30::model::v33:
+                return "v33";
+            case v30::model::v35:
+                return "v35";
+            case v30::model::v30:
+            default:
+                return "v30";
+            }
+        }
     } // namespace
 
     chip_metadata v30::metadata() const noexcept {
         return {
             .manufacturer = "NEC",
-            .part_number = "v30",
+            .part_number = part_number_for(model_),
             .family = "v-series",
             .klass = chip_class::cpu,
             .revision = 1U,
@@ -118,7 +130,7 @@ namespace mnemos::chips::cpu {
     }
 
     std::uint8_t v30::fetch8() noexcept {
-        const std::uint8_t value = rb(cs_, ip_);
+        const std::uint8_t value = bus_ != nullptr ? bus_->fetch_opcode8(phys(cs_, ip_)) : 0xFFU;
         ip_ = static_cast<std::uint16_t>(ip_ + 1U);
         return value;
     }
@@ -1975,8 +1987,9 @@ namespace mnemos::chips::cpu {
                     interrupt(0U);
                     break;
                 }
-                const std::int16_t quotient = static_cast<std::int16_t>(dividend / divisor);
-                if (quotient > 0x7F || quotient < -0x80) {
+                const std::int32_t quotient = dividend / divisor;
+                // V20/V30 byte IDIV vectors on -128 even though it fits in signed 8 bits.
+                if (quotient > 0x7F || quotient <= -0x80) {
                     interrupt(0U);
                     break;
                 }

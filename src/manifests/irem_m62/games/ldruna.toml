@@ -1,0 +1,32 @@
+# Lode Runner (alternate) -- Irem M62 raw-media contract.
+# Local wrapper: D:\emu\irem\Lode-Runner_Arcade_EN (1).zip -> ldruna.zip.
+# Region placement is a contiguous artifact contract only; exact M62 bus
+# mapping, video priority, and M6803/AY/MSM5205 behavior remain gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "ldruna"
+board       = "irem_m62"
+orientation = "horizontal"
+
+[[region]]
+name = "raw_media"
+size = 0x6000
+
+[[region.file]]
+name   = "roma4a"
+offset = 0x0
+size   = 0x2000
+crc32  = 0x899df8e0
+
+[[region.file]]
+name   = "roma4b"
+offset = 0x2000
+size   = 0x2000
+crc32  = 0x3c464bad
+
+[[region.file]]
+name   = "roma4c"
+offset = 0x4000
+size   = 0x2000
+crc32  = 0x279421e1

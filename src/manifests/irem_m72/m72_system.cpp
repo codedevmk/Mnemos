@@ -35,54 +35,122 @@ namespace mnemos::manifests::irem_m72 {
             return bytes;
         }
 
-        // The no-dump profiles expose only board-facing sample trigger data.
-        // Protection entry routines remain artifact-gated; no MCU code is
-        // synthesized here.
-        inline constexpr std::array<std::uint32_t, 9> dbreedm72_sample_starts{
-            0x00000U, 0x00020U, 0x02C40U, 0x08160U, 0x0C8C0U,
-            0x0FFE0U, 0x13000U, 0x15820U, 0x15F40U,
-        };
-
-        inline constexpr std::array<std::uint32_t, 28> dkgensanm72_sample_starts{
-            0x00000U, 0x00020U, 0x01800U, 0x02DA0U, 0x03BE0U, 0x05AE0U, 0x06100U,
-            0x06DE0U, 0x07260U, 0x07A60U, 0x08720U, 0x0A5C0U, 0x0C3C0U, 0x0C7A0U,
-            0x0E140U, 0x0FB00U, 0x10FA0U, 0x10FC0U, 0x10FE0U, 0x11F40U, 0x12B20U,
-            0x130A0U, 0x13C60U, 0x14740U, 0x153C0U, 0x197E0U, 0x1AF40U, 0x1C080U,
-        };
-
-        template <std::size_t Count>
         [[nodiscard]] std::optional<std::uint32_t>
-        bounded_sample_start(const std::array<std::uint32_t, Count>& starts,
-                             std::span<const std::uint8_t> samples,
-                             std::uint8_t trigger) noexcept {
-            if (trigger >= starts.size()) {
-                return std::nullopt;
-            }
-            const std::uint32_t start = starts[trigger];
-            if (start >= samples.size()) {
-                return std::nullopt;
-            }
-            return start;
-        }
-
-        [[nodiscard]] std::optional<std::uint32_t>
-        no_dump_hle_sample_start(std::string_view profile,
+        no_dump_hle_sample_start(std::span<const no_dump_hle_sample_trigger> sample_triggers,
                                  std::span<const std::uint8_t> samples,
                                  std::uint8_t trigger) noexcept {
             if (samples.empty()) {
                 return std::nullopt;
             }
-            if (profile == "irem_m72.dbreedm72_no_dump_mcu") {
-                return bounded_sample_start(dbreedm72_sample_starts, samples, trigger);
-            }
-            if (profile == "irem_m72.dkgensanm72_no_dump_mcu") {
-                return bounded_sample_start(dkgensanm72_sample_starts, samples, trigger);
+            for (const no_dump_hle_sample_trigger& sample_trigger : sample_triggers) {
+                if (sample_trigger.trigger == trigger && sample_trigger.start < samples.size()) {
+                    return sample_trigger.start;
+                }
             }
             return std::nullopt;
         }
 
-        [[nodiscard]] std::uint32_t
-        crc32_u64(std::uint32_t crc, std::uint64_t value) noexcept {
+        [[nodiscard]] std::uint8_t read_sample_rom_byte(std::span<const std::uint8_t> samples,
+                                                        std::uint32_t address) noexcept {
+            if (address >= samples.size()) {
+                return 0xFFU;
+            }
+            return samples[static_cast<std::size_t>(address)];
+        }
+
+        [[nodiscard]] std::uint8_t no_dump_hle_startup_pattern_byte(std::size_t offset) noexcept {
+            return static_cast<std::uint8_t>(((offset >> 8U) & 0x0FU) + (offset & 0xFFU));
+        }
+
+        struct no_dump_hle_entry_target final {
+            std::uint16_t ip{};
+            std::uint16_t cs{};
+        };
+
+        inline constexpr std::size_t no_dump_hle_crc_response_offset = 0x0FE0U;
+        inline constexpr std::size_t no_dump_hle_crc_request_offset = 0x0FFFU;
+        inline constexpr std::uint8_t no_dump_hle_crc_request_value = 0x00U;
+        inline constexpr std::array<std::uint8_t, 18> dbreedm72_crc_response{
+            0xA4U, 0x96U, 0x5FU, 0xC0U, 0xABU, 0x49U, 0x9FU, 0x19U, 0x84U,
+            0xE6U, 0xD6U, 0xCAU, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U};
+        inline constexpr std::array<std::uint8_t, 18> dkgensanm72_crc_response{
+            0xC8U, 0xB4U, 0xDCU, 0xF8U, 0xD3U, 0xBAU, 0x48U, 0xEDU, 0x79U,
+            0x08U, 0x1CU, 0xB3U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U};
+
+        [[nodiscard]] std::optional<no_dump_hle_entry_target>
+        no_dump_hle_entry_target_for(std::string_view profile) noexcept {
+            if (profile == "irem_m72.dbreedm72_no_dump_mcu") {
+                return no_dump_hle_entry_target{.ip = 0x006CU, .cs = 0x0000U};
+            }
+            if (profile == "irem_m72.dkgensanm72_no_dump_mcu") {
+                return no_dump_hle_entry_target{.ip = 0x003DU, .cs = 0x1000U};
+            }
+            return std::nullopt;
+        }
+
+        [[nodiscard]] std::optional<std::uint8_t>
+        no_dump_hle_entry_stub_byte(std::string_view profile, std::size_t offset) noexcept {
+            const auto target = no_dump_hle_entry_target_for(profile);
+            if (!target.has_value()) {
+                return std::nullopt;
+            }
+            switch (offset) {
+            case 0U:
+                return static_cast<std::uint8_t>(0xEAU); // JMP ptr16:16
+            case 1U:
+                return static_cast<std::uint8_t>(target->ip & 0xFFU);
+            case 2U:
+                return static_cast<std::uint8_t>(target->ip >> 8U);
+            case 3U:
+                return static_cast<std::uint8_t>(target->cs & 0xFFU);
+            case 4U:
+                return static_cast<std::uint8_t>(target->cs >> 8U);
+            default:
+                return std::nullopt;
+            }
+        }
+
+        [[nodiscard]] std::span<const std::uint8_t>
+        no_dump_hle_crc_response_for(std::string_view profile) noexcept {
+            if (profile == "irem_m72.dbreedm72_no_dump_mcu") {
+                return dbreedm72_crc_response;
+            }
+            if (profile == "irem_m72.dkgensanm72_no_dump_mcu") {
+                return dkgensanm72_crc_response;
+            }
+            return {};
+        }
+
+        [[nodiscard]] bool mcu_dpram_interrupt_byte(std::size_t offset) noexcept {
+            return offset >= mcu_shared_ram_size - 2U && offset < mcu_shared_ram_size;
+        }
+
+        [[nodiscard]] std::size_t m72_palette_physical_offset(std::uint32_t address,
+                                                              std::uint32_t base) noexcept {
+            // Palette RAM leaves word-address A9 disconnected: each 0x200-byte
+            // lane mirror aliases the preceding physical lane.
+            return static_cast<std::size_t>((address - base) & ~0x200U);
+        }
+
+        [[nodiscard]] std::uint8_t m72_palette_read(std::span<const std::uint8_t> palette,
+                                                    std::uint32_t address,
+                                                    std::uint32_t base) noexcept {
+            const std::size_t offset = m72_palette_physical_offset(address, base);
+            if ((offset & 1U) != 0U || offset >= palette.size()) {
+                return 0xFFU;
+            }
+            return static_cast<std::uint8_t>(palette[offset] | 0xE0U);
+        }
+
+        void m72_palette_write(std::span<std::uint8_t> palette, std::uint32_t address,
+                               std::uint32_t base, std::uint8_t value) noexcept {
+            const std::size_t offset = m72_palette_physical_offset(address, base);
+            if ((offset & 1U) == 0U && offset < palette.size()) {
+                palette[offset] = static_cast<std::uint8_t>(value & 0x1FU);
+            }
+        }
+
+        [[nodiscard]] std::uint32_t crc32_u64(std::uint32_t crc, std::uint64_t value) noexcept {
             std::array<std::uint8_t, 8> bytes{};
             for (std::size_t i = 0; i < bytes.size(); ++i) {
                 bytes[i] = static_cast<std::uint8_t>((value >> (i * 8U)) & 0xFFU);
@@ -91,8 +159,7 @@ namespace mnemos::manifests::irem_m72 {
                 std::span<const std::uint8_t>(bytes.data(), bytes.size()), crc);
         }
 
-        [[nodiscard]] std::uint32_t
-        crc32_u32(std::uint32_t crc, std::uint32_t value) noexcept {
+        [[nodiscard]] std::uint32_t crc32_u32(std::uint32_t crc, std::uint32_t value) noexcept {
             std::array<std::uint8_t, 4> bytes{};
             for (std::size_t i = 0; i < bytes.size(); ++i) {
                 bytes[i] = static_cast<std::uint8_t>((value >> (i * 8U)) & 0xFFU);
@@ -101,8 +168,7 @@ namespace mnemos::manifests::irem_m72 {
                 std::span<const std::uint8_t>(bytes.data(), bytes.size()), crc);
         }
 
-        [[nodiscard]] std::uint32_t
-        crc32_u16(std::uint32_t crc, std::uint16_t value) noexcept {
+        [[nodiscard]] std::uint32_t crc32_u16(std::uint32_t crc, std::uint16_t value) noexcept {
             std::array<std::uint8_t, 2> bytes{};
             for (std::size_t i = 0; i < bytes.size(); ++i) {
                 bytes[i] = static_cast<std::uint8_t>((value >> (i * 8U)) & 0xFFU);
@@ -111,16 +177,14 @@ namespace mnemos::manifests::irem_m72 {
                 std::span<const std::uint8_t>(bytes.data(), bytes.size()), crc);
         }
 
-        [[nodiscard]] std::uint32_t
-        crc32_u8(std::uint32_t crc, std::uint8_t value) noexcept {
+        [[nodiscard]] std::uint32_t crc32_u8(std::uint32_t crc, std::uint8_t value) noexcept {
             std::array<std::uint8_t, 1> bytes{value};
             return security::cryptography::crc32(
                 std::span<const std::uint8_t>(bytes.data(), bytes.size()), crc);
         }
 
-        [[nodiscard]] std::uint32_t
-        rom_identity_crc(const common::rom_set_image& roms,
-                         const m72_board_params& params) {
+        [[nodiscard]] std::uint32_t rom_identity_crc(const common::rom_set_image& roms,
+                                                     const m72_board_params& params) {
             std::uint32_t crc =
                 security::cryptography::crc32(std::string_view{"m72.rom.identity.v1"});
             crc = crc32_u32(crc, params.work_ram_base);
@@ -130,6 +194,12 @@ namespace mnemos::manifests::irem_m72 {
             if (params.protection_hle_profile.has_value()) {
                 crc = crc32_u64(crc, params.protection_hle_profile->size());
                 crc = security::cryptography::crc32(*params.protection_hle_profile, crc);
+            }
+            crc = crc32_u64(crc, params.protection_hle_sample_triggers.size());
+            for (const no_dump_hle_sample_trigger& sample_trigger :
+                 params.protection_hle_sample_triggers) {
+                crc = crc32_u8(crc, sample_trigger.trigger);
+                crc = crc32_u32(crc, sample_trigger.start);
             }
 
             crc = crc32_u64(crc, roms.regions.size());
@@ -147,6 +217,45 @@ namespace mnemos::manifests::irem_m72 {
     bool supported_protection_hle_profile(std::string_view profile) noexcept {
         return profile == "irem_m72.dbreedm72_no_dump_mcu" ||
                profile == "irem_m72.dkgensanm72_no_dump_mcu";
+    }
+
+    std::optional<std::string> protection_hle_sample_trigger_issue(
+        const common::rom_set_image& image,
+        const std::vector<no_dump_hle_sample_trigger>& sample_triggers) {
+        if (sample_triggers.empty()) {
+            return std::nullopt;
+        }
+        const auto* samples = image.region("samples");
+        if (samples == nullptr || samples->empty()) {
+            return "M72 MCU HLE sample-trigger metadata requires a non-empty samples region";
+        }
+        for (const no_dump_hle_sample_trigger& trigger : sample_triggers) {
+            if (trigger.start >= samples->size()) {
+                return "M72 MCU HLE sample trigger " + std::to_string(trigger.trigger) +
+                       " starts at " + std::to_string(trigger.start) +
+                       " beyond samples region size " + std::to_string(samples->size());
+            }
+        }
+        return std::nullopt;
+    }
+
+    chips::chip_metadata m72_sample_pump::metadata() const noexcept {
+        return {
+            .manufacturer = "Irem",
+            .part_number = "m72_sample_pump",
+            .family = "m72_sample_hardware",
+            .klass = chips::chip_class::peripheral,
+            .revision = 1U,
+        };
+    }
+
+    void m72_sample_pump::tick(std::uint64_t cycles) {
+        if (system_ == nullptr) {
+            return;
+        }
+        for (std::uint64_t i = 0; i < cycles; ++i) {
+            system_->pump_sample_once();
+        }
     }
 
     m72_board_params board_params_for(std::string_view set_name) {
@@ -191,6 +300,7 @@ namespace mnemos::manifests::irem_m72 {
 
     m72_system::m72_system(common::rom_set_image image, m72_board_params board_params)
         : roms(std::move(image)), params(board_params) {
+        sample_pump.attach(*this);
         dip_switches = params.dip_default;
         const auto* sound_rom_region = roms.region("soundcpu");
         sound_rom_present = sound_rom_region != nullptr && !sound_rom_region->empty();
@@ -199,8 +309,24 @@ namespace mnemos::manifests::irem_m72 {
         auto& main_prog = pinned_region(roms, "maincpu", main_rom_size);
         main_bus.map_rom(0x00000U, std::span<const std::uint8_t>(main_prog));
         main_bus.map_ram(sprite_ram_base, sprite_ram, 1);
-        main_bus.map_ram(palette_a_base, palette_a, 1);
-        main_bus.map_ram(palette_b_base, palette_b, 1);
+        main_bus.map_mmio(
+            palette_a_base, static_cast<std::uint32_t>(palette_size),
+            [this](std::uint32_t address) -> std::uint8_t {
+                return m72_palette_read(palette_a, address, palette_a_base);
+            },
+            [this](std::uint32_t address, std::uint8_t value) {
+                m72_palette_write(palette_a, address, palette_a_base, value);
+            },
+            1);
+        main_bus.map_mmio(
+            palette_b_base, static_cast<std::uint32_t>(palette_size),
+            [this](std::uint32_t address) -> std::uint8_t {
+                return m72_palette_read(palette_b, address, palette_b_base);
+            },
+            [this](std::uint32_t address, std::uint8_t value) {
+                m72_palette_write(palette_b, address, palette_b_base, value);
+            },
+            1);
         main_bus.map_ram(vram_a_base, vram_a, 1);
         main_bus.map_ram(vram_b_base, vram_b, 1);
         main_bus.map_ram(params.work_ram_base, work_ram, 1);
@@ -215,13 +341,13 @@ namespace mnemos::manifests::irem_m72 {
         // --- sound bus: R-Type-style upload RAM or later-board sound ROM ---
         if (sound_rom_present) {
             auto& sound_rom = pinned_region(roms, "soundcpu", sound_rom_region_size);
-            sound_bus.map_rom(
-                sound_rom_base,
-                std::span<const std::uint8_t>(sound_rom).first(sound_rom_mapped_size), 0);
-            sound_bus.map_ram(
-                sound_work_ram_base,
-                std::span<std::uint8_t>(sound_ram).subspan(sound_work_ram_base, sound_work_ram_size),
-                1);
+            sound_bus.map_rom(sound_rom_base,
+                              std::span<const std::uint8_t>(sound_rom).first(sound_rom_mapped_size),
+                              0);
+            sound_bus.map_ram(sound_work_ram_base,
+                              std::span<std::uint8_t>(sound_ram).subspan(sound_work_ram_base,
+                                                                         sound_work_ram_size),
+                              1);
         } else {
             sound_bus.map_ram(0x0000U, sound_ram, 0);
         }
@@ -249,7 +375,7 @@ namespace mnemos::manifests::irem_m72 {
             case port_pic_a1:
                 return pic.read(1U);
             case port_mcu_latch:
-                return mcu_to_main;
+                return (mcu_present || protection_hle_present) ? mcu_to_main : 0xFFU;
             default:
                 return 0xFFU; // open bus
             }
@@ -307,19 +433,19 @@ namespace mnemos::manifests::irem_m72 {
                 pic.write(1U, value);
                 break;
             case port_mcu_latch:
-                main_to_mcu = value;
-                if (mcu_present) { // knock: edge-pulse the MCU's INT1
+                if (mcu_present) {
+                    main_to_mcu = value;
+                    mcu_latch_irq_pending = true;
                     mcu.set_int1_line(true);
-                    mcu.set_int1_line(false);
                 } else if (protection_hle_present) {
                     // No-dump HLE can only acknowledge the board-facing command
                     // latch; per-game protection entry routines stay artifact-gated.
+                    main_to_mcu = value;
                     mcu_to_main = value;
                     const auto* samples = roms.region("samples");
                     if (samples != nullptr) {
-                        if (const auto start =
-                                no_dump_hle_sample_start(*params.protection_hle_profile,
-                                                         *samples, value)) {
+                        if (const auto start = no_dump_hle_sample_start(
+                                params.protection_hle_sample_triggers, *samples, value)) {
                             sample_address = *start;
                         }
                     }
@@ -344,7 +470,7 @@ namespace mnemos::manifests::irem_m72 {
                 if (samples == nullptr || samples->empty()) {
                     return 0xFFU;
                 }
-                const std::uint8_t byte = (*samples)[sample_address % samples->size()];
+                const std::uint8_t byte = read_sample_rom_byte(*samples, sample_address);
                 ++sample_address;
                 return byte;
             }
@@ -368,8 +494,8 @@ namespace mnemos::manifests::irem_m72 {
                 sample_address = (sample_address & 0xFF00U) | value;
                 break;
             case z80_port_sample_addr_hi:
-                sample_address = (sample_address & 0x00FFU) |
-                                 (static_cast<std::uint32_t>(value) << 8U);
+                sample_address =
+                    (sample_address & 0x00FFU) | (static_cast<std::uint32_t>(value) << 8U);
                 break;
             case z80_port_dac:
                 record_dac_write(value);
@@ -401,16 +527,42 @@ namespace mnemos::manifests::irem_m72 {
         mcu_present = mcu_program != nullptr && !mcu_program->empty();
         if (params.protection_hle_profile.has_value() &&
             !supported_protection_hle_profile(*params.protection_hle_profile)) {
-            roms.issues.push_back(
-                {"mcu",
-                 "unsupported M72 MCU HLE profile '" + *params.protection_hle_profile + "'"});
+            roms.issues.push_back({"mcu", "unsupported M72 MCU HLE profile '" +
+                                              *params.protection_hle_profile + "'"});
+            params.protection_hle_profile.reset();
+            params.protection_hle_sample_triggers.clear();
+        }
+        if (!mcu_present && params.protection_hle_profile.has_value() &&
+            params.protection_hle_sample_triggers.empty()) {
+            roms.issues.push_back({"mcu", "M72 MCU HLE profile '" + *params.protection_hle_profile +
+                                              "' is missing sample-trigger metadata"});
             params.protection_hle_profile.reset();
         }
-        protection_hle_present =
-            !mcu_present && params.protection_hle_profile.has_value() &&
-            supported_protection_hle_profile(*params.protection_hle_profile);
+        if (!mcu_present && params.protection_hle_profile.has_value()) {
+            if (auto issue = protection_hle_sample_trigger_issue(
+                    roms, params.protection_hle_sample_triggers)) {
+                roms.issues.push_back({"mcu", std::move(*issue)});
+                params.protection_hle_profile.reset();
+                params.protection_hle_sample_triggers.clear();
+            }
+        }
+        protection_hle_present = !mcu_present && params.protection_hle_profile.has_value() &&
+                                 supported_protection_hle_profile(*params.protection_hle_profile);
         if (mcu_present) {
-            main_bus.map_ram(mcu_shared_main_base, mcu_shared_ram, 1);
+            main_bus.map_mmio(
+                mcu_shared_main_base, static_cast<std::uint32_t>(mcu_shared_ram_size),
+                [this](std::uint32_t address) -> std::uint8_t {
+                    const auto offset = static_cast<std::size_t>(address - mcu_shared_main_base);
+                    return mcu_shared_ram[offset];
+                },
+                [this](std::uint32_t address, std::uint8_t value) {
+                    const auto offset = static_cast<std::size_t>(address - mcu_shared_main_base);
+                    mcu_shared_ram[offset] = value;
+                    if (mcu_dpram_interrupt_byte(offset)) {
+                        mcu.set_int0_line(true);
+                    }
+                },
+                1);
             mcu.attach_program(*mcu_program);
             mcu_bus.map_mmio(
                 mcu_sample_data, 3U,
@@ -422,7 +574,7 @@ namespace mnemos::manifests::irem_m72 {
                             return 0xFFU;
                         }
                         const std::uint8_t sample =
-                            (*samples)[mcu_sample_address % samples->size()];
+                            read_sample_rom_byte(*samples, mcu_sample_address);
                         ++mcu_sample_address;
                         return sample;
                     }
@@ -435,37 +587,56 @@ namespace mnemos::manifests::irem_m72 {
                 [this](std::uint32_t address, std::uint8_t value) {
                     switch (address) {
                     case mcu_sample_data:
-                        mcu_sample_address =
-                            (mcu_sample_address & 0xFFE000U) |
-                            (static_cast<std::uint32_t>(value) << 5U);
+                        mcu_sample_address = (mcu_sample_address & 0xFFE000U) |
+                                             (static_cast<std::uint32_t>(value) << 5U);
                         break;
                     case mcu_sample_addr_high:
-                        mcu_sample_address =
-                            (mcu_sample_address & 0x001FFFU) |
-                            (static_cast<std::uint32_t>(value) << 13U);
+                        mcu_sample_address = (mcu_sample_address & 0x001FFFU) |
+                                             (static_cast<std::uint32_t>(value) << 13U);
                         break;
                     case mcu_latch:
                         mcu_to_main = value;
+                        mcu_latch_irq_pending = false;
+                        mcu.set_int1_line(false);
                         break;
                     default:
                         break;
                     }
                 },
                 1);
-            mcu_bus.map_ram(mcu_shared_movx_base, mcu_shared_ram, 0);
+            mcu_bus.map_mmio(
+                mcu_shared_movx_base, static_cast<std::uint32_t>(mcu_shared_ram_size),
+                [this](std::uint32_t address) -> std::uint8_t {
+                    const auto offset = static_cast<std::size_t>(address - mcu_shared_movx_base);
+                    const std::uint8_t value = mcu_shared_ram[offset];
+                    if (mcu_dpram_interrupt_byte(offset)) {
+                        mcu.set_int0_line(false);
+                    }
+                    return value;
+                },
+                [this](std::uint32_t address, std::uint8_t value) {
+                    const auto offset = static_cast<std::size_t>(address - mcu_shared_movx_base);
+                    mcu_shared_ram[offset] = value;
+                },
+                0);
             mcu.attach_bus(mcu_bus);
         } else if (protection_hle_present) {
             main_bus.map_mmio(
                 mcu_shared_main_base, static_cast<std::uint32_t>(mcu_shared_ram_size),
                 [this](std::uint32_t address) -> std::uint8_t {
-                    const auto offset =
-                        static_cast<std::size_t>(address - mcu_shared_main_base);
+                    const auto offset = static_cast<std::size_t>(address - mcu_shared_main_base);
+                    if (protection_hle_entry_stub_active &&
+                        params.protection_hle_profile.has_value()) {
+                        if (const auto byte = no_dump_hle_entry_stub_byte(
+                                *params.protection_hle_profile, offset)) {
+                            return *byte;
+                        }
+                    }
                     return mcu_shared_ram[offset];
                 },
                 [this](std::uint32_t address, std::uint8_t value) {
-                    const auto offset =
-                        static_cast<std::size_t>(address - mcu_shared_main_base);
-                    mcu_shared_ram[offset] = static_cast<std::uint8_t>(~value);
+                    const auto offset = static_cast<std::size_t>(address - mcu_shared_main_base);
+                    write_protection_hle_shared(offset, value);
                 },
                 1);
         }
@@ -482,8 +653,10 @@ namespace mnemos::manifests::irem_m72 {
         video.attach_tiles_b(roms.regions["tiles_b"]);
         video.attach_sprites(roms.regions["sprites"]);
         video.set_scanline_callback([this](std::uint32_t line) {
-            pic.set_irq_line(0U, line == chips::video::irem_m72_video::visible_height);
-            pic.set_irq_line(2U, video.raster_compare_matches(line));
+            const bool vbl = line == chips::video::irem_m72_video::visible_height;
+            const bool rc = video.raster_compare_matches(line);
+            pic.set_irq_line(0U, vbl);
+            pic.set_irq_line(2U, rc);
         });
         pic.set_int_callback([this](bool asserted) { main_cpu.set_irq_line(asserted); });
         main_cpu.set_irq_ack([this]() -> std::uint8_t { return pic.acknowledge(); });
@@ -497,12 +670,26 @@ namespace mnemos::manifests::irem_m72 {
         }
     }
 
+    void m72_system::pump_sample_once() {
+        if (sound_cpu.reset_line_held()) {
+            return;
+        }
+        const auto* samples = roms.region("samples");
+        if (samples == nullptr || samples->empty() || sample_address >= samples->size()) {
+            return;
+        }
+        const std::uint8_t sample = read_sample_rom_byte(*samples, sample_address);
+        ++sample_address;
+        if (sample != 0U) {
+            record_dac_write(sample);
+        }
+    }
+
     void m72_system::record_dac_write(std::uint8_t value) {
         dac.write(value);
-        const dac_write_event event{.sound_clock = fm.elapsed_clocks(),
+        const dac_write_event event{.sound_clock = sound_cpu.elapsed_cycles(),
                                     .output = dac.output()};
-        if (!dac_write_events.empty() &&
-            dac_write_events.back().sound_clock == event.sound_clock) {
+        if (!dac_write_events.empty() && dac_write_events.back().sound_clock == event.sound_clock) {
             dac_write_events.back() = event;
             return;
         }
@@ -519,14 +706,63 @@ namespace mnemos::manifests::irem_m72 {
             return;
         }
         dac_write_events.erase(dac_write_events.begin(),
-                               dac_write_events.begin() +
-                                   static_cast<std::ptrdiff_t>(first_live));
+                               dac_write_events.begin() + static_cast<std::ptrdiff_t>(first_live));
     }
 
-    namespace {
-        // Whole-board state format. Bump when the layout below changes.
-        constexpr std::uint32_t m72_system_state_version = 6U;
-    } // namespace
+    void m72_system::write_protection_hle_shared(std::size_t offset, std::uint8_t value) noexcept {
+        if (offset >= mcu_shared_ram.size()) {
+            return;
+        }
+
+        const bool starts_startup_fill = !protection_hle_startup_fill_completed && offset == 0U &&
+                                         value == no_dump_hle_startup_pattern_byte(0U);
+        if (!protection_hle_startup_invert_active && starts_startup_fill) {
+            protection_hle_entry_stub_active = false;
+            protection_hle_startup_fill_completed = false;
+            protection_hle_entry_write_next_offset = 0U;
+            protection_hle_startup_invert_active = true;
+            protection_hle_startup_next_offset = 0U;
+        }
+
+        const bool expected_startup_fill = protection_hle_startup_invert_active &&
+                                           offset == protection_hle_startup_next_offset &&
+                                           value == no_dump_hle_startup_pattern_byte(offset);
+        if (expected_startup_fill) {
+            mcu_shared_ram[offset] = static_cast<std::uint8_t>(~value);
+            if (offset + 1U >= mcu_shared_ram.size()) {
+                protection_hle_startup_invert_active = false;
+                protection_hle_startup_next_offset = 0U;
+                protection_hle_startup_fill_completed = true;
+            } else {
+                protection_hle_startup_next_offset = static_cast<std::uint16_t>(offset + 1U);
+            }
+            return;
+        }
+
+        protection_hle_startup_invert_active = false;
+        protection_hle_startup_next_offset = 0U;
+        if (protection_hle_startup_fill_completed &&
+            offset == protection_hle_entry_write_next_offset) {
+            if (offset + 1U >= mcu_shared_ram.size() - 4U) {
+                protection_hle_entry_stub_active = true;
+                protection_hle_startup_fill_completed = false;
+                protection_hle_entry_write_next_offset = 0U;
+            } else {
+                protection_hle_entry_write_next_offset = static_cast<std::uint16_t>(offset + 1U);
+            }
+        } else if (offset != 0U || value != no_dump_hle_startup_pattern_byte(0U)) {
+            protection_hle_startup_fill_completed = false;
+            protection_hle_entry_write_next_offset = 0U;
+        }
+        mcu_shared_ram[offset] = value;
+        if (offset == no_dump_hle_crc_request_offset && value == no_dump_hle_crc_request_value &&
+            params.protection_hle_profile.has_value()) {
+            const auto response = no_dump_hle_crc_response_for(*params.protection_hle_profile);
+            for (std::size_t i = 0; i < response.size(); ++i) {
+                mcu_shared_ram[no_dump_hle_crc_response_offset + i] = response[i];
+            }
+        }
+    }
 
     void m72_system::save_state(chips::state_writer& writer) const {
         writer.u32(m72_system_state_version);
@@ -572,12 +808,17 @@ namespace mnemos::manifests::irem_m72 {
         writer.u32(static_cast<std::uint32_t>(dac_write_events.size()));
         for (const auto& event : dac_write_events) {
             writer.u64(event.sound_clock);
-            writer.u16(static_cast<std::uint16_t>(
-                static_cast<std::int32_t>(event.output) + 32768));
+            writer.u16(static_cast<std::uint16_t>(static_cast<std::int32_t>(event.output) + 32768));
         }
         writer.u8(main_to_mcu);
         writer.u8(mcu_to_main);
+        writer.boolean(mcu_latch_irq_pending);
         writer.u32(mcu_sample_address);
+        writer.boolean(protection_hle_startup_invert_active);
+        writer.u16(protection_hle_startup_next_offset);
+        writer.boolean(protection_hle_startup_fill_completed);
+        writer.u16(protection_hle_entry_write_next_offset);
+        writer.boolean(protection_hle_entry_stub_active);
     }
 
     void m72_system::load_state(chips::state_reader& reader) {
@@ -590,8 +831,7 @@ namespace mnemos::manifests::irem_m72 {
         const bool saved_protection_hle_present = reader.boolean();
         const bool saved_sound_rom_present = reader.boolean();
         const std::uint32_t saved_rom_identity = reader.u32();
-        if (saved_work_ram_base != params.work_ram_base ||
-            saved_mcu_present != mcu_present ||
+        if (saved_work_ram_base != params.work_ram_base || saved_mcu_present != mcu_present ||
             saved_protection_hle_present != protection_hle_present ||
             saved_sound_rom_present != sound_rom_present ||
             saved_rom_identity != rom_identity_crc(roms, params)) {
@@ -639,8 +879,8 @@ namespace mnemos::manifests::irem_m72 {
         for (std::uint32_t i = 0; i < dac_event_count; ++i) {
             dac_write_event event{};
             event.sound_clock = reader.u64();
-            event.output = static_cast<std::int16_t>(
-                static_cast<std::int32_t>(reader.u16()) - 32768);
+            event.output =
+                static_cast<std::int16_t>(static_cast<std::int32_t>(reader.u16()) - 32768);
             if (i != 0U && event.sound_clock < previous_dac_event_clock) {
                 reader.fail();
                 return;
@@ -650,7 +890,13 @@ namespace mnemos::manifests::irem_m72 {
         }
         main_to_mcu = reader.u8();
         mcu_to_main = reader.u8();
+        mcu_latch_irq_pending = reader.boolean();
         mcu_sample_address = reader.u32();
+        protection_hle_startup_invert_active = reader.boolean();
+        protection_hle_startup_next_offset = reader.u16();
+        protection_hle_startup_fill_completed = reader.boolean();
+        protection_hle_entry_write_next_offset = reader.u16();
+        protection_hle_entry_stub_active = reader.boolean();
 
         if (reader.ok()) {
             update_sound_irq();

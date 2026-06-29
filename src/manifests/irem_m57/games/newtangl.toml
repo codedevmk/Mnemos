@@ -1,0 +1,70 @@
+# New Tropical Angel -- Irem M57 raw-media contract.
+# Local wrapper: D:\emu\irem\M57\newtangl.zip.
+# Region placement is a contiguous artifact contract only; exact M57 bus
+# mapping, video priority, and Irem Audio behavior remain gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "newtangl"
+board       = "irem_m57"
+orientation = "horizontal"
+
+[[region]]
+name = "raw_media"
+size = 0x10000
+
+[[region.file]]
+name    = "3k"
+aliases = ["newtangl/3k"]
+offset  = 0x0000
+size    = 0x2000
+crc32   = 0x3c6299a8
+
+[[region.file]]
+name    = "3m"
+aliases = ["newtangl/3m"]
+offset  = 0x2000
+size    = 0x2000
+crc32   = 0x8d09056c
+
+[[region.file]]
+name    = "3n"
+aliases = ["newtangl/3n"]
+offset  = 0x4000
+size    = 0x2000
+crc32   = 0x17b5a775
+
+[[region.file]]
+name    = "3q"
+aliases = ["newtangl/3q"]
+offset  = 0x6000
+size    = 0x2000
+crc32   = 0x2e5fa773
+
+[[region.file]]
+name    = "5c"
+aliases = ["newtangl/5c"]
+offset  = 0x8000
+size    = 0x2000
+crc32   = 0x4a20637a
+
+[[region.file]]
+name    = "5e"
+aliases = ["newtangl/5e"]
+offset  = 0xa000
+size    = 0x2000
+crc32   = 0x5460a467
+
+[[region.file]]
+name    = "5j"
+aliases = ["newtangl/5j"]
+offset  = 0xc000
+size    = 0x2000
+crc32   = 0x89409130
+
+[[region.file]]
+name    = "ta-s-1a-"
+aliases = ["newtangl/ta-s-1a-"]
+offset  = 0xe000
+size    = 0x2000
+crc32   = 0xea8a05cb

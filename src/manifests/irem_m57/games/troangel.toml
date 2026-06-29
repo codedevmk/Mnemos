@@ -1,0 +1,140 @@
+# Tropical Angel -- Irem M57 raw-media contract.
+# Local wrapper: D:\emu\irem\M57\troangel.zip.
+# Region placement is a contiguous artifact contract only; exact M57 bus
+# mapping, video priority, and Irem Audio behavior remain gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "troangel"
+board       = "irem_m57"
+orientation = "horizontal"
+
+[[region]]
+name = "raw_media"
+size = 0x1c320
+
+[[region.file]]
+name    = "ta-a-3c"
+aliases = ["troangel/ta-a-3c"]
+offset  = 0x00000
+size    = 0x2000
+crc32   = 0x7ff5482f
+
+[[region.file]]
+name    = "ta-a-3d"
+aliases = ["troangel/ta-a-3d"]
+offset  = 0x02000
+size    = 0x2000
+crc32   = 0x06eef241
+
+[[region.file]]
+name    = "ta-a-3e"
+aliases = ["troangel/ta-a-3e"]
+offset  = 0x04000
+size    = 0x2000
+crc32   = 0xe49f7ad8
+
+[[region.file]]
+name    = "ta-a-3k"
+aliases = ["troangel/ta-a-3k"]
+offset  = 0x06000
+size    = 0x2000
+crc32   = 0xf21f8196
+
+[[region.file]]
+name    = "ta-a-3m"
+aliases = ["troangel/ta-a-3m"]
+offset  = 0x08000
+size    = 0x2000
+crc32   = 0x58801e55
+
+[[region.file]]
+name    = "ta-a-3n"
+aliases = ["troangel/ta-a-3n"]
+offset  = 0x0a000
+size    = 0x2000
+crc32   = 0xde3dea44
+
+[[region.file]]
+name    = "ta-a-3q"
+aliases = ["troangel/ta-a-3q"]
+offset  = 0x0c000
+size    = 0x2000
+crc32   = 0xfff0fc2a
+
+[[region.file]]
+name    = "ta-b-5a"
+aliases = ["troangel/ta-b-5a"]
+offset  = 0x0e000
+size    = 0x2000
+crc32   = 0x0012792a
+
+[[region.file]]
+name    = "ta-b-5c"
+aliases = ["troangel/ta-b-5c"]
+offset  = 0x10000
+size    = 0x2000
+crc32   = 0xc19134c9
+
+[[region.file]]
+name    = "ta-b-5d"
+aliases = ["troangel/ta-b-5d"]
+offset  = 0x12000
+size    = 0x2000
+crc32   = 0xcd473d47
+
+[[region.file]]
+name    = "ta-b-5e"
+aliases = ["troangel/ta-b-5e"]
+offset  = 0x14000
+size    = 0x2000
+crc32   = 0x8b21ee9a
+
+[[region.file]]
+name    = "ta-b-5h"
+aliases = ["troangel/ta-b-5h"]
+offset  = 0x16000
+size    = 0x2000
+crc32   = 0xf8cff29d
+
+[[region.file]]
+name    = "ta-b-5j"
+aliases = ["troangel/ta-b-5j"]
+offset  = 0x18000
+size    = 0x2000
+crc32   = 0x86895c0c
+
+[[region.file]]
+name    = "ta-s-1a"
+aliases = ["troangel/ta-s-1a"]
+offset  = 0x1a000
+size    = 0x2000
+crc32   = 0x15a83210
+
+[[region.file]]
+name    = "ta-a-5a"
+aliases = ["troangel/ta-a-5a"]
+offset  = 0x1c000
+size    = 0x0100
+crc32   = 0x01de1167
+
+[[region.file]]
+name    = "ta-a-5b"
+aliases = ["troangel/ta-a-5b"]
+offset  = 0x1c100
+size    = 0x0100
+crc32   = 0xefd11d4b
+
+[[region.file]]
+name    = "ta-b-1b"
+aliases = ["troangel/ta-b-1b"]
+offset  = 0x1c200
+size    = 0x0020
+crc32   = 0xf94911ea
+
+[[region.file]]
+name    = "ta-b-3d"
+aliases = ["troangel/ta-b-3d"]
+offset  = 0x1c220
+size    = 0x0100
+crc32   = 0xed3e2aa4

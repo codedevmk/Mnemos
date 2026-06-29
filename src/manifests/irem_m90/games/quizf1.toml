@@ -1,0 +1,111 @@
+# Quiz F-1 1-2finish -- Irem M90.
+# The local corpus includes the extra banked V35 program pair; the current
+# first-pass board records it as resident media before an authentic bank mapper.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "quizf1"
+board       = "irem_m90"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "qf1-h0-.ic77"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x280e3049
+
+[[region.file]]
+name   = "qf1-l0-.ic79"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0x94588a6f
+
+[[region.file]]
+name          = "qf1-h0-.ic77"
+offset        = 0x0ffff1
+stride        = 2
+source_offset = 0x3fff8
+length        = 0x8
+size          = 0x40000
+crc32         = 0x280e3049
+
+[[region.file]]
+name          = "qf1-l0-.ic79"
+offset        = 0x0ffff0
+stride        = 2
+source_offset = 0x3fff8
+length        = 0x8
+size          = 0x40000
+crc32         = 0x94588a6f
+
+[[region]]
+name = "banked"
+size = 0x100000
+
+[[region.file]]
+name   = "qf1-h1-.ic78"
+offset = 0x000001
+stride = 2
+size   = 0x80000
+crc32  = 0xc6c2eb2b
+
+[[region.file]]
+name   = "qf1-l1-.ic80"
+offset = 0x000000
+stride = 2
+size   = 0x80000
+crc32  = 0x3132c144
+
+[[region]]
+name = "soundcpu"
+size = 0x010000
+
+[[region.file]]
+name   = "qf1-sp-.ic33"
+offset = 0x000000
+size   = 0x10000
+crc32  = 0x0664fa9f
+
+[[region]]
+name = "graphics"
+size = 0x200000
+
+[[region.file]]
+name   = "qf1-c0-.ic81"
+offset = 0x000000
+size   = 0x80000
+crc32  = 0xc26b521e
+
+[[region.file]]
+name   = "qf1-c1-.ic82"
+offset = 0x080000
+size   = 0x80000
+crc32  = 0xdb9d7394
+
+[[region.file]]
+name   = "qf1-c2-.ic83"
+offset = 0x100000
+size   = 0x80000
+crc32  = 0x0b1460ae
+
+[[region.file]]
+name   = "qf1-c3-.ic84"
+offset = 0x180000
+size   = 0x80000
+crc32  = 0x2d32ff37
+
+[[region]]
+name = "samples"
+size = 0x040000
+
+[[region.file]]
+name   = "qf1-v0-.ic30"
+offset = 0x000000
+size   = 0x40000
+crc32  = 0xb8d16e7c

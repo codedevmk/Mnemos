@@ -1,0 +1,53 @@
+# R-Type II (Japan, C revision) -- Irem M82 clone of rtype2.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "rtype2jc"
+board  = "irem_m82"
+parent = "rtype2"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "rt2_a-h0-c.ic54"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0xef9a9990
+
+[[region.file]]
+name   = "rt2_a-l0-c.ic60"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xd8b9da64
+
+[[region.file]]
+name   = "rt2_a-h1-c.ic53"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x1b1870f4
+
+[[region.file]]
+name   = "rt2_a-l1-c.ic59"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x60fdff35
+
+[[region.file]]
+name   = "rt2_a-h1-c.ic53"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0x1b1870f4
+
+[[region.file]]
+name   = "rt2_a-l1-c.ic59"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0x60fdff35

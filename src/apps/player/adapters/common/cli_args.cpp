@@ -287,6 +287,16 @@ namespace mnemos::apps::player::adapters {
         return std::nullopt;
     }
 
+    bool parse_help_arg(int argc, char* argv[]) {
+        for (int i = 1; i < argc; ++i) {
+            const std::string_view a{argv[i]};
+            if (a == "--help" || a == "-h") {
+                return true;
+            }
+        }
+        return false;
+    }
+
     namespace {
         std::optional<std::uint32_t> parse_press_port_prefix(std::string_view& spec) noexcept {
             if (spec.size() < 3U || (spec[0] != 'p' && spec[0] != 'P') ||

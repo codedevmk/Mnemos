@@ -1,0 +1,58 @@
+# Pound for Pound (Japan) -- Irem M85 split clone of poundfor.
+# Schema mnemos-romset/1; the local clone ZIP supplies only the H0/L0 program
+# replacements and inherits the remaining program, graphics, sound, sample, and
+# PLD files from poundfor.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "poundforj"
+parent      = "poundfor"
+board       = "irem_m85"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "pp-a-h0-.9e"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0xf0165e3b
+
+[[region.file]]
+name   = "pp-a-l0-.9d"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xf954f99f
+
+[[region.file]]
+name   = "pp-a-h1-.9f"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0xf6c82f48
+
+[[region.file]]
+name   = "pp-a-l1-.9c"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x5b07b087
+
+# Boot-chunk reload inherited from the parent final program pair.
+[[region.file]]
+name   = "pp-a-h1-.9f"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0xf6c82f48
+
+[[region.file]]
+name   = "pp-a-l1-.9c"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0x5b07b087

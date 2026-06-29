@@ -17,6 +17,7 @@ namespace {
     using mnemos::apps::player::adapters::parse_extract_assets_args;
     using mnemos::apps::player::adapters::parse_extract_audio_args;
     using mnemos::apps::player::adapters::parse_fm_unit_arg;
+    using mnemos::apps::player::adapters::parse_help_arg;
     using mnemos::apps::player::adapters::parse_load_state_arg;
     using mnemos::apps::player::adapters::parse_mapper2_arg;
     using mnemos::apps::player::adapters::parse_mapper_arg;
@@ -88,6 +89,23 @@ TEST_CASE("cli_args: missing --rom returns nullopt") {
 TEST_CASE("cli_args: --rom without a value returns nullopt") {
     auto a = make_argv({"player", "--rom"});
     REQUIRE(parse_rom_arg(a.argc(), a.argv.data()) == std::nullopt);
+}
+
+TEST_CASE("cli_args: --help and -h request the usage screen") {
+    auto a = make_argv({"player", "--help"});
+    REQUIRE(parse_help_arg(a.argc(), a.argv.data()));
+
+    auto b = make_argv({"player", "-h"});
+    REQUIRE(parse_help_arg(b.argc(), b.argv.data()));
+
+    // Recognised even when other flags precede it (no value is consumed).
+    auto c = make_argv({"player", "--system", "genesis", "--help"});
+    REQUIRE(parse_help_arg(c.argc(), c.argv.data()));
+}
+
+TEST_CASE("cli_args: absent --help returns false") {
+    auto a = make_argv({"player", "--system", "genesis", "--rom", "game.bin"});
+    REQUIRE_FALSE(parse_help_arg(a.argc(), a.argv.data()));
 }
 
 TEST_CASE("cli_args: parse_rom_args collects all media paths in order") {

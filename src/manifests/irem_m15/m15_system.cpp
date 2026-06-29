@@ -1,0 +1,448 @@
+#include "m15_system.hpp"
+
+#include "crc32.hpp"
+
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <string>
+#include <string_view>
+#include <utility>
+
+namespace mnemos::manifests::irem_m15 {
+
+    namespace {
+        [[nodiscard]] std::vector<std::uint8_t>&
+        pinned_region(common::rom_set_image& image, std::string_view name, std::size_t size) {
+            auto& bytes = image.regions[std::string{name}];
+            if (bytes.size() < size) {
+                bytes.resize(size, 0xFFU);
+            }
+            return bytes;
+        }
+
+        [[nodiscard]] bool in_range(std::uint16_t address, std::uint16_t base,
+                                    std::size_t size) noexcept {
+            return address >= base &&
+                   address < static_cast<std::uint16_t>(base + static_cast<std::uint16_t>(size));
+        }
+
+        [[nodiscard]] std::uint8_t sample_byte(std::span<const std::uint8_t> data,
+                                               std::uint64_t index,
+                                               std::uint8_t fallback) noexcept {
+            if (data.empty()) {
+                return fallback;
+            }
+            return data[static_cast<std::size_t>(index % data.size())];
+        }
+
+        [[nodiscard]] std::uint32_t crc32_u64(std::uint32_t crc, std::uint64_t value) noexcept {
+            std::array<std::uint8_t, 8> bytes{};
+            for (std::size_t i = 0; i < bytes.size(); ++i) {
+                bytes[i] = static_cast<std::uint8_t>((value >> (i * 8U)) & 0xFFU);
+            }
+            return security::cryptography::crc32(
+                std::span<const std::uint8_t>(bytes.data(), bytes.size()), crc);
+        }
+
+        [[nodiscard]] std::uint8_t layout_code(std::string_view layout) noexcept {
+            if (layout == "m15_headon_6502") {
+                return 1U;
+            }
+            return 0U;
+        }
+
+        [[nodiscard]] std::uint32_t palette_color(std::uint8_t color_code) noexcept {
+            const std::uint8_t pen = static_cast<std::uint8_t>(((color_code & 0x07U) << 1U) | 1U);
+            const std::uint8_t inverted = static_cast<std::uint8_t>(~pen);
+            const std::uint32_t r = (inverted & 0x08U) != 0U ? 0xFFU : 0x00U;
+            const std::uint32_t g = (inverted & 0x04U) != 0U ? 0xFFU : 0x00U;
+            const std::uint32_t b = (inverted & 0x02U) != 0U ? 0xFFU : 0x00U;
+            return (r << 16U) | (g << 8U) | b;
+        }
+
+        [[nodiscard]] std::uint16_t visible_tile_index(std::uint32_t x, std::uint32_t y,
+                                                       bool flip_screen) noexcept {
+            std::uint32_t raw_x = y;
+            std::uint32_t raw_y = 239U - x;
+            if (flip_screen) {
+                raw_x = 255U - raw_x;
+                raw_y = 255U - raw_y;
+            }
+            const std::uint32_t col = (raw_x >> 3U) & 0x1FU;
+            const std::uint32_t row = (raw_y >> 3U) & 0x1FU;
+            return static_cast<std::uint16_t>(((31U - col) * 32U + row) & 0x03FFU);
+        }
+
+        [[nodiscard]] bool tile_pixel_on(std::span<const std::uint8_t> chargen_ram,
+                                         std::uint8_t tile, std::uint32_t x, std::uint32_t y,
+                                         bool flip_screen) noexcept {
+            std::uint32_t raw_x = y;
+            std::uint32_t raw_y = 239U - x;
+            if (flip_screen) {
+                raw_x = 255U - raw_x;
+                raw_y = 255U - raw_y;
+            }
+            const std::uint32_t row = raw_y & 0x07U;
+            const std::uint32_t bit = 7U - (raw_x & 0x07U);
+            const std::uint64_t offset = static_cast<std::uint64_t>(tile) * 8U + row;
+            return (sample_byte(chargen_ram, offset, 0U) & (1U << bit)) != 0U;
+        }
+
+        [[nodiscard]] std::uint32_t rom_identity_crc(const common::rom_set_image& roms,
+                                                     const m15_board_params& params) {
+            std::uint32_t crc =
+                security::cryptography::crc32(std::string_view{"m15.rom.identity.v2"});
+            crc = security::cryptography::crc32(
+                std::span<const std::uint8_t>(&params.dip_default, 1U), crc);
+            const std::uint8_t layout = layout_code(params.rom_layout);
+            crc = security::cryptography::crc32(std::span<const std::uint8_t>(&layout, 1U), crc);
+            crc = crc32_u64(crc, params.cpu_clock_hz);
+            crc = crc32_u64(crc, roms.regions.size());
+            for (const auto& [name, bytes] : roms.regions) {
+                crc = crc32_u64(crc, name.size());
+                crc = security::cryptography::crc32(std::string_view{name}, crc);
+                crc = crc32_u64(crc, bytes.size());
+                crc = security::cryptography::crc32(
+                    std::span<const std::uint8_t>(bytes.data(), bytes.size()), crc);
+            }
+            return crc;
+        }
+
+        [[nodiscard]] std::uint8_t read_rom_byte(const m15_system& system,
+                                                 std::uint16_t address) noexcept {
+            const auto* main_prog = system.roms.region("maincpu");
+            if (main_prog == nullptr || address >= main_prog->size()) {
+                return 0xFFU;
+            }
+            return (*main_prog)[address];
+        }
+
+        [[nodiscard]] bool speaker_output_from_latch(std::uint8_t latch) noexcept {
+            return (latch & sound_speaker_active_low_bit) == 0U;
+        }
+    } // namespace
+
+    m15_board_params board_params_for(std::string_view set_name) noexcept {
+        if (set_name == "greenber" || set_name == "headoni" || set_name == "spacbeam") {
+            return {.cpu_clock_hz = cpu_clock_hz, .rom_layout = "m15_headon_6502",
+                    .dip_default = headoni_dip_default};
+        }
+        return {};
+    }
+
+    std::uint8_t m15_cpu_bus::read8(std::uint32_t address) {
+        if (system_ == nullptr) {
+            return 0xFFU;
+        }
+
+        const auto a = static_cast<std::uint16_t>(address);
+        if (in_range(a, scratch_ram_base, scratch_ram_size)) {
+            return system_->scratch_ram[a - scratch_ram_base];
+        }
+        if (in_range(a, video_ram_base, video_ram_size)) {
+            return system_->video_ram[a - video_ram_base];
+        }
+        if (in_range(a, color_ram_base, color_ram_size)) {
+            return system_->color_ram[a - color_ram_base];
+        }
+        if (in_range(a, chargen_ram_base, chargen_ram_size)) {
+            return system_->chargen_ram[a - chargen_ram_base];
+        }
+
+        switch (a) {
+        case input_p2_address:
+            return system_->input_p2;
+        case dip_switch_address:
+            return system_->dip_switches;
+        case input_p1_address:
+            return system_->input_p1;
+        default:
+            break;
+        }
+
+        if ((a >= program_rom_base && a < program_rom_limit) || a >= vector_rom_base) {
+            return read_rom_byte(*system_, a);
+        }
+        return 0xFFU;
+    }
+
+    void m15_cpu_bus::write8(std::uint32_t address, std::uint8_t value) {
+        if (system_ == nullptr) {
+            return;
+        }
+
+        const auto a = static_cast<std::uint16_t>(address);
+        if (in_range(a, scratch_ram_base, scratch_ram_size)) {
+            system_->scratch_ram[a - scratch_ram_base] = value;
+            return;
+        }
+        if (in_range(a, video_ram_base, video_ram_size)) {
+            system_->video_ram[a - video_ram_base] = value;
+            return;
+        }
+        if (in_range(a, color_ram_base, color_ram_size)) {
+            system_->color_ram[a - color_ram_base] = value;
+            return;
+        }
+        if (in_range(a, chargen_ram_base, chargen_ram_size)) {
+            system_->chargen_ram[a - chargen_ram_base] = value;
+            return;
+        }
+
+        switch (a) {
+        case sound_latch_address:
+            system_->write_sound_latch(value);
+            break;
+        case control_register_address:
+            system_->control_register = value;
+            system_->flip_screen = (value & control_flip_active_low_bit) == 0U;
+            break;
+        default:
+            break;
+        }
+    }
+
+    m15_video::m15_video()
+        : pixels_(static_cast<std::size_t>(visible_width) * visible_height, 0U) {
+        reset(chips::reset_kind::power_on);
+    }
+
+    chips::chip_metadata m15_video::metadata() const noexcept {
+        return {.manufacturer = "Irem",
+                .part_number = "m15_video_first_pass",
+                .family = "irem_m15",
+                .klass = chips::chip_class::video,
+                .revision = 3U};
+    }
+
+    void m15_video::tick(std::uint64_t cycles) { elapsed_cycles_ += cycles; }
+
+    void m15_video::reset(chips::reset_kind /*kind*/) {
+        std::fill(pixels_.begin(), pixels_.end(), 0U);
+        elapsed_cycles_ = 0U;
+        frame_index_ = 0U;
+    }
+
+    chips::frame_buffer_view m15_video::framebuffer() const noexcept {
+        return {.pixels = pixels_.data(),
+                .width = visible_width,
+                .height = visible_height,
+                .stride = visible_width};
+    }
+
+    void m15_video::begin_frame() noexcept { std::fill(pixels_.begin(), pixels_.end(), 0U); }
+
+    void m15_video::compose_scanline(std::span<const std::uint8_t> video_ram,
+                                     std::span<const std::uint8_t> color_ram,
+                                     std::span<const std::uint8_t> chargen_ram,
+                                     std::uint32_t line,
+                                     bool flip_screen) {
+        if (line >= visible_height) {
+            return;
+        }
+
+        const auto row = static_cast<std::ptrdiff_t>(line * visible_width);
+        std::fill_n(pixels_.begin() + row, visible_width, 0U);
+        for (std::uint32_t x = 0; x < visible_width; ++x) {
+            const std::uint16_t tile_index = visible_tile_index(x, line, flip_screen);
+            const std::uint8_t tile = sample_byte(video_ram, tile_index, 0U);
+            const bool bit = tile_pixel_on(chargen_ram, tile, x, line, flip_screen);
+            const std::uint8_t color = sample_byte(color_ram, tile_index, 0U);
+            pixels_[static_cast<std::size_t>(line) * visible_width + x] =
+                bit ? palette_color(color) : 0U;
+        }
+    }
+
+    void m15_video::end_frame() noexcept { ++frame_index_; }
+
+    void m15_video::compose(std::span<const std::uint8_t> video_ram,
+                            std::span<const std::uint8_t> color_ram,
+                            std::span<const std::uint8_t> chargen_ram,
+                            bool flip_screen) {
+        begin_frame();
+        for (std::uint32_t y = 0; y < visible_height; ++y) {
+            compose_scanline(video_ram, color_ram, chargen_ram, y, flip_screen);
+        }
+        end_frame();
+    }
+
+    void m15_video::save_state(chips::state_writer& writer) const {
+        writer.u64(elapsed_cycles_);
+        writer.u64(frame_index_);
+        for (const std::uint32_t pixel : pixels_) {
+            writer.u32(pixel);
+        }
+    }
+
+    void m15_video::load_state(chips::state_reader& reader) {
+        elapsed_cycles_ = reader.u64();
+        frame_index_ = reader.u64();
+        for (std::uint32_t& pixel : pixels_) {
+            pixel = reader.u32();
+        }
+    }
+
+    m15_system::m15_system(common::rom_set_image image, m15_board_params board_params)
+        : roms(std::move(image)), params(board_params) {
+        (void)pinned_region(roms, "maincpu", main_rom_size);
+        dip_switches = params.dip_default;
+
+        main_bus.attach(*this);
+        main_cpu.set_variant(chips::cpu::m6510::variant::mos_6502);
+        main_cpu.set_port_enabled(false);
+        main_cpu.attach_bus(main_bus);
+        main_cpu.reset(chips::reset_kind::power_on);
+
+        speaker.set_clock(params.cpu_clock_hz, audio_rate_hz);
+        speaker.enable_audio_capture(true);
+        speaker_output_high = speaker_output_from_latch(speaker_latch);
+        speaker.set_speaker(speaker_output_high);
+    }
+
+    void m15_system::run_frame() {
+        std::uint64_t cycles_elapsed = 0U;
+        video.begin_frame();
+        for (std::uint32_t line = 0U; line < frame_lines; ++line) {
+            const std::uint64_t next_cycle =
+                (cpu_cycles_per_frame * static_cast<std::uint64_t>(line + 1U)) / frame_lines;
+            const std::uint64_t line_cycles = next_cycle - cycles_elapsed;
+
+            if (line < visible_height) {
+                video.compose_scanline(video_ram, color_ram, chargen_ram, line, flip_screen);
+            }
+
+            if (line == visible_height - 16U) {
+                const std::uint64_t irq_pulse = std::min<std::uint64_t>(line_cycles, 16U);
+                if (irq_pulse > 0U) {
+                    main_cpu.set_irq_line(true);
+                    main_cpu.tick(irq_pulse);
+                    main_cpu.set_irq_line(false);
+                }
+                main_cpu.tick(line_cycles - irq_pulse);
+            } else {
+                main_cpu.tick(line_cycles);
+            }
+
+            speaker.tick(line_cycles);
+            video.tick(line_cycles);
+            cycles_elapsed = next_cycle;
+        }
+        main_cpu.set_irq_line(false);
+        video.end_frame();
+    }
+
+    void m15_system::set_inputs(std::uint8_t p1, std::uint8_t p2,
+                                std::uint8_t system) noexcept {
+        input_p1 = p1;
+        input_p2 = p2;
+        main_cpu.set_nmi_line((system & coin1_bit) != 0U);
+        input_system = system;
+    }
+
+    void m15_system::write_sound_latch(std::uint8_t value) noexcept {
+        ++sound_latch_write_count;
+
+        const std::uint8_t changed = static_cast<std::uint8_t>(speaker_latch ^ value);
+        for (std::size_t bit = 0U; bit < sound_bit_rise_count.size(); ++bit) {
+            const std::uint8_t mask = static_cast<std::uint8_t>(1U << bit);
+            if ((changed & mask) == 0U) {
+                continue;
+            }
+            if ((value & mask) != 0U) {
+                ++sound_bit_rise_count[bit];
+            } else {
+                ++sound_bit_fall_count[bit];
+            }
+        }
+
+        speaker_latch = value;
+        const bool output = speaker_output_from_latch(value);
+        if (output != speaker_output_high) {
+            ++speaker_output_edge_count;
+            speaker_output_high = output;
+        }
+        speaker.set_speaker(speaker_output_high);
+    }
+
+    void m15_system::save_state(chips::state_writer& writer) const {
+        writer.u32(m15_system_state_version);
+        writer.u8(params.dip_default);
+        writer.u8(layout_code(params.rom_layout));
+        writer.u32(params.cpu_clock_hz);
+        writer.u32(rom_identity_crc(roms, params));
+        main_cpu.save_state(writer);
+        video.save_state(writer);
+        speaker.save_state(writer);
+        writer.bytes(scratch_ram);
+        writer.bytes(video_ram);
+        writer.bytes(color_ram);
+        writer.bytes(chargen_ram);
+        writer.u8(input_p1);
+        writer.u8(input_p2);
+        writer.u8(input_system);
+        writer.u8(dip_switches);
+        writer.u8(control_register);
+        writer.boolean(flip_screen);
+        writer.u8(speaker_latch);
+        writer.u64(sound_latch_write_count);
+        for (const std::uint64_t count : sound_bit_rise_count) {
+            writer.u64(count);
+        }
+        for (const std::uint64_t count : sound_bit_fall_count) {
+            writer.u64(count);
+        }
+        writer.u64(speaker_output_edge_count);
+        writer.boolean(speaker_output_high);
+    }
+
+    void m15_system::load_state(chips::state_reader& reader) {
+        if (reader.u32() != m15_system_state_version) {
+            reader.fail();
+            return;
+        }
+        const std::uint8_t saved_dip = reader.u8();
+        const std::uint8_t saved_layout = reader.u8();
+        const std::uint32_t saved_clock = reader.u32();
+        const std::uint32_t saved_identity = reader.u32();
+        if (saved_dip != params.dip_default || saved_layout != layout_code(params.rom_layout) ||
+            saved_clock != params.cpu_clock_hz || saved_identity != rom_identity_crc(roms, params)) {
+            reader.fail();
+            return;
+        }
+        main_cpu.load_state(reader);
+        video.load_state(reader);
+        speaker.load_state(reader);
+        reader.bytes(scratch_ram);
+        reader.bytes(video_ram);
+        reader.bytes(color_ram);
+        reader.bytes(chargen_ram);
+        input_p1 = reader.u8();
+        input_p2 = reader.u8();
+        input_system = reader.u8();
+        dip_switches = reader.u8();
+        control_register = reader.u8();
+        flip_screen = reader.boolean();
+        speaker_latch = reader.u8();
+        sound_latch_write_count = reader.u64();
+        for (std::uint64_t& count : sound_bit_rise_count) {
+            count = reader.u64();
+        }
+        for (std::uint64_t& count : sound_bit_fall_count) {
+            count = reader.u64();
+        }
+        speaker_output_edge_count = reader.u64();
+        speaker_output_high = reader.boolean();
+        if (reader.ok()) {
+            speaker.set_speaker(speaker_output_high);
+        }
+    }
+
+    std::unique_ptr<m15_system> assemble_m15(common::rom_set_image image,
+                                             m15_board_params board_params) {
+        return std::make_unique<m15_system>(std::move(image), board_params);
+    }
+
+} // namespace mnemos::manifests::irem_m15

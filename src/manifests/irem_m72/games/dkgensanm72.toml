@@ -265,6 +265,118 @@ chip      = "mcu"
 profile   = "irem_m72.dkgensanm72_no_dump_mcu"
 rationale = "The set's i8751 dump is unavailable; this manifest declares the interim M72 no-dump protection profile rather than pretending a ROM exists."
 
+[[hle.sample_trigger]]
+trigger = 0
+start   = 0x00000
+
+[[hle.sample_trigger]]
+trigger = 1
+start   = 0x00020
+
+[[hle.sample_trigger]]
+trigger = 2
+start   = 0x01800
+
+[[hle.sample_trigger]]
+trigger = 3
+start   = 0x02da0
+
+[[hle.sample_trigger]]
+trigger = 4
+start   = 0x03be0
+
+[[hle.sample_trigger]]
+trigger = 5
+start   = 0x05ae0
+
+[[hle.sample_trigger]]
+trigger = 6
+start   = 0x06100
+
+[[hle.sample_trigger]]
+trigger = 7
+start   = 0x06de0
+
+[[hle.sample_trigger]]
+trigger = 8
+start   = 0x07260
+
+[[hle.sample_trigger]]
+trigger = 9
+start   = 0x07a60
+
+[[hle.sample_trigger]]
+trigger = 10
+start   = 0x08720
+
+[[hle.sample_trigger]]
+trigger = 11
+start   = 0x0a5c0
+
+[[hle.sample_trigger]]
+trigger = 12
+start   = 0x0c3c0
+
+[[hle.sample_trigger]]
+trigger = 13
+start   = 0x0c7a0
+
+[[hle.sample_trigger]]
+trigger = 14
+start   = 0x0e140
+
+[[hle.sample_trigger]]
+trigger = 15
+start   = 0x0fb00
+
+[[hle.sample_trigger]]
+trigger = 16
+start   = 0x10fa0
+
+[[hle.sample_trigger]]
+trigger = 17
+start   = 0x10fc0
+
+[[hle.sample_trigger]]
+trigger = 18
+start   = 0x10fe0
+
+[[hle.sample_trigger]]
+trigger = 19
+start   = 0x11f40
+
+[[hle.sample_trigger]]
+trigger = 20
+start   = 0x12b20
+
+[[hle.sample_trigger]]
+trigger = 21
+start   = 0x130a0
+
+[[hle.sample_trigger]]
+trigger = 22
+start   = 0x13c60
+
+[[hle.sample_trigger]]
+trigger = 23
+start   = 0x14740
+
+[[hle.sample_trigger]]
+trigger = 24
+start   = 0x153c0
+
+[[hle.sample_trigger]]
+trigger = 25
+start   = 0x197e0
+
+[[hle.sample_trigger]]
+trigger = 26
+start   = 0x1af40
+
+[[hle.sample_trigger]]
+trigger = 27
+start   = 0x1c080
+
 [[region]]
 name = "maincpu"
 size = 0x100000

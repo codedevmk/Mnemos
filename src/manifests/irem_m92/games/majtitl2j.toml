@@ -1,0 +1,44 @@
+# Major Title 2 (Japan) -- Irem M92-B-F clone of majtitl2.
+# The local split clone carries changed H0/L0 program ROMs; the second program
+# pair and shared media resolve from the sibling parent.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "majtitl2j"
+parent      = "majtitl2"
+board       = "irem_m92"
+orientation = "horizontal"
+players     = 4
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "mt2_h0.ic34"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x8a8d71ad
+
+[[region.file]]
+name   = "mt2_l1.ic31"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0xdd4fff51
+
+[[region.file]]
+name   = "mt2_h1-.ic33"
+offset = 0x080001
+stride = 2
+size   = 0x40000
+crc32  = 0x9ba8e1f2
+
+[[region.file]]
+name   = "mt2_l1-.ic32"
+offset = 0x080000
+stride = 2
+size   = 0x40000
+crc32  = 0xe4e00626

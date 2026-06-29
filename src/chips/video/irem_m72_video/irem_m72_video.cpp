@@ -166,7 +166,7 @@ namespace mnemos::chips::video {
 
         // A width-W entry occupies W slots; collect the entry offsets, then
         // draw back-to-front so earlier entries land on top.
-        std::array<std::size_t, 64> entries{};
+        std::array<std::size_t, 0x400U / irem_m72_video::sprite_entry_bytes> entries{};
         std::size_t entry_count = 0U;
         const std::size_t total_words = sprite_buffer_.size() / 2U;
         for (std::size_t offs = 0U; offs < total_words && entry_count < entries.size();) {

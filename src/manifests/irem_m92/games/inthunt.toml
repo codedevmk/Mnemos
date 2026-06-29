@@ -1,0 +1,166 @@
+# In the Hunt -- Irem M92 set.
+# Schema mnemos-romset/1. The first-pass M92 board can load the set, but the
+# encrypted V35 sound program and GA21/GA22 video are not parity-authentic yet.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "inthunt"
+board       = "irem_m92"
+orientation = "horizontal"
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "ith_-h0-d.ic28"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x52f8e7a6
+
+[[region.file]]
+name   = "ith_-l0-d.ic39"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0x5db79eb7
+
+[[region.file]]
+name   = "ith_-h1-b.ic38"
+offset = 0x080001
+stride = 2
+size   = 0x20000
+crc32  = 0xfc2899df
+
+[[region.file]]
+name   = "ith_-l1-b.ic27"
+offset = 0x080000
+stride = 2
+size   = 0x20000
+crc32  = 0x955a605a
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name   = "ith_-sh0-.ic30"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0x209c8b7f
+
+[[region.file]]
+name   = "ith_-sl0-.ic31"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x18472d65
+
+[[region]]
+name = "tiles"
+size = 0x200000
+
+[[region.file]]
+name   = "ith_-c0-.ic26"
+offset = 0x000000
+size   = 0x80000
+crc32  = 0x4c1818cf
+
+[[region.file]]
+name   = "ith_-c1-.ic25"
+offset = 0x080000
+size   = 0x80000
+crc32  = 0x91145bae
+
+[[region.file]]
+name   = "ith_-c2-.ic24"
+offset = 0x100000
+size   = 0x80000
+crc32  = 0xfc03fe3b
+
+[[region.file]]
+name   = "ith_-c3-.ic23"
+offset = 0x180000
+size   = 0x80000
+crc32  = 0xee156a0a
+
+[[region]]
+name = "sprites"
+size = 0x400000
+
+[[region.file]]
+name   = "ith_-000-.ic34"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0xa019766e
+
+[[region.file]]
+name   = "ith_-010-.ic35"
+offset = 0x100000
+size   = 0x100000
+crc32  = 0x3fca3073
+
+[[region.file]]
+name   = "ith_-020-.ic36"
+offset = 0x200000
+size   = 0x100000
+crc32  = 0x20d1b28b
+
+[[region.file]]
+name   = "ith_-030-.ic37"
+offset = 0x300000
+size   = 0x100000
+crc32  = 0x90b6fd4b
+
+[[region]]
+name = "samples"
+size = 0x080000
+
+[[region.file]]
+name   = "ith_-da-.ic9"
+offset = 0x000000
+size   = 0x80000
+crc32  = 0x318ee71a
+
+[[region]]
+name = "plds"
+size = 0x000C00
+
+[[region.file]]
+name   = "m92_a-3m-.ic11"
+offset = 0x0000
+size   = 0x0117
+crc32  = 0xfc718efe
+
+[[region.file]]
+name   = "m92_a-7j-.ic41"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0x5730b25a
+
+[[region.file]]
+name   = "m92_a-9j-.ic51"
+offset = 0x0400
+size   = 0x0117
+crc32  = 0x92d477cf
+
+[[region.file]]
+name   = "m92_e-3k-.ic20"
+offset = 0x0600
+size   = 0x0117
+crc32  = 0x52ecf083
+
+[[region.file]]
+name   = "m92_e-3p-.ic21"
+offset = 0x0800
+size   = 0x0117
+crc32  = 0x67a4cc04
+
+[[region.file]]
+name   = "m92_e-4k-.ic29"
+offset = 0x0A00
+size   = 0x0117
+crc32  = 0x506a0e20

@@ -1,0 +1,414 @@
+# Fire Barrel -- Irem M107 set.
+# Schema mnemos-romset/1; this is a ROM-contract manifest only. The executable
+# M107 board profile remains separate from older Irem board families.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "firebarr"
+board       = "irem_m107"
+orientation = "horizontal"
+
+# SW1/SW2 and SW3 metadata from the shared Fire Barrel / Air Assault input
+# profile. M107 maps SW3 through the separate COINS_DSW3 port word.
+[[dip]]
+bank = "SW1"
+name = "Lives"
+mask = 0x0003
+default = 0x0003
+
+[[dip.option]]
+label = "2"
+value = 0x0000
+
+[[dip.option]]
+label = "3"
+value = 0x0003
+
+[[dip.option]]
+label = "4"
+value = 0x0002
+
+[[dip.option]]
+label = "5"
+value = 0x0001
+
+[[dip]]
+bank = "SW1"
+name = "Allow Continue"
+mask = 0x0020
+default = 0x0020
+
+[[dip.option]]
+label = "No"
+value = 0x0000
+
+[[dip.option]]
+label = "Yes"
+value = 0x0020
+
+[[dip]]
+bank = "SW1"
+name = "Demo Sounds"
+mask = 0x0040
+default = 0x0000
+
+[[dip.option]]
+label = "Off"
+value = 0x0040
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Service Mode"
+mask = 0x0080
+default = 0x0080
+
+[[dip.option]]
+label = "Off"
+value = 0x0080
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Flip Screen"
+mask = 0x0100
+default = 0x0100
+
+[[dip.option]]
+label = "Off"
+value = 0x0100
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coin Slots"
+mask = 0x0400
+default = 0x0400
+
+[[dip.option]]
+label = "Common"
+value = 0x0400
+
+[[dip.option]]
+label = "Separate"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coin Mode"
+mask = 0x0800
+default = 0x0800
+
+[[dip.option]]
+label = "Mode 1"
+value = 0x0800
+
+[[dip.option]]
+label = "Mode 2"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coinage"
+mask = 0xf000
+default = 0xf000
+condition_mask = 0x0800
+condition_value = 0x0800
+
+[[dip.option]]
+label = "6 Coins / 1 Credit"
+value = 0xa000
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0xb000
+
+[[dip.option]]
+label = "4 Coins / 1 Credit"
+value = 0xc000
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0xd000
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0xe000
+
+[[dip.option]]
+label = "2 Coins to Start/1 to Continue"
+value = 0x1000
+
+[[dip.option]]
+label = "3 Coins / 2 Credits"
+value = 0x3000
+
+[[dip.option]]
+label = "4 Coins / 3 Credits"
+value = 0x2000
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0xf000
+
+[[dip.option]]
+label = "2 Coins / 3 Credits"
+value = 0x4000
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0x9000
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x8000
+
+[[dip.option]]
+label = "1 Coin / 4 Credits"
+value = 0x7000
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x6000
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x5000
+
+[[dip.option]]
+label = "Free Play"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coin A"
+mask = 0x3000
+default = 0x3000
+condition_mask = 0x0800
+condition_value = 0x0000
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0x0000
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0x1000
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0x2000
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0x3000
+
+[[dip]]
+bank = "SW2"
+name = "Coin B"
+mask = 0xc000
+default = 0xc000
+condition_mask = 0x0800
+condition_value = 0x0000
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0xc000
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x8000
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x4000
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x0000
+
+[[dip]]
+bank = "SW3"
+name = "Rapid Fire"
+mask = 0x0c00
+default = 0x0800
+
+[[dip.option]]
+label = "Button 1 Normal, Button 3 Rapid Fire"
+value = 0x0000
+
+[[dip.option]]
+label = "Button 1 Rapid Fire, Button 3 No Function"
+value = 0x0400
+
+[[dip.option]]
+label = "Off"
+value = 0x0800
+
+[[dip.option]]
+label = "Off"
+value = 0x0c00
+
+[[dip]]
+bank = "SW3"
+name = "Continuous Play"
+mask = 0x1000
+default = 0x0000
+
+[[dip.option]]
+label = "Off"
+value = 0x1000
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "f4-a-h0-c.h0"
+offset = 0x00001
+stride = 2
+size   = 0x40000
+crc32  = 0x2aa5676e
+
+[[region.file]]
+name   = "f4-a-l0-c.l0"
+offset = 0x00000
+stride = 2
+size   = 0x40000
+crc32  = 0x42f75d59
+
+[[region.file]]
+name   = "f4-a-h1-c.h1"
+offset = 0x80001
+stride = 2
+size   = 0x20000
+crc32  = 0xbb7f6968
+
+[[region.file]]
+name   = "f4-a-l1-c.l1"
+offset = 0x80000
+stride = 2
+size   = 0x20000
+crc32  = 0x9d57edd6
+
+# Boot-chunk reload of the final program pair at the top of the 1 MiB CPU space.
+[[region.file]]
+name   = "f4-a-h1-c.h1"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0xbb7f6968
+
+[[region.file]]
+name   = "f4-a-l1-c.l1"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0x9d57edd6
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name   = "f4-b-sh0-b.sh0"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0x30a8e232
+
+[[region.file]]
+name   = "f4-b-sl0-b.sl0"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x204b5f1f
+
+[[region]]
+name = "gfx"
+size = 0x600000
+
+[[region.file]]
+name   = "f4-000.000"
+offset = 0x000000
+size   = 0x80000
+crc32  = 0x920deee9
+
+[[region.file]]
+name   = "f4-001.001"
+offset = 0x080000
+size   = 0x80000
+crc32  = 0xe5725eaf
+
+[[region.file]]
+name   = "f4-010.010"
+offset = 0x100000
+size   = 0x80000
+crc32  = 0x3505d185
+
+[[region.file]]
+name   = "f4-011.011"
+offset = 0x180000
+size   = 0x80000
+crc32  = 0x1912682f
+
+[[region.file]]
+name   = "f4-020.020"
+offset = 0x200000
+size   = 0x80000
+crc32  = 0xec130b8e
+
+[[region.file]]
+name   = "f4-021.021"
+offset = 0x280000
+size   = 0x80000
+crc32  = 0x8dd384dc
+
+[[region.file]]
+name   = "f4-030.030"
+offset = 0x300000
+size   = 0x80000
+crc32  = 0x7e7b30cd
+
+[[region.file]]
+name   = "f4-031.031"
+offset = 0x380000
+size   = 0x80000
+crc32  = 0x83ac56c5
+
+[[region.file]]
+name   = "f4-c00.c00"
+offset = 0x400000
+size   = 0x80000
+crc32  = 0x50cab384
+
+[[region.file]]
+name   = "f4-c01.c01"
+offset = 0x480000
+size   = 0x80000
+crc32  = 0x12a698c8
+
+[[region.file]]
+name   = "f4-c10.c10"
+offset = 0x500000
+size   = 0x80000
+crc32  = 0x330c6df2
+
+[[region.file]]
+name   = "f4-c11.c11"
+offset = 0x580000
+size   = 0x80000
+crc32  = 0x3f9add18

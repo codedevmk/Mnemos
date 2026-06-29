@@ -1,0 +1,89 @@
+# P.T. Reach Mahjong (Japan) -- Irem M14 ROM contract.
+# Local wrapper: D:\emu\irem\PT-Reach-Mahjong-Game_Arcade_JA.zip -> ptrmj.zip.
+# Region names, offsets, sizes, and CRCs follow public Irem M14 set metadata;
+# Mnemos currently uses this media in a first-pass executable M14 route; exact
+# 8085 timing, color, video, and sound behavior remain gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "ptrmj"
+board       = "irem_m14"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name    = "mgpb1.bin"
+aliases = ["ptrmj/mgpb1.bin"]
+offset  = 0x0000
+size    = 0x0400
+crc32   = 0x47c041b8
+
+[[region.file]]
+name    = "mgpa2.bin"
+aliases = ["ptrmj/mgpa2.bin"]
+offset  = 0x0400
+size    = 0x0400
+crc32   = 0xcf8bfa23
+
+[[region.file]]
+name    = "mgpa3.bin"
+aliases = ["ptrmj/mgpa3.bin"]
+offset  = 0x0800
+size    = 0x0400
+crc32   = 0xa07a3093
+
+[[region.file]]
+name    = "mgpa4.bin"
+aliases = ["ptrmj/mgpa4.bin"]
+offset  = 0x0c00
+size    = 0x0400
+crc32   = 0xa420241c
+
+[[region.file]]
+name    = "mgpa5.bin"
+aliases = ["ptrmj/mgpa5.bin"]
+offset  = 0x1000
+size    = 0x0400
+crc32   = 0xa2df92a3
+
+[[region.file]]
+name    = "mgpb6.bin"
+aliases = ["ptrmj/mgpb6.bin"]
+offset  = 0x1400
+size    = 0x0400
+crc32   = 0xf5c0fcd4
+
+[[region.file]]
+name    = "mgpa7.bin"
+aliases = ["ptrmj/mgpa7.bin"]
+offset  = 0x1800
+size    = 0x0400
+crc32   = 0x56ed7eb2
+
+[[region.file]]
+name    = "mgpb8.bin"
+aliases = ["ptrmj/mgpb8.bin"]
+offset  = 0x1c00
+size    = 0x0400
+crc32   = 0x3ecb8214
+
+[[region]]
+name = "gfx1"
+size = 0x0800
+
+[[region.file]]
+name    = "mgpa9.bin"
+aliases = ["ptrmj/mgpa9.bin"]
+offset  = 0x0000
+size    = 0x0400
+crc32   = 0xcb68b4ec
+
+[[region.file]]
+name    = "mgpa10.bin"
+aliases = ["ptrmj/mgpa10.bin"]
+offset  = 0x0400
+size    = 0x0400
+crc32   = 0xe1a4ebdc

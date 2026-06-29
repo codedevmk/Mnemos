@@ -1,0 +1,43 @@
+# Gunforce (US, revision D) -- Irem M92 clone of gunforce.
+# Requires the parent gunforce set beside the clone for inherited graphics,
+# sound, sample, and PLD declarations.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "gunforceu"
+parent      = "gunforce"
+board       = "irem_m92"
+orientation = "horizontal"
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "gf_b-h0-d.ic28"
+offset = 0x000001
+stride = 2
+size   = 0x20000
+crc32  = 0xa6db7b5c
+
+[[region.file]]
+name   = "gf_b-l0-d.ic25"
+offset = 0x000000
+stride = 2
+size   = 0x20000
+crc32  = 0x82cf55f6
+
+[[region.file]]
+name   = "gf_b-h1-d.ic27"
+offset = 0x040001
+stride = 2
+size   = 0x20000
+crc32  = 0x08a3736c
+
+[[region.file]]
+name   = "gf_b-l1-d.ic26"
+offset = 0x040000
+stride = 2
+size   = 0x20000
+crc32  = 0x435f524f

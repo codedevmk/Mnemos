@@ -1,0 +1,186 @@
+# Daiku no Gensan (Japan, M82 hardware) -- Irem M82 conversion set.
+# The local split ZIP omits shared graphics/PAL dumps; the standalone unpacked
+# route is the CRC-clean contract source for this manifest.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "dkgensanm82"
+board  = "irem_m82"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "gen_=m84=_a-h0-d.ic52"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0xa1ca8855
+
+[[region.file]]
+name   = "gen_=m84=_a-l0-d.ic60"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0x247117b0
+
+[[region.file]]
+name   = "gen_=m84=_a-h1-d.ic51"
+offset = 0x60001
+stride = 2
+size   = 0x10000
+crc32  = 0x54e5b73c
+
+[[region.file]]
+name   = "gen_=m84=_a-l1-d.ic59"
+offset = 0x60000
+stride = 2
+size   = 0x10000
+crc32  = 0x894f8a9f
+
+[[region.file]]
+name   = "gen_=m84=_a-h1-d.ic51"
+offset = 0xE0001
+stride = 2
+size   = 0x10000
+crc32  = 0x54e5b73c
+
+[[region.file]]
+name   = "gen_=m84=_a-l1-d.ic59"
+offset = 0xE0000
+stride = 2
+size   = 0x10000
+crc32  = 0x894f8a9f
+
+[[region]]
+name = "soundcpu"
+size = 0x010000
+
+[[region.file]]
+name   = "gen_=m84=_a-sp-d.ic15"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xe83cfc2c
+
+[[region]]
+name = "samples"
+size = 0x020000
+
+[[region.file]]
+name   = "gen_=m84=_a-vo-d.ic12"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xd8595c66
+
+[[region]]
+name = "tiles"
+size = 0x080000
+
+[[region.file]]
+name   = "gen_=m81=_a-l0-a.ic49"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xc577ba5f
+
+[[region.file]]
+name   = "gen_=m81=_a-l1-a.ic48"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x429d12ab
+
+[[region.file]]
+name   = "gen_=m81=_a-h0-a.ic57"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0xb5b163b0
+
+[[region.file]]
+name   = "gen_=m81=_a-h1-a.ic56"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x8ef566a1
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "gen_=m72=_c-l0-b.ic44"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xec5127ef
+
+[[region.file]]
+name   = "gen_=m72=_c-l3-b.ic45"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0xdef65294
+
+[[region.file]]
+name   = "gen_=m72=_c-h0-b.ic46"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0xbb0d6ad4
+
+[[region.file]]
+name   = "gen_=m72=_c-h3-b.ic36"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x4351044e
+
+[[region]]
+name = "residual_sprites2"
+size = 0x080000
+
+[[region.file]]
+name   = "mt_f0.ic38"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x2d5e05d5
+
+[[region.file]]
+name   = "mt_f1.ic39"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0xc68cd65f
+
+[[region.file]]
+name   = "mt_f2.ic40"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0xa71feb2d
+
+[[region.file]]
+name   = "mt_f3.ic41"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x179f7562
+
+[[region]]
+name = "proms"
+size = 0x0800
+
+[[region.file]]
+name   = "mt_a-2h-.ic5"
+offset = 0x0000
+size   = 0x0117
+crc32  = 0x21ede612
+
+[[region.file]]
+name   = "mt_a-5l-.ic31"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0xe3064bfe
+
+[[region.file]]
+name   = "gen=m84=a-7d-d.ic43"
+offset = 0x0400
+size   = 0x0117
+crc32  = 0xa3ee35fe
+
+[[region.file]]
+name   = "gen=m72=c-3f-b.ic23"
+offset = 0x0600
+size   = 0x0117
+crc32  = 0x028932a4

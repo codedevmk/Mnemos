@@ -1,0 +1,176 @@
+# Youjyuden -- Irem M62 raw-media contract.
+# Local wrapper: D:\emu\irem\Yojuden_Arcade_JA.zip -> youjyudn.zip.
+# Region placement is a contiguous artifact contract only; exact M62 bus
+# mapping, video priority, and M6803/AY/MSM5205 behavior remain gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "youjyudn"
+board       = "irem_m62"
+orientation = "horizontal"
+
+[[region]]
+name = "raw_media"
+size = 0x50a24
+
+[[region.file]]
+name   = "yju_a3fb.bin"
+offset = 0x0
+size   = 0x4000
+crc32  = 0xe15c8030
+
+[[region.file]]
+name   = "yju_a4db.bin"
+offset = 0x4000
+size   = 0x4000
+crc32  = 0xc169be13
+
+[[region.file]]
+name   = "yju_a4eb.bin"
+offset = 0x8000
+size   = 0x4000
+crc32  = 0x0d356bdc
+
+[[region.file]]
+name   = "yju_b-5p.bpr"
+offset = 0xc000
+size   = 0x20
+crc32  = 0x2095e6a3
+
+[[region.file]]
+name   = "yju_b-6f.bpr"
+offset = 0xc020
+size   = 0x100
+crc32  = 0x82c20d12
+
+[[region.file]]
+name   = "yju_b-pal16r4a-8m.pal"
+offset = 0xc120
+size   = 0x104
+crc32  = 0x3ece8e61
+
+[[region.file]]
+name   = "yju_b1la.b"
+offset = 0xc224
+size   = 0x100
+crc32  = 0x45e10491
+
+[[region.file]]
+name   = "yju_b1ma.r"
+offset = 0xc324
+size   = 0x100
+crc32  = 0xa8340e13
+
+[[region.file]]
+name   = "yju_b1na.g"
+offset = 0xc424
+size   = 0x100
+crc32  = 0xf5b4bc41
+
+[[region.file]]
+name   = "yju_b3na.10"
+offset = 0xc524
+size   = 0x4000
+crc32  = 0x68879321
+
+[[region.file]]
+name   = "yju_b4ca.20"
+offset = 0x10524
+size   = 0x4000
+crc32  = 0xab365829
+
+[[region.file]]
+name   = "yju_b4ea.21"
+offset = 0x14524
+size   = 0x4000
+crc32  = 0xb36c31e4
+
+[[region.file]]
+name   = "yju_b4fa.01"
+offset = 0x18524
+size   = 0x4000
+crc32  = 0x14b4dd24
+
+[[region.file]]
+name   = "yju_b4ka.00"
+offset = 0x1c524
+size   = 0x4000
+crc32  = 0x1bbb864a
+
+[[region.file]]
+name   = "yju_b4na.11"
+offset = 0x20524
+size   = 0x4000
+crc32  = 0x2860a68b
+
+[[region.file]]
+name   = "yju_p-8d.bpr"
+offset = 0x24524
+size   = 0x200
+crc32  = 0x6cef0fbd
+
+[[region.file]]
+name   = "yju_p1bb.1"
+offset = 0x24724
+size   = 0x8000
+crc32  = 0x94627523
+
+[[region.file]]
+name   = "yju_p1cb.2"
+offset = 0x2c724
+size   = 0x8000
+crc32  = 0x6a378c56
+
+[[region.file]]
+name   = "yju_p2hb.bpr"
+offset = 0x34724
+size   = 0x100
+crc32  = 0xa6fd355c
+
+[[region.file]]
+name   = "yju_p2jb.bpr"
+offset = 0x34824
+size   = 0x100
+crc32  = 0xa4483631
+
+[[region.file]]
+name   = "yju_p2kb.bpr"
+offset = 0x34924
+size   = 0x100
+crc32  = 0x85481103
+
+[[region.file]]
+name   = "yju_p3bb.0"
+offset = 0x34a24
+size   = 0x8000
+crc32  = 0xc017913c
+
+[[region.file]]
+name   = "yju_p4cb.0"
+offset = 0x3ca24
+size   = 0x4000
+crc32  = 0x60baf3b1
+
+[[region.file]]
+name   = "yju_p4eb.1"
+offset = 0x40a24
+size   = 0x4000
+crc32  = 0x8d0521f8
+
+[[region.file]]
+name   = "yju_p4lb.2"
+offset = 0x44a24
+size   = 0x4000
+crc32  = 0x87878d9b
+
+[[region.file]]
+name   = "yju_p4mb.1"
+offset = 0x48a24
+size   = 0x4000
+crc32  = 0x1e1a0d09
+
+[[region.file]]
+name   = "yju_p4pb.0"
+offset = 0x4ca24
+size   = 0x4000
+crc32  = 0xb4ab520b

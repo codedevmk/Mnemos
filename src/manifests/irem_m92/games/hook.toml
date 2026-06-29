@@ -1,0 +1,161 @@
+# Hook -- Irem M92 set.
+# Schema mnemos-romset/1. The first-pass M92 board can load the set, but the
+# encrypted V35 sound program and GA21/GA22 video are not parity-authentic yet.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "hook"
+board       = "irem_m92"
+orientation = "horizontal"
+players     = 4
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "hook_-h0-d.ic25"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x40189ff6
+
+[[region.file]]
+name   = "hook_-l0-d.ic38"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0x14567690
+
+[[region.file]]
+name   = "hook_-h1-.ic24"
+offset = 0x080001
+stride = 2
+size   = 0x20000
+crc32  = 0x264ba1f0
+
+[[region.file]]
+name   = "hook_-l1-.ic37"
+offset = 0x080000
+stride = 2
+size   = 0x20000
+crc32  = 0xf9913731
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name   = "hook_-sh0-.ic27"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0x86a4e56e
+
+[[region.file]]
+name   = "hook_-sl0-.ic28"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x10fd9676
+
+[[region]]
+name = "tiles"
+size = 0x100000
+
+[[region.file]]
+name   = "hook_-c0-.ic4"
+offset = 0x000000
+size   = 0x40000
+crc32  = 0xdec63dcf
+
+[[region.file]]
+name   = "hook_-c1-.ic3"
+offset = 0x040000
+size   = 0x40000
+crc32  = 0xe4eb0b92
+
+[[region.file]]
+name   = "hook_-c2-.ic2"
+offset = 0x080000
+size   = 0x40000
+crc32  = 0xa52b320b
+
+[[region.file]]
+name   = "hook_-c3-.ic1"
+offset = 0x0C0000
+size   = 0x40000
+crc32  = 0x7ef67731
+
+[[region]]
+name = "sprites"
+size = 0x400000
+
+[[region.file]]
+name   = "hook_-000-.ic33"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0xccceac30
+
+[[region.file]]
+name   = "hook_-010-.ic34"
+offset = 0x100000
+size   = 0x100000
+crc32  = 0x8ac8da67
+
+[[region.file]]
+name   = "hook_-020-.ic35"
+offset = 0x200000
+size   = 0x100000
+crc32  = 0x8847af9a
+
+[[region.file]]
+name   = "hook_-030-.ic36"
+offset = 0x300000
+size   = 0x100000
+crc32  = 0x239e877e
+
+[[region]]
+name = "samples"
+size = 0x080000
+
+[[region.file]]
+name   = "hook_-da-.ic11"
+offset = 0x000000
+size   = 0x80000
+crc32  = 0x88cd0212
+
+[[region]]
+name = "plds"
+size = 0x000C00
+
+[[region.file]]
+name   = "m92_a-3m-.ic11"
+offset = 0x0000
+size   = 0x0117
+crc32  = 0xfc718efe
+
+[[region.file]]
+name   = "m92_a-7j-.ic41"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0x5730b25a
+
+[[region.file]]
+name   = "m92_a-9j-.ic51"
+offset = 0x0400
+size   = 0x0117
+crc32  = 0x92d477cf
+
+[[region.file]]
+name   = "m92_d-3j-c.ic26"
+offset = 0x0600
+size   = 0x0117
+crc32  = 0x9ec35216
+
+[[region.file]]
+name   = "m92_d-3p-.ic29"
+offset = 0x0800
+size   = 0x0117
+crc32  = 0x3f336904

@@ -1,0 +1,425 @@
+# Dream Soccer '94 (World, M107 hardware) -- Irem M107 set.
+# Schema mnemos-romset/1; this is a ROM-contract manifest only. The executable
+# M107 board profile remains diagnostic until GA21/GA22 video parity is proven.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "dsoccr94"
+board       = "irem_m107"
+orientation = "horizontal"
+
+# Dream Soccer '94 uses the four-player M107 input profile. SW3:1,2 select
+# player power; the manual marks SW3:3-8 as not for normal operation.
+[[dip]]
+bank = "SW3"
+name = "Player Power"
+mask = 0x0300
+default = 0x0300
+
+[[dip.option]]
+label = "500"
+value = 0x0000
+
+[[dip.option]]
+label = "1000"
+value = 0x0300
+
+[[dip.option]]
+label = "1500"
+value = 0x0100
+
+[[dip.option]]
+label = "2000"
+value = 0x0200
+
+[[dip]]
+bank = "SW1"
+name = "Time"
+mask = 0x0003
+default = 0x0003
+
+[[dip.option]]
+label = "1:30"
+value = 0x0000
+
+[[dip.option]]
+label = "2:00"
+value = 0x0003
+
+[[dip.option]]
+label = "2:30"
+value = 0x0002
+
+[[dip.option]]
+label = "3:00"
+value = 0x0001
+
+[[dip]]
+bank = "SW1"
+name = "Difficulty"
+mask = 0x000c
+default = 0x000c
+
+[[dip.option]]
+label = "Very Easy"
+value = 0x0000
+
+[[dip.option]]
+label = "Easy"
+value = 0x0008
+
+[[dip.option]]
+label = "Normal"
+value = 0x000c
+
+[[dip.option]]
+label = "Hard"
+value = 0x0004
+
+[[dip]]
+bank = "SW1"
+name = "Game Mode"
+mask = 0x0010
+default = 0x0010
+
+[[dip.option]]
+label = "Match Mode"
+value = 0x0010
+
+[[dip.option]]
+label = "Power Mode"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Starting Button"
+mask = 0x0020
+default = 0x0020
+
+[[dip.option]]
+label = "Button 1"
+value = 0x0000
+
+[[dip.option]]
+label = "Start Button"
+value = 0x0020
+
+[[dip]]
+bank = "SW1"
+name = "Demo Sounds"
+mask = 0x0040
+default = 0x0000
+
+[[dip.option]]
+label = "Off"
+value = 0x0040
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Service Mode"
+mask = 0x0080
+default = 0x0080
+
+[[dip.option]]
+label = "Off"
+value = 0x0080
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Flip Screen"
+mask = 0x0100
+default = 0x0100
+
+[[dip.option]]
+label = "Off"
+value = 0x0100
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Cabinet"
+mask = 0x0200
+default = 0x0200
+
+[[dip.option]]
+label = "2 Players"
+value = 0x0200
+
+[[dip.option]]
+label = "4 Players"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coin Slots"
+mask = 0x0400
+default = 0x0400
+
+[[dip.option]]
+label = "Common"
+value = 0x0400
+
+[[dip.option]]
+label = "Separate"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coin Mode"
+mask = 0x0800
+default = 0x0800
+
+[[dip.option]]
+label = "Mode 1"
+value = 0x0800
+
+[[dip.option]]
+label = "Mode 2"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coinage"
+mask = 0xf000
+default = 0xf000
+condition_mask = 0x0800
+condition_value = 0x0800
+
+[[dip.option]]
+label = "6 Coins / 1 Credit"
+value = 0xa000
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0xb000
+
+[[dip.option]]
+label = "4 Coins / 1 Credit"
+value = 0xc000
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0xd000
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0xe000
+
+[[dip.option]]
+label = "2 Coins to Start/1 to Continue"
+value = 0x1000
+
+[[dip.option]]
+label = "3 Coins / 2 Credits"
+value = 0x3000
+
+[[dip.option]]
+label = "4 Coins / 3 Credits"
+value = 0x2000
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0xf000
+
+[[dip.option]]
+label = "2 Coins / 3 Credits"
+value = 0x4000
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0x9000
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x8000
+
+[[dip.option]]
+label = "1 Coin / 4 Credits"
+value = 0x7000
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x6000
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x5000
+
+[[dip.option]]
+label = "Free Play"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coin A"
+mask = 0x3000
+default = 0x3000
+condition_mask = 0x0800
+condition_value = 0x0000
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0x0000
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0x1000
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0x2000
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0x3000
+
+[[dip]]
+bank = "SW2"
+name = "Coin B"
+mask = 0xc000
+default = 0xc000
+condition_mask = 0x0800
+condition_value = 0x0000
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0xc000
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x8000
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x4000
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x0000
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "a3-4p_h0-c-0.ic59"
+offset = 0x00001
+stride = 2
+size   = 0x40000
+crc32  = 0xd01d3fd7
+
+[[region.file]]
+name   = "a3-4p_l0-c-0.ic61"
+offset = 0x00000
+stride = 2
+size   = 0x40000
+crc32  = 0x8af0afe2
+
+[[region.file]]
+name   = "a3_h1-c-0.ic60"
+offset = 0x80001
+stride = 2
+size   = 0x40000
+crc32  = 0x6109041b
+
+[[region.file]]
+name   = "a3_l1-c-0.ic62"
+offset = 0x80000
+stride = 2
+size   = 0x40000
+crc32  = 0x97a01f6b
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name   = "a3-sh0-c-0.ic31"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0x23fe6ffc
+
+[[region.file]]
+name   = "a3-sl0-c-0.ic37"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x768132e5
+
+[[region]]
+name = "gfx"
+size = 0x800000
+
+[[region.file]]
+name   = "ds_c00.ic29"
+offset = 0x000000
+stride = 2
+size   = 0x100000
+crc32  = 0x2d31d418
+
+[[region.file]]
+name   = "ds_c10.ic28"
+offset = 0x000001
+stride = 2
+size   = 0x100000
+crc32  = 0x57f7bcd3
+
+[[region.file]]
+name   = "ds_c01.ic21"
+offset = 0x200000
+stride = 2
+size   = 0x100000
+crc32  = 0x9d31a464
+
+[[region.file]]
+name   = "ds_c11.ic20"
+offset = 0x200001
+stride = 2
+size   = 0x100000
+crc32  = 0xa372e79f
+
+[[region.file]]
+name   = "ds_000.ic11"
+offset = 0x400000
+size   = 0x100000
+crc32  = 0x366b3e29
+
+[[region.file]]
+name   = "ds_010.ic12"
+offset = 0x500000
+size   = 0x100000
+crc32  = 0x28a4cc40
+
+[[region.file]]
+name   = "ds_020.ic13"
+offset = 0x600000
+size   = 0x100000
+crc32  = 0x5a310f7f
+
+[[region.file]]
+name   = "ds_030.ic14"
+offset = 0x700000
+size   = 0x100000
+crc32  = 0x328b1f45
+
+[[region]]
+name = "samples"
+size = 0x100000
+
+[[region.file]]
+name   = "ds_da0.ic24"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0x67fc52fd

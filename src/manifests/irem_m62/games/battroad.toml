@@ -1,0 +1,212 @@
+# The Battle-Road -- Irem M62 raw-media contract.
+# Local wrapper: D:\emu\irem\The-Battle-Road_Arcade_EN.zip -> battroad.zip.
+# Region placement is a contiguous artifact contract only; exact M62 bus
+# mapping, video priority, and M6803/AY/MSM5205 behavior remain gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "battroad"
+board       = "irem_m62"
+orientation = "horizontal"
+
+[[region]]
+name = "raw_media"
+size = 0x30740
+
+[[region.file]]
+name   = "br-a-3e"
+offset = 0x0
+size   = 0x2000
+crc32  = 0xa7140871
+
+[[region.file]]
+name   = "br-a-3f"
+offset = 0x2000
+size   = 0x2000
+crc32  = 0x1bb51b30
+
+[[region.file]]
+name   = "br-a-3h"
+offset = 0x4000
+size   = 0x2000
+crc32  = 0xafb3e083
+
+[[region.file]]
+name   = "br-a-4a"
+offset = 0x6000
+size   = 0x2000
+crc32  = 0x65b61c21
+
+[[region.file]]
+name   = "br-a-4b.b"
+offset = 0x8000
+size   = 0x2000
+crc32  = 0x1865bb22
+
+[[region.file]]
+name   = "br-a-4d.b"
+offset = 0xa000
+size   = 0x2000
+crc32  = 0x39ca1627
+
+[[region.file]]
+name   = "br-a-4e.b"
+offset = 0xc000
+size   = 0x2000
+crc32  = 0x9bf14768
+
+[[region.file]]
+name   = "br-b-1l"
+offset = 0xe000
+size   = 0x100
+crc32  = 0x5271c7d8
+
+[[region.file]]
+name   = "br-b-1m"
+offset = 0xe100
+size   = 0x100
+crc32  = 0x3bd30c7d
+
+[[region.file]]
+name   = "br-b-1n"
+offset = 0xe200
+size   = 0x100
+crc32  = 0xb7f3dc3b
+
+[[region.file]]
+name   = "br-b-3n.a"
+offset = 0xe300
+size   = 0x2000
+crc32  = 0x2668dbef
+
+[[region.file]]
+name   = "br-b-4c.a"
+offset = 0x10300
+size   = 0x2000
+crc32  = 0x0b3193bf
+
+[[region.file]]
+name   = "br-b-4e.a"
+offset = 0x12300
+size   = 0x2000
+crc32  = 0x3662e8fb
+
+[[region.file]]
+name   = "br-b-4f.a"
+offset = 0x14300
+size   = 0x2000
+crc32  = 0x4354232a
+
+[[region.file]]
+name   = "br-b-4k.a"
+offset = 0x16300
+size   = 0x2000
+crc32  = 0xd3c5e85b
+
+[[region.file]]
+name   = "br-b-4n.a"
+offset = 0x18300
+size   = 0x2000
+crc32  = 0xc719a324
+
+[[region.file]]
+name   = "br-b-5p"
+offset = 0x1a300
+size   = 0x20
+crc32  = 0xce746937
+
+[[region.file]]
+name   = "br-b-6f"
+offset = 0x1a320
+size   = 0x100
+crc32  = 0x82c20d12
+
+[[region.file]]
+name   = "br-c-1b"
+offset = 0x1a420
+size   = 0x2000
+crc32  = 0x8088911e
+
+[[region.file]]
+name   = "br-c-1c"
+offset = 0x1c420
+size   = 0x2000
+crc32  = 0x3d78b653
+
+[[region.file]]
+name   = "br-c-1j"
+offset = 0x1e420
+size   = 0x20
+crc32  = 0x78eb5d77
+
+[[region.file]]
+name   = "br-c-3j"
+offset = 0x1e440
+size   = 0x100
+crc32  = 0xaceaed79
+
+[[region.file]]
+name   = "br-c-3k"
+offset = 0x1e540
+size   = 0x100
+crc32  = 0xd90e4a54
+
+[[region.file]]
+name   = "br-c-3l"
+offset = 0x1e640
+size   = 0x100
+crc32  = 0x7cf6f380
+
+[[region.file]]
+name   = "br-c-6h"
+offset = 0x1e740
+size   = 0x2000
+crc32  = 0xca50841c
+
+[[region.file]]
+name   = "br-c-6k"
+offset = 0x20740
+size   = 0x2000
+crc32  = 0x5951e12a
+
+[[region.file]]
+name   = "br-c-6n"
+offset = 0x22740
+size   = 0x2000
+crc32  = 0x7d53163a
+
+[[region.file]]
+name   = "br-c-7a"
+offset = 0x24740
+size   = 0x2000
+crc32  = 0xec3b0080
+
+[[region.file]]
+name   = "br-c-7b"
+offset = 0x26740
+size   = 0x2000
+crc32  = 0x0b31b90b
+
+[[region.file]]
+name   = "br-c-7c"
+offset = 0x28740
+size   = 0x2000
+crc32  = 0x2e1eca52
+
+[[region.file]]
+name   = "br-c-7d"
+offset = 0x2a740
+size   = 0x2000
+crc32  = 0x3aa9fa30
+
+[[region.file]]
+name   = "br-c-7k"
+offset = 0x2c740
+size   = 0x2000
+crc32  = 0xedc75f7f
+
+[[region.file]]
+name   = "br-c-7l"
+offset = 0x2e740
+size   = 0x2000
+crc32  = 0xf2178578

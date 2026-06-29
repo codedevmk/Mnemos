@@ -1,0 +1,43 @@
+# Mystic Riders (Japan / Gun Hohki) -- Irem M92 clone of mysticri.
+# Requires the parent mysticri set beside the clone for inherited graphics,
+# sound, sample, and PLD declarations.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "gunhohki"
+parent      = "mysticri"
+board       = "irem_m92"
+orientation = "horizontal"
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "mr_-h0-.ic28"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x83352270
+
+[[region.file]]
+name   = "mr_-l0-.ic25"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0x9db308ae
+
+[[region.file]]
+name   = "mr_-h1-.ic27"
+offset = 0x080001
+stride = 2
+size   = 0x10000
+crc32  = 0xc9532b60
+
+[[region.file]]
+name   = "mr_-l1-.ic26"
+offset = 0x080000
+stride = 2
+size   = 0x10000
+crc32  = 0x6349b520

@@ -1,0 +1,141 @@
+# Horizon -- Irem M62 raw-media contract.
+# Local wrapper: D:\emu\irem\M72\Horizon_Arcade_EN.zip -> horizon.zip.
+# The local folder is historical corpus sorting, not board proof; Horizon is
+# tracked here as M62-style Z80/M6803 hardware. Region placement remains a
+# contiguous artifact contract only until the executable M62 board profile lands.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "horizon"
+board       = "irem_m62"
+orientation = "horizontal"
+
+[[region]]
+name = "raw_media"
+size = 0x2e720
+
+[[region.file]]
+name   = "hrza-3f"
+offset = 0x0
+size   = 0x4000
+crc32  = 0x7412c99f
+
+[[region.file]]
+name   = "hrza-4b"
+offset = 0x4000
+size   = 0x4000
+crc32  = 0x39c0bd02
+
+[[region.file]]
+name   = "hrza-4d"
+offset = 0x8000
+size   = 0x4000
+crc32  = 0x06b06ac7
+
+[[region.file]]
+name   = "hrza-4e"
+offset = 0xc000
+size   = 0x4000
+crc32  = 0x98b96ba2
+
+[[region.file]]
+name   = "hrzb-1l.b"
+offset = 0x10000
+size   = 0x100
+crc32  = 0x9ad0a0c8
+
+[[region.file]]
+name   = "hrzb-1m.r"
+offset = 0x10100
+size   = 0x100
+crc32  = 0x0871690a
+
+[[region.file]]
+name   = "hrzb-1n.g"
+offset = 0x10200
+size   = 0x100
+crc32  = 0xf247d0a9
+
+[[region.file]]
+name   = "hrzb-3n.10"
+offset = 0x10300
+size   = 0x4000
+crc32  = 0x87078a02
+
+[[region.file]]
+name   = "hrzb-4c.20"
+offset = 0x14300
+size   = 0x4000
+crc32  = 0x90b385e7
+
+[[region.file]]
+name   = "hrzb-4e.21"
+offset = 0x18300
+size   = 0x4000
+crc32  = 0xd05d77a2
+
+[[region.file]]
+name   = "hrzb-4f.01"
+offset = 0x1c300
+size   = 0x4000
+crc32  = 0x356902ea
+
+[[region.file]]
+name   = "hrzb-4k.00"
+offset = 0x20300
+size   = 0x4000
+crc32  = 0x11d2f3a1
+
+[[region.file]]
+name   = "hrzb-4n.11"
+offset = 0x24300
+size   = 0x4000
+crc32  = 0x5019cb1f
+
+[[region.file]]
+name   = "hrzb-5p"
+offset = 0x28300
+size   = 0x20
+crc32  = 0x208b49e9
+
+[[region.file]]
+name   = "hrzb-6f"
+offset = 0x28320
+size   = 0x100
+crc32  = 0x82c20d12
+
+[[region.file]]
+name   = "hrzd-1c"
+offset = 0x28420
+size   = 0x100
+crc32  = 0x6e696f3a
+
+[[region.file]]
+name   = "hrzd-1d"
+offset = 0x28520
+size   = 0x100
+crc32  = 0xb33b08f9
+
+[[region.file]]
+name   = "hrzd-1e"
+offset = 0x28620
+size   = 0x100
+crc32  = 0x1fa60379
+
+[[region.file]]
+name   = "hrzd-4a"
+offset = 0x28720
+size   = 0x2000
+crc32  = 0xeace8d53
+
+[[region.file]]
+name   = "hrzd-4c"
+offset = 0x2a720
+size   = 0x2000
+crc32  = 0x1cf73b53
+
+[[region.file]]
+name   = "hrzd-4d"
+offset = 0x2c720
+size   = 0x2000
+crc32  = 0xb93ed581

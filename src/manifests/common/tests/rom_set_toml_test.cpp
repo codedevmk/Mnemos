@@ -33,6 +33,7 @@ offset = 0x0
 stride = 2
 size = 0x10000
 crc32 = 0x1234ABCD
+aliases = ["prog-alt.lo"]
 
 [[region.file]]
 name = "prog.hi"
@@ -57,6 +58,8 @@ fill = 0x00
     REQUIRE(main.files.size() == 2U);
     CHECK(main.files[0].stride == 2U);
     CHECK(main.files[0].size == 0x10000U);
+    REQUIRE(main.files[0].aliases.size() == 1U);
+    CHECK(main.files[0].aliases[0] == "prog-alt.lo");
     REQUIRE(main.files[0].crc32.has_value());
     CHECK(*main.files[0].crc32 == 0x1234ABCDU);
     CHECK(main.files[1].offset == 1U);
@@ -122,6 +125,14 @@ chip = "mcu"
 profile = "irem_m72.dbreedm72_no_dump_mcu"
 rationale = "The i8751 dump is unavailable; this profile declares the substitution."
 
+[[hle.sample_trigger]]
+trigger = 1
+start = 0x20
+
+[[hle.sample_trigger]]
+trigger = 20
+start = 0x12B20
+
 [[region]]
 name = "maincpu"
 size = 0x100
@@ -131,6 +142,11 @@ size = 0x100
     CHECK(result.value->hle[0].chip == "mcu");
     CHECK(result.value->hle[0].profile == "irem_m72.dbreedm72_no_dump_mcu");
     CHECK_FALSE(result.value->hle[0].rationale.empty());
+    REQUIRE(result.value->hle[0].sample_triggers.size() == 2U);
+    CHECK(result.value->hle[0].sample_triggers[0].trigger == 1U);
+    CHECK(result.value->hle[0].sample_triggers[0].start == 0x20U);
+    CHECK(result.value->hle[0].sample_triggers[1].trigger == 20U);
+    CHECK(result.value->hle[0].sample_triggers[1].start == 0x12B20U);
 }
 
 TEST_CASE("rom_set_toml rejects bad HLE declarations", "[rom_set_toml]") {
@@ -152,6 +168,37 @@ TEST_CASE("rom_set_toml rejects bad HLE declarations", "[rom_set_toml]") {
             "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = \"mcu\"\n"
             "profile = \"p\"\nrationale = \"documented\"\nextra = true\n[[region]]\n"
             "name = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("sample trigger outside 8-bit range is rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = \"mcu\"\n"
+            "profile = \"p\"\nrationale = \"documented\"\n[[hle.sample_trigger]]\n"
+            "trigger = 256\nstart = 0x20\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("sample trigger requires a start") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = \"mcu\"\n"
+            "profile = \"p\"\nrationale = \"documented\"\n[[hle.sample_trigger]]\n"
+            "trigger = 1\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("sample trigger unknown key is rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = \"mcu\"\n"
+            "profile = \"p\"\nrationale = \"documented\"\n[[hle.sample_trigger]]\n"
+            "trigger = 1\nstart = 0x20\nextra = true\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("duplicate sample trigger values are rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = \"mcu\"\n"
+            "profile = \"p\"\nrationale = \"documented\"\n[[hle.sample_trigger]]\n"
+            "trigger = 1\nstart = 0x20\n[[hle.sample_trigger]]\ntrigger = 1\n"
+            "start = 0x40\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
         CHECK_FALSE(result.ok());
     }
 }

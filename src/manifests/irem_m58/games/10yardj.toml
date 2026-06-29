@@ -1,0 +1,35 @@
+# 10-Yard Fight (Japan) -- Irem M58 split-clone ROM contract.
+# The split clone carries replacement program dumps and inherits shared sound,
+# tile, sprite, and PROM regions from the 10yard parent set.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "10yardj"
+parent      = "10yard"
+board       = "irem_m58"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name    = "yf-a.3p"
+aliases = ["10yardj/yf-a.3p"]
+offset  = 0x0000
+size    = 0x2000
+crc32   = 0x4586114f
+
+[[region.file]]
+name    = "yf-a.3n"
+aliases = ["10yardj/yf-a.3n"]
+offset  = 0x2000
+size    = 0x2000
+crc32   = 0x947fa760
+
+[[region.file]]
+name    = "yf-a.3m"
+aliases = ["10yardj/yf-a.3m"]
+offset  = 0x4000
+size    = 0x2000
+crc32   = 0xd4975633

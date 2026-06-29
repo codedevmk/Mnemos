@@ -1,0 +1,120 @@
+# Moon Patrol (Williams license) -- local Irem M52 corpus clone.
+# The local wrapper contains the clone-specific program / subset files. Shared
+# parent files are inherited from mpatrol when a parent provider is available.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "mpatrolw"
+board       = "irem_m52"
+parent      = "mpatrol"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name    = "mpa-1w.3m"
+aliases = ["mpatrolw/mpa-1w.3m"]
+offset  = 0x0000
+size    = 0x1000
+crc32   = 0xbaa1a1d4
+
+[[region.file]]
+name    = "mpa-2w.3l"
+aliases = ["mpatrolw/mpa-2w.3l"]
+offset  = 0x1000
+size    = 0x1000
+crc32   = 0x52459e51
+
+[[region.file]]
+name    = "mpa-3w.3k"
+aliases = ["mpatrolw/mpa-3w.3k"]
+offset  = 0x2000
+size    = 0x1000
+crc32   = 0x9b249fe5
+
+[[region.file]]
+name    = "mpa-4w.3j"
+aliases = ["mpatrolw/mpa-4w.3j"]
+offset  = 0x3000
+size    = 0x1000
+crc32   = 0xfee76972
+
+[[region]]
+name = "soundcpu"
+size = 0x10000
+
+[[region.file]]
+name    = "mpe-1.3l"
+aliases = ["mpatrol/mpe-1.3l"]
+offset  = 0x0000
+size    = 0x1000
+crc32   = 0xc46a7f72
+
+[[region.file]]
+name    = "mpe-2.3k"
+aliases = ["mpatrol/mpe-2.3k"]
+offset  = 0x1000
+size    = 0x1000
+crc32   = 0xc7aa1fb0
+
+[[region.file]]
+name    = "mpe-3.3h"
+aliases = ["mpatrol/mpe-3.3h"]
+offset  = 0x2000
+size    = 0x1000
+crc32   = 0xa0919392
+
+[[region.file]]
+name    = "mpe-4w.3f"
+aliases = ["mpatrolw/mpe-4w.3f"]
+offset  = 0x3000
+size    = 0x1000
+crc32   = 0xcaaba2d9
+
+[[region.file]]
+name    = "mpe-5w.3e"
+aliases = ["mpatrolw/mpe-5w.3e"]
+offset  = 0x4000
+size    = 0x1000
+crc32   = 0xf56e01fe
+
+[[region]]
+name = "proms"
+size = 0x0540
+
+[[region.file]]
+name    = "mpc-1.1f"
+aliases = ["mpatrol/mpc-1.1f"]
+offset  = 0x0000
+size    = 0x0020
+crc32   = 0x26979b13
+
+[[region.file]]
+name    = "mpc-3.1m"
+aliases = ["mpatrol/mpc-3.1m"]
+offset  = 0x0020
+size    = 0x0020
+crc32   = 0x6a57eff2
+
+[[region.file]]
+name    = "mpc-2.2h"
+aliases = ["mpatrol/mpc-2.2h"]
+offset  = 0x0040
+size    = 0x0100
+crc32   = 0x7ae4cd97
+
+[[region.file]]
+name    = "mpc-4a.2a"
+aliases = ["mpatrolw/mpc-4a.2a"]
+offset  = 0x0140
+size    = 0x0200
+crc32   = 0xcb0a5ff3
+
+[[region.file]]
+name    = "mp_7621-5.7h"
+aliases = ["mpatrol/mp_7621-5.7h"]
+offset  = 0x0340
+size    = 0x0200
+crc32   = 0xcf1fd9d0

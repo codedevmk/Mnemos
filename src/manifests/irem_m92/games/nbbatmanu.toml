@@ -1,0 +1,44 @@
+# Ninja Baseball Bat Man (US) -- Irem M92 clone of nbbatman.
+# Requires the parent nbbatman set beside the clone for inherited graphics,
+# sample, PLD, sound, and upper main-program declarations.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "nbbatmanu"
+parent      = "nbbatman"
+board       = "irem_m92"
+orientation = "horizontal"
+players     = 4
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "a1_-h0-a.ic34"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x24a9b794
+
+[[region.file]]
+name   = "a1_-l0-a.ic31"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0x846d7716
+
+[[region.file]]
+name   = "a1_-h1-.ic33"
+offset = 0x080001
+stride = 2
+size   = 0x40000
+crc32  = 0x3ce2aab5
+
+[[region.file]]
+name   = "a1_-l1-.ic32"
+offset = 0x080000
+stride = 2
+size   = 0x40000
+crc32  = 0x116d9bcc

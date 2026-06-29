@@ -4,7 +4,30 @@
 #include "capcom_cps1_adapter.hpp"
 #include "capcom_cps2_adapter.hpp"
 #include "genesis_adapter.hpp"
+#include "irem_m10_adapter.hpp"
+#include "irem_m102_adapter.hpp"
+#include "irem_m107_adapter.hpp"
+#include "irem_m119_adapter.hpp"
+#include "irem_m14_adapter.hpp"
+#include "irem_m15_adapter.hpp"
+#include "irem_m27_adapter.hpp"
+#include "irem_m47_adapter.hpp"
+#include "irem_m52_adapter.hpp"
+#include "irem_m57_adapter.hpp"
+#include "irem_m58_adapter.hpp"
+#include "irem_m62_adapter.hpp"
+#include "irem_m63_adapter.hpp"
 #include "irem_m72_adapter.hpp"
+#include "irem_m75_adapter.hpp"
+#include "irem_m78_adapter.hpp"
+#include "irem_m81_adapter.hpp"
+#include "irem_m82_adapter.hpp"
+#include "irem_m84_adapter.hpp"
+#include "irem_m85_adapter.hpp"
+#include "irem_m90_adapter.hpp"
+#include "irem_m92_adapter.hpp"
+#include "irem_redalert_adapter.hpp"
+#include "irem_travrusa_adapter.hpp"
 #include "msx2_adapter.hpp"
 #include "msx_adapter.hpp"
 #include "sega32x_adapter.hpp"
@@ -28,7 +51,30 @@ namespace {
     namespace cps1 = mnemos::apps::player::adapters::capcom_cps1;
     namespace cps2 = mnemos::apps::player::adapters::capcom_cps2;
     namespace genesis = mnemos::apps::player::adapters::genesis;
+    namespace irem_m10 = mnemos::apps::player::adapters::irem_m10;
+    namespace irem_m102 = mnemos::apps::player::adapters::irem_m102;
+    namespace irem_m119 = mnemos::apps::player::adapters::irem_m119;
+    namespace irem_m14 = mnemos::apps::player::adapters::irem_m14;
+    namespace irem_m15 = mnemos::apps::player::adapters::irem_m15;
+    namespace irem_m27 = mnemos::apps::player::adapters::irem_m27;
+    namespace irem_m47 = mnemos::apps::player::adapters::irem_m47;
+    namespace irem_m52 = mnemos::apps::player::adapters::irem_m52;
+    namespace irem_m57 = mnemos::apps::player::adapters::irem_m57;
+    namespace irem_m58 = mnemos::apps::player::adapters::irem_m58;
+    namespace irem_m62 = mnemos::apps::player::adapters::irem_m62;
+    namespace irem_m63 = mnemos::apps::player::adapters::irem_m63;
+    namespace irem_travrusa = mnemos::apps::player::adapters::irem_travrusa;
     namespace irem_m72 = mnemos::apps::player::adapters::irem_m72;
+    namespace irem_m75 = mnemos::apps::player::adapters::irem_m75;
+    namespace irem_m78 = mnemos::apps::player::adapters::irem_m78;
+    namespace irem_m81 = mnemos::apps::player::adapters::irem_m81;
+    namespace irem_m82 = mnemos::apps::player::adapters::irem_m82;
+    namespace irem_m84 = mnemos::apps::player::adapters::irem_m84;
+    namespace irem_m85 = mnemos::apps::player::adapters::irem_m85;
+    namespace irem_m90 = mnemos::apps::player::adapters::irem_m90;
+    namespace irem_m92 = mnemos::apps::player::adapters::irem_m92;
+    namespace irem_m107 = mnemos::apps::player::adapters::irem_m107;
+    namespace irem_redalert = mnemos::apps::player::adapters::irem_redalert;
     namespace msx = mnemos::apps::player::adapters::msx;
     namespace msx2 = mnemos::apps::player::adapters::msx2;
     namespace sega32x = mnemos::apps::player::adapters::sega32x;
@@ -162,6 +208,332 @@ namespace {
                                                 0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U};
         for (std::size_t i = 0; i < program.size(); ++i) {
             rom[0x200U + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m52_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m52::main_rom_size, 0x00U);
+        const std::vector<std::uint8_t> program{0x3EU, 0x77U, 0x32U, 0x00U, 0x80U,
+                                                0xD3U, 0x10U, 0xC3U, 0x00U, 0x00U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m47_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m47::main_rom_size, 0x00U);
+        const std::vector<std::uint8_t> program{0x3EU, 0x77U, 0x32U, 0x00U, 0x80U,
+                                                0xD3U, 0x10U, 0xC3U, 0x00U, 0x00U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m58_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m58::main_rom_size, 0x00U);
+        const std::vector<std::uint8_t> program{0x3EU, 0x77U, 0x32U, 0x00U, 0x80U,
+                                                0xD3U, 0x10U, 0xC3U, 0x00U, 0x00U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m57_program() {
+        namespace m57 = mnemos::manifests::irem_m57;
+        std::vector<std::uint8_t> rom(m57::main_rom_size, 0xFFU);
+        const auto lo = [](std::uint16_t value) {
+            return static_cast<std::uint8_t>(value & 0x00FFU);
+        };
+        const auto hi = [](std::uint16_t value) { return static_cast<std::uint8_t>(value >> 8U); };
+        const std::vector<std::uint8_t> program{
+            0x3EU, 0x77U, 0x32U, lo(m57::video_ram_base), hi(m57::video_ram_base), 0xD3U, 0x04U,
+            0xC3U, 0x07U, 0x00U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[m57::program_rom_base + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m62_program() {
+        namespace m62 = mnemos::manifests::irem_m62;
+        std::vector<std::uint8_t> rom(m62::main_rom_size, 0xFFU);
+        const auto lo = [](std::uint16_t value) {
+            return static_cast<std::uint8_t>(value & 0x00FFU);
+        };
+        const auto hi = [](std::uint16_t value) { return static_cast<std::uint8_t>(value >> 8U); };
+        const std::vector<std::uint8_t> program{
+            0x3EU, 0x77U, 0x32U, lo(m62::video_ram_base), hi(m62::video_ram_base), 0xD3U, 0x04U,
+            0xC3U, 0x07U, 0x00U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[m62::program_rom_base + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m63_program() {
+        namespace m63 = mnemos::manifests::irem_m63;
+        std::vector<std::uint8_t> rom(m63::main_rom_size, 0xFFU);
+        const auto lo = [](std::uint16_t value) {
+            return static_cast<std::uint8_t>(value & 0x00FFU);
+        };
+        const auto hi = [](std::uint16_t value) { return static_cast<std::uint8_t>(value >> 8U); };
+        const std::vector<std::uint8_t> program{
+            0x3EU, 0x77U, 0x32U, lo(m63::video_ram_base), hi(m63::video_ram_base), 0xD3U, 0x04U,
+            0xC3U, 0x07U, 0x00U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[m63::program_rom_base + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_travrusa_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_travrusa::main_rom_size, 0x00U);
+        const std::vector<std::uint8_t> program{
+            0x3EU, 0x77U, 0x32U, 0x00U, 0x80U, // LD A,$77 ; LD ($8000),A
+            0x3EU, 0x2AU, 0x32U, 0x00U, 0x90U, // LD A,$2A ; LD ($9000),A
+            0x3EU, 0x01U, 0x32U, 0x00U, 0xA0U, // LD A,$01 ; LD ($A000),A
+            0x3EU, 0x01U, 0x32U, 0x00U, 0xD0U, // LD A,$01 ; LD ($D000),A
+            0xC3U, 0x00U, 0x00U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m82_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m82::main_rom_size, 0xFFU);
+        rom[0xFFFF0U] = 0xEAU; // JMP 0000:0200
+        rom[0xFFFF1U] = 0x00U;
+        rom[0xFFFF2U] = 0x02U;
+        rom[0xFFFF3U] = 0x00U;
+        rom[0xFFFF4U] = 0x00U;
+        const std::vector<std::uint8_t> program{0xB8U, 0x00U, 0xA0U, 0x8EU, 0xD8U, 0xB0U,
+                                                0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[0x200U + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m75_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m75::main_rom_size, 0xFFU);
+        const std::vector<std::uint8_t> program{0x3EU, 0x42U, 0x32U, 0x00U, 0xE0U, 0x76U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m78_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m78::main_rom_size, 0x00U);
+        const std::vector<std::uint8_t> program{
+            0x3EU, 0x42U, 0x32U, 0x00U, 0xE0U,
+            0x3EU, 0x11U, 0x01U, 0x00U, 0x80U, 0xEDU, 0x79U,
+            0xC3U, 0x00U, 0x00U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m15_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m15::main_rom_size, 0xFFU);
+        const std::vector<std::uint8_t> program{0xA9U, 0x42U, 0x8DU, 0x00U, 0x00U, 0xA9U, 0x81U,
+                                                0x8DU, 0x00U, 0x40U, 0x4CU, 0x0AU, 0x10U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[mnemos::manifests::irem_m15::program_rom_base + i] = program[i];
+        }
+        rom[0xFFFCU] = static_cast<std::uint8_t>(mnemos::manifests::irem_m15::program_rom_base);
+        rom[0xFFFDU] =
+            static_cast<std::uint8_t>(mnemos::manifests::irem_m15::program_rom_base >> 8U);
+        rom[0xFFFEU] = static_cast<std::uint8_t>(mnemos::manifests::irem_m15::program_rom_base);
+        rom[0xFFFFU] =
+            static_cast<std::uint8_t>(mnemos::manifests::irem_m15::program_rom_base >> 8U);
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m14_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m14::main_rom_size, 0xFFU);
+        const std::vector<std::uint8_t> program{0x3EU, 0x42U, 0x32U, 0x00U, 0x20U, 0x3EU, 0x81U,
+                                                0x32U, 0x00U, 0x24U, 0xC3U, 0x0AU, 0x00U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[mnemos::manifests::irem_m14::program_rom_base + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m27_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m27::main_rom_size, 0xFFU);
+        const std::vector<std::uint8_t> program{0xA9U, 0x42U, 0x8DU, 0x00U, 0x00U, 0xA9U, 0x81U,
+                                                0x8DU, 0x00U, 0x20U, 0x4CU, 0x0AU, 0x80U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[mnemos::manifests::irem_m27::program_rom_base + i] = program[i];
+        }
+        rom[0xFFFCU] = static_cast<std::uint8_t>(mnemos::manifests::irem_m27::program_rom_base);
+        rom[0xFFFDU] =
+            static_cast<std::uint8_t>(mnemos::manifests::irem_m27::program_rom_base >> 8U);
+        rom[0xFFFEU] = static_cast<std::uint8_t>(mnemos::manifests::irem_m27::program_rom_base);
+        rom[0xFFFFU] =
+            static_cast<std::uint8_t>(mnemos::manifests::irem_m27::program_rom_base >> 8U);
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m10_program() {
+        namespace M10 = mnemos::manifests::irem_m10;
+        std::vector<std::uint8_t> rom(M10::main_rom_size, 0xFFU);
+        rom[0x0000U] = 0xC3U;
+        rom[0x0001U] = static_cast<std::uint8_t>(M10::program_rom_base);
+        rom[0x0002U] = static_cast<std::uint8_t>(M10::program_rom_base >> 8U);
+        const std::vector<std::uint8_t> program{0x3EU, 0x42U, 0x32U, 0x00U, 0x00U,
+                                                0x3EU, 0x81U, 0x32U, 0x00U, 0x40U,
+                                                0xC3U, 0x0AU, 0x10U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[M10::program_rom_base + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_redalert_program() {
+        namespace red = mnemos::manifests::irem_redalert;
+        std::vector<std::uint8_t> rom(red::main_rom_size, 0xFFU);
+        const std::vector<std::uint8_t> program{
+            0xA9U, 0x42U, 0x8DU, 0x00U, 0x00U, // LDA #$42 ; STA $0000
+            0xA9U, 0x07U, 0x8DU, 0x50U, 0xC0U, // LDA #$07 ; STA $C050
+            0xA9U, 0x81U, 0x8DU, 0x00U, 0x20U, // LDA #$81 ; STA $2000
+            0xA9U, 0xC3U, 0x8DU, 0x00U, 0x40U, // LDA #$C3 ; STA $4000
+            0xA9U, 0x00U, 0x8DU, 0x30U, 0xC0U, // LDA #$00 ; STA $C030
+            0xA9U, 0x04U, 0x8DU, 0x40U, 0xC0U, // LDA #$04 ; STA $C040
+            0xADU, 0x70U, 0xC0U,             // LDA $C070 ; clear IRQ
+            0x4CU, 0x21U, 0x50U};             // JMP $5021
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[red::program_rom_base + i] = program[i];
+        }
+        rom[red::vector_mirror_source + 0x0FFCU] =
+            static_cast<std::uint8_t>(red::program_rom_base);
+        rom[red::vector_mirror_source + 0x0FFDU] =
+            static_cast<std::uint8_t>(red::program_rom_base >> 8U);
+        rom[red::vector_mirror_source + 0x0FFEU] =
+            static_cast<std::uint8_t>(red::program_rom_base);
+        rom[red::vector_mirror_source + 0x0FFFU] =
+            static_cast<std::uint8_t>(red::program_rom_base >> 8U);
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m81_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m81::main_rom_size, 0xFFU);
+        rom[0xFFFF0U] = 0xEAU; // JMP 0000:0200
+        rom[0xFFFF1U] = 0x00U;
+        rom[0xFFFF2U] = 0x02U;
+        rom[0xFFFF3U] = 0x00U;
+        rom[0xFFFF4U] = 0x00U;
+        const std::vector<std::uint8_t> program{0xB8U, 0x00U, 0xA0U, 0x8EU, 0xD8U, 0xB0U,
+                                                0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[0x200U + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m84_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m84::main_rom_size, 0xFFU);
+        rom[0xFFFF0U] = 0xEAU; // JMP 0000:0200
+        rom[0xFFFF1U] = 0x00U;
+        rom[0xFFFF2U] = 0x02U;
+        rom[0xFFFF3U] = 0x00U;
+        rom[0xFFFF4U] = 0x00U;
+        const std::vector<std::uint8_t> program{0xB8U, 0x00U, 0xA0U, 0x8EU, 0xD8U, 0xB0U,
+                                                0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[0x200U + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m85_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m85::main_rom_size, 0xFFU);
+        rom[0xFFFF0U] = 0xEAU; // JMP 0000:0200
+        rom[0xFFFF1U] = 0x00U;
+        rom[0xFFFF2U] = 0x02U;
+        rom[0xFFFF3U] = 0x00U;
+        rom[0xFFFF4U] = 0x00U;
+        const std::vector<std::uint8_t> program{0xB8U, 0x00U, 0xA0U, 0x8EU, 0xD8U, 0xB0U,
+                                                0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[0x200U + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m90_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m90::main_rom_size, 0xFFU);
+        rom[0xFFFF0U] = 0xEAU; // JMP 0000:0200
+        rom[0xFFFF1U] = 0x00U;
+        rom[0xFFFF2U] = 0x02U;
+        rom[0xFFFF3U] = 0x00U;
+        rom[0xFFFF4U] = 0x00U;
+        const std::vector<std::uint8_t> program{0xB8U, 0x00U, 0xA0U, 0x8EU, 0xD8U, 0xB0U,
+                                                0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[0x200U + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m107_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m107::main_rom_size, 0xFFU);
+        rom[0xFFFF0U] = 0xEAU; // JMP 0000:0200
+        rom[0xFFFF1U] = 0x00U;
+        rom[0xFFFF2U] = 0x02U;
+        rom[0xFFFF3U] = 0x00U;
+        rom[0xFFFF4U] = 0x00U;
+        const std::vector<std::uint8_t> program{0xB8U, 0x00U, 0xA0U, 0x8EU, 0xD8U, 0xB0U,
+                                                0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[0x200U + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m92_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m92::main_rom_size, 0xFFU);
+        rom[0xFFFF0U] = 0xEAU; // JMP 0000:0200
+        rom[0xFFFF1U] = 0x00U;
+        rom[0xFFFF2U] = 0x02U;
+        rom[0xFFFF3U] = 0x00U;
+        rom[0xFFFF4U] = 0x00U;
+        const std::vector<std::uint8_t> program{0xB8U, 0x00U, 0xE0U, 0x8EU, 0xD8U, 0xB0U,
+                                                0x42U, 0xA2U, 0x00U, 0x00U, 0xF4U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[0x200U + i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m102_program() {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m102::main_rom_size, 0x00U);
+        const std::vector<std::uint8_t> program{
+            0x3EU, 0x42U, 0x32U, 0x00U, 0xE0U,
+            0x3EU, 0x81U, 0x32U, 0x00U, 0xC0U,
+            0x3EU, 0x24U, 0x32U, 0x00U, 0xD0U,
+            0x3EU, 0x5AU, 0xD3U, 0x50U,
+            0xC3U, 0x13U, 0x00U};
+        for (std::size_t i = 0; i < program.size(); ++i) {
+            rom[i] = program[i];
+        }
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> irem_m119_program() {
+        namespace m119 = mnemos::manifests::irem_m119;
+        std::vector<std::uint8_t> rom(m119::main_rom_size, 0x00U);
+        poke32_be(rom, 0x0U, 0x00000100U);
+        poke32_be(rom, 0x4U, m119::work_ram_base + m119::work_ram_size - 4U);
+        for (std::size_t at = 0x100U; at < 0x180U; at += 2U) {
+            poke16_be(rom, at, 0x0009U);
         }
         return rom;
     }
@@ -302,6 +674,201 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
         const auto summary = summary_for(adapter);
         require_common_session_controls(summary, true);
         require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M75") {
+        irem_m75::irem_m75_adapter adapter(irem_m75_program(), "Tiny M75");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M10") {
+        irem_m10::irem_m10_adapter adapter(irem_m10_program(), "Tiny M10");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+        require_line(summary, "capability memory memory.8085a.registers state=available");
+    }
+
+    SECTION("Irem M78") {
+        irem_m78::irem_m78_adapter adapter(irem_m78_program(), "Tiny M78");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+        require_line(summary, "capability memory memory.z80_0.registers state=available");
+        require_line(summary, "capability memory memory.z80_1.registers state=available");
+        require_line(summary, "capability memory memory.ym2151.registers state=available");
+    }
+
+    SECTION("Irem M15") {
+        irem_m15::irem_m15_adapter adapter(irem_m15_program(), "Tiny M15");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M14") {
+        irem_m14::irem_m14_adapter adapter(irem_m14_program(), "Tiny M14");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+        require_line(summary, "capability memory memory.8085a.registers state=available");
+    }
+
+    SECTION("Irem M27") {
+        irem_m27::irem_m27_adapter adapter(irem_m27_program(), "Tiny M27");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem Red Alert") {
+        irem_redalert::irem_redalert_adapter adapter(irem_redalert_program(), "Tiny WW III");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M52") {
+        irem_m52::irem_m52_adapter adapter(irem_m52_program(), "Tiny M52");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+        require_line(summary, "capability memory memory.z80_0.registers state=available");
+        require_line(summary, "capability memory memory.z80_1.registers state=available");
+        require_line(summary, "capability memory memory.ym2149_0.registers state=available");
+        require_line(summary, "capability memory memory.ym2149_1.registers state=available");
+        require_line(summary, "capability memory memory.msm5205.registers state=available");
+    }
+
+    SECTION("Irem M47") {
+        irem_m47::irem_m47_adapter adapter(irem_m47_program(), "Tiny M47");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+        require_line(summary, "capability memory memory.z80_0.registers state=available");
+        require_line(summary, "capability memory memory.z80_1.registers state=available");
+        require_line(summary, "capability memory memory.ym2149_0.registers state=available");
+        require_line(summary, "capability memory memory.ym2149_1.registers state=available");
+    }
+
+    SECTION("Irem M58") {
+        irem_m58::irem_m58_adapter adapter(irem_m58_program(), "Tiny M58");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+        require_line(summary, "capability memory memory.z80.registers state=available");
+        require_line(summary, "capability memory memory.mc6803.registers state=available");
+        require_line(summary, "capability memory memory.ym2149_0.registers state=available");
+        require_line(summary, "capability memory memory.ym2149_1.registers state=available");
+    }
+
+    SECTION("Irem M57") {
+        irem_m57::irem_m57_adapter adapter(irem_m57_program(), "Tiny M57");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+        require_line(summary, "capability memory memory.z80.registers state=available");
+    }
+
+    SECTION("Irem M62") {
+        irem_m62::irem_m62_adapter adapter(irem_m62_program(), "Tiny M62");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+        require_line(summary, "capability memory memory.z80.registers state=available");
+        require_line(summary, "capability memory memory.mc6803.registers state=available");
+        require_line(summary, "capability memory memory.ym2149_0.registers state=available");
+        require_line(summary, "capability memory memory.ym2149_1.registers state=available");
+    }
+
+    SECTION("Irem M63") {
+        irem_m63::irem_m63_adapter adapter(irem_m63_program(), "Tiny M63");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+        require_line(summary, "capability memory memory.z80.registers state=available");
+    }
+
+    SECTION("Irem Traverse USA") {
+        irem_travrusa::irem_travrusa_adapter adapter(irem_travrusa_program(), "Tiny travrusa");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+        require_line(summary, "capability memory memory.z80_0.registers state=available");
+        require_line(summary, "capability memory memory.z80_1.registers state=available");
+        require_line(summary, "capability memory memory.ym2149_0.registers state=available");
+        require_line(summary, "capability memory memory.ym2149_1.registers state=available");
+        require_line(summary, "capability memory memory.msm5205.registers state=available");
+    }
+
+    SECTION("Irem M81") {
+        irem_m81::irem_m81_adapter adapter(irem_m81_program(), "Tiny M81");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M82") {
+        irem_m82::irem_m82_adapter adapter(irem_m82_program(), "Tiny M82");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M84") {
+        irem_m84::irem_m84_adapter adapter(irem_m84_program(), "Tiny M84");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M85") {
+        irem_m85::irem_m85_adapter adapter(irem_m85_program(), "Tiny M85");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M90") {
+        irem_m90::irem_m90_adapter adapter(irem_m90_program(), "Tiny M90");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M107") {
+        irem_m107::irem_m107_adapter adapter(irem_m107_program(), "Tiny M107");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M119") {
+        irem_m119::irem_m119_adapter adapter(irem_m119_program(), "Tiny M119");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+        require_line(summary, "capability memory memory.hd6417708s.registers state=available");
+        require_line(summary, "capability memory memory.upd94244_210.registers state=available");
+        require_line(summary, "capability memory memory.ymz280b.registers state=available");
+    }
+
+    SECTION("Irem M92") {
+        irem_m92::irem_m92_adapter adapter(irem_m92_program(), "Tiny M92");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M102") {
+        irem_m102::irem_m102_adapter adapter(irem_m102_program(), "Tiny M102");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+        require_line(summary, "capability memory memory.z80.registers state=available");
+        require_line(summary, "capability memory memory.ga20.registers state=available");
     }
 
     SECTION("Taito F2") {

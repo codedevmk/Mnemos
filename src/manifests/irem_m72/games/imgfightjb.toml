@@ -151,24 +151,28 @@ size = 0x040000
 
 [[region.file]]
 name   = "ic30.3d"
+aliases = ["if_b-a0.ic21"]
 offset = 0x00000
 size   = 0x10000
 crc32  = 0x34ee2d77
 
 [[region.file]]
 name   = "ic31.3e"
+aliases = ["if_b-a1.ic22"]
 offset = 0x10000
 size   = 0x10000
 crc32  = 0x6bd2845b
 
 [[region.file]]
 name   = "ic29.3c"
+aliases = ["if_b-a2.ic20"]
 offset = 0x20000
 size   = 0x10000
 crc32  = 0x090d50e5
 
 [[region.file]]
 name   = "ic32.3f"
+aliases = ["if_b-a3.ic23"]
 offset = 0x30000
 size   = 0x10000
 crc32  = 0x3a8e3083
@@ -179,24 +183,28 @@ size = 0x040000
 
 [[region.file]]
 name   = "ic35.3k"
+aliases = ["if_b-b0.ic26"]
 offset = 0x00000
 size   = 0x10000
 crc32  = 0xb425c829
 
 [[region.file]]
 name   = "ic36.3l"
+aliases = ["if_b-b1.ic27"]
 offset = 0x10000
 size   = 0x10000
 crc32  = 0xe9bfe23e
 
 [[region.file]]
 name   = "ic34.3j"
+aliases = ["if_b-b2.ic25"]
 offset = 0x20000
 size   = 0x10000
 crc32  = 0x256e50f2
 
 [[region.file]]
 name   = "ic33.3h"
+aliases = ["if_b-b3.ic24"]
 offset = 0x30000
 size   = 0x10000
 crc32  = 0x4c682785
@@ -207,12 +215,14 @@ size = 0x20000
 
 [[region.file]]
 name   = "ic28.lower.2n"
+aliases = ["if_c-v0.ic44"]
 offset = 0x00000
 size   = 0x10000
 crc32  = 0xcb64a194
 
 [[region.file]]
 name   = "ic28.upper.2n"
+aliases = ["if_c-v1.ic45"]
 offset = 0x10000
 size   = 0x10000
 crc32  = 0x45b68bf5

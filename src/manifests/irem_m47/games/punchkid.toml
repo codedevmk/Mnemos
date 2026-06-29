@@ -1,0 +1,81 @@
+# Punching Kid (Japan) -- Irem M47 split-clone ROM contract.
+# Current execution is a first-pass board route, not board-authentic
+# timing/video/audio parity.
+# Local wrapper: D:\emu\irem\M47\punchkid.zip.
+# The split clone carries replacement program and 8x8 graphics dumps; shared
+# audio, sample, 16x16 graphics, and PROM regions are inherited from olibochu.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "punchkid"
+parent      = "olibochu"
+board       = "irem_m47"
+orientation = "vertical"
+
+[[region]]
+name = "maincpu"
+size = 0x8000
+
+[[region.file]]
+name   = "pka_1.n3"
+offset = 0x0000
+size   = 0x1000
+crc32  = 0x18f1fa10
+
+[[region.file]]
+name   = "pka_2.m3"
+offset = 0x1000
+size   = 0x1000
+crc32  = 0x7766d9be
+
+[[region.file]]
+name   = "pka_3.k3"
+offset = 0x2000
+size   = 0x1000
+crc32  = 0xbb90e21b
+
+[[region.file]]
+name   = "pka_4.j3"
+offset = 0x3000
+size   = 0x1000
+crc32  = 0xce18a851
+
+[[region.file]]
+name   = "pka_5.h3"
+offset = 0x4000
+size   = 0x1000
+crc32  = 0x426c8254
+
+[[region.file]]
+name   = "pka_6.f3"
+offset = 0x5000
+size   = 0x1000
+crc32  = 0x288b223e
+
+[[region.file]]
+name   = "pka_7.e3"
+offset = 0x6000
+size   = 0x1000
+crc32  = 0xc689e057
+
+[[region.file]]
+name   = "pka_8.d3"
+offset = 0x7000
+size   = 0x1000
+crc32  = 0x61c118e0
+
+[[region]]
+name = "gfx8x8"
+size = 0x2000
+
+[[region.file]]
+name   = "pka_13.n6"
+offset = 0x0000
+size   = 0x1000
+crc32  = 0x388f2bfd
+
+[[region.file]]
+name   = "pka_14.n4"
+offset = 0x1000
+size   = 0x1000
+crc32  = 0xb5bf456f

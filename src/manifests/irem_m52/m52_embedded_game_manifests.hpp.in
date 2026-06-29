@@ -1,0 +1,17 @@
+#pragma once
+
+#include <array>
+#include <string_view>
+#include <utility>
+
+namespace mnemos::manifests::irem_m52::embedded {
+
+@MNEMOS_IREM_M52_EMBEDDED_CONSTANTS@
+
+    inline constexpr std::array<std::pair<std::string_view, std::string_view>,
+                                @MNEMOS_IREM_M52_GAME_MANIFEST_COUNT@>
+        game_manifests{{
+@MNEMOS_IREM_M52_EMBEDDED_ENTRIES@
+        }};
+
+} // namespace mnemos::manifests::irem_m52::embedded

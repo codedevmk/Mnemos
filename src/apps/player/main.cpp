@@ -1,8 +1,13 @@
 // SDL3 windowed player. Boots the player_system adapter named by --system
-// (genesis / sms / gg / c64 / segacd / sega32x / irem_m72 / taito_f2 /
-// taito_gnet / cps1 / cps2 / spectrum / nes / msx / amiga500) with the --rom
-// media (zip archives are extracted transparently), presents its framebuffer at integer scale, streams
-// audio, and routes keyboard + gamepad input. ESC quits. Optional devices
+// (genesis / sms / gg / c64 / segacd / sega32x / irem_m10 / irem_m14 / irem_m15 / irem_m27 /
+// irem_m47 / irem_m52 / irem_m57 / irem_m58 / irem_m62 / irem_m63 / irem_travrusa /
+// irem_redalert / irem_m72 / irem_m75 / irem_m78 / irem_m81 / irem_m82 / irem_m84 / irem_m85 /
+// irem_m90 / irem_m92 / irem_m102 / irem_m107 / irem_m119 / taito_f2 / taito_gnet / cps1 / cps2 /
+// spectrum / nes / msx / msx2 / amiga500)
+// with the --rom media (zip archives are extracted transparently; Irem arcade
+// boards also accept wrapper zips and unpacked set directories),
+// presents its framebuffer at integer scale, streams audio, and routes keyboard
+// + gamepad input. ESC quits. Optional devices
 // include --fm for MSX-MUSIC/FM-PAC or SMS YM2413, --rtc for MSX RP-5C01
 // clock/CMOS, and --msx2 for MSX2/V9938 video hardware.
 
@@ -16,6 +21,7 @@
 #include "region.hpp"
 #include "region_args.hpp"
 #include "state_file.hpp"
+#include "system_family.hpp" // family_names() for the usage screen
 #include "system_launch.hpp"
 #include "text_overlay.hpp"
 
@@ -286,7 +292,8 @@ namespace {
         state.aim_y = normalize_analog_axis(SDL_GetGamepadAxis(gp, y_axis));
     }
 
-    [[nodiscard]] bool key_pressed(const bool* keys, int key_count, SDL_Scancode scancode) noexcept {
+    [[nodiscard]] bool key_pressed(const bool* keys, int key_count,
+                                   SDL_Scancode scancode) noexcept {
         const int index = static_cast<int>(scancode);
         return keys != nullptr && index >= 0 && index < key_count && keys[index];
     }
@@ -296,15 +303,14 @@ namespace {
         if (keys == nullptr || key_count <= 0) {
             return;
         }
-        const auto count = std::min<std::size_t>(
-            static_cast<std::size_t>(key_count), mnemos::peripheral::keyboard_usage_count);
+        const auto count = std::min<std::size_t>(static_cast<std::size_t>(key_count),
+                                                 mnemos::peripheral::keyboard_usage_count);
         for (std::size_t usage = 0; usage < count; ++usage) {
             state.set_key(static_cast<std::uint16_t>(usage), keys[usage]);
         }
     }
 
-    [[nodiscard]] const char*
-    load_status_name(mnemos::runtime::load_status status) noexcept {
+    [[nodiscard]] const char* load_status_name(mnemos::runtime::load_status status) noexcept {
         switch (status) {
         case mnemos::runtime::load_status::ok:
             return "ok";
@@ -336,8 +342,7 @@ namespace {
             return;
         }
         const std::vector<std::uint8_t> bytes = system->save_state();
-        if (bytes.empty() ||
-            !mnemos::apps::player::adapters::save_save_state_file(path, bytes)) {
+        if (bytes.empty() || !mnemos::apps::player::adapters::save_save_state_file(path, bytes)) {
             std::fprintf(stderr, "[mnemos_player] quick save failed: %s\n", path.c_str());
         } else {
             std::fprintf(stderr, "[mnemos_player] quick saved: %s (%zu bytes)\n", path.c_str(),
@@ -411,6 +416,65 @@ namespace {
         std::fflush(stderr);
     }
 
+    void print_usage() {
+        std::printf(
+            R"(mnemos_player -- Mnemos multi-system emulator (SDL3 windowed player)
+
+Usage:
+  mnemos_player --system <name> --rom <file-or-folder> [options]
+
+Systems (--system, -s):
+  %s
+
+Core:
+  --rom, -r <path>      Primary media (Irem arcade accepts zips, wrappers, or folders)
+  --disk <file>         Additional disk image (F6 cycles a multi-disk set)
+  --system, -s <name>   Emulation engine to run (required with media)
+  --region <ntsc|pal>   Force a region instead of the media's default
+  --mapper <name>       Override cartridge mapper (system-specific vocabulary)
+  --mapper2 <name>      Mapper for a system's second slot (e.g. MSX cart 2)
+  --dip <value>         16-bit DIP bank (0x-hex or decimal)
+  --no-autostart        Drop to a bare prompt instead of auto-loading
+
+Optional hardware:
+  --fm                  FM expansion (SMS YM2413 / MSX-MUSIC / FM-PAC)
+  --rtc                 Battery-backed RTC where present (MSX RP-5C01)
+  --msx2                Select MSX2-class video hardware (V9938)
+  --light-gun           Plug a light gun into the gun port
+  --four-score          NES Four Score 4-player multitap
+
+Headless (run, do work, then exit -- no window opens):
+  --screenshot <file> --frames <n>    Dump a frame (.png or .ppm) after n frames
+  --save-state <file> [--frames <n>]  Write a save-state container, then exit
+  --load-state <file>                 Restore a save-state before running
+  --capabilities                      Print the system capability summary
+  --extract-assets <base> [--extract-frames <n>]   Dump decoded gfx to <base>.*
+  --extract-audio <base> [--extract-frames <n>]    Dump chip PCM to <base>.*
+  --record-gif <file.gif> --frames <n>             Record n frames as a GIF
+  --record-movie <base> --frames <n>               Record a PNG frame sequence
+  --press [pN:]<button>@<frame>[+hold]             Scripted input (headless)
+
+Other:
+  --help, -h            Show this help and exit
+
+Window hotkeys:
+  ESC quit   P pause   F5 quick-save   F9 quick-load
+  F6 swap disk   F11 fullscreen   F12 dump PPM frame
+
+Keyboard as pad:
+  arrows = D-pad   Z/X/C = A/B/C   A/S/D = X/Y/Z (Genesis 6-button extras)
+  Enter or 1 = Start   Backspace or 5 = Select/coin   LShift = Mode
+  6 = service credit   F2 = test switch
+
+Environment:
+  MNEMOS_*_BIOS / MNEMOS_*_BIOS_DIR   BIOS/Kickstart paths (Sega CD, 32X, FDS,
+                                      MSX/MSX2, Amiga Kickstart)
+  MNEMOS_GPU_DRIVER                   Override GPU backend (default direct3d12 on Windows)
+  MNEMOS_GPU_DEBUG=1                  Enable the GPU validation layer (slow)
+)",
+            mnemos::apps::player::adapters::family_names());
+    }
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -425,6 +489,7 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_extract_audio_args;
     using mnemos::apps::player::adapters::parse_fm_unit_arg;
     using mnemos::apps::player::adapters::parse_four_score_arg;
+    using mnemos::apps::player::adapters::parse_help_arg;
     using mnemos::apps::player::adapters::parse_light_gun_arg;
     using mnemos::apps::player::adapters::parse_load_state_arg;
     using mnemos::apps::player::adapters::parse_mapper2_arg;
@@ -437,9 +502,15 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_save_state_args;
     using mnemos::apps::player::adapters::parse_screenshot_args;
     using mnemos::apps::player::adapters::parse_system_arg;
-    using mnemos::apps::player::adapters::state_path_for;
     using mnemos::apps::player::adapters::srm_path_for;
+    using mnemos::apps::player::adapters::state_path_for;
     using mnemos::apps::player::adapters::validate_headless_request_args;
+
+    // --help / -h short-circuits before touching media, SDL, or the GPU.
+    if (parse_help_arg(argc, argv)) {
+        print_usage();
+        return 0;
+    }
 
     if (const auto headless_error = validate_headless_request_args(argc, argv)) {
         std::fprintf(stderr, "%s\n", headless_error->c_str());
@@ -486,8 +557,9 @@ int main(int argc, char* argv[]) {
         return launch.exit_code;
     }
     auto system = std::move(launch.system);
-    const std::string quick_state_path =
-        launch.primary_media_path.empty() ? std::string{} : state_path_for(launch.primary_media_path);
+    const std::string quick_state_path = launch.primary_media_path.empty()
+                                             ? std::string{}
+                                             : state_path_for(launch.primary_media_path);
 
     // Diagnostic/headless sweeps over ROM corpora must not create or update
     // save files beside source media.

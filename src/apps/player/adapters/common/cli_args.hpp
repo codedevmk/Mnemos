@@ -138,6 +138,11 @@ namespace mnemos::apps::player::adapters {
     [[nodiscard]] std::optional<std::string> validate_headless_request_args(int argc,
                                                                             char* argv[]);
 
+    // --help / -h: print the usage screen and exit before loading any media.
+    // A bare presence flag -- it consumes no value and is recognised wherever it
+    // appears on the command line.
+    [[nodiscard]] bool parse_help_arg(int argc, char* argv[]);
+
     enum class animation_record_format : std::uint8_t {
         gif,
         movie_frames,

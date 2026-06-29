@@ -1,0 +1,159 @@
+# Dragon Breed (World) -- Irem M81 parent set.
+# Schema mnemos-romset/1; this is a ROM-contract manifest only. The executable
+# M81 board profile remains separate from M72 because the program/video wiring
+# is not a true-M72 variant.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "dbreed"
+board       = "irem_m81"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "db_a-h0-.ic59"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0xe1177267
+
+[[region.file]]
+name   = "db_a-l0-.ic68"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xd82b167e
+
+# Boot-chunk reload of the only program pair at the top of the 1 MiB V30 space.
+[[region.file]]
+name   = "db_a-h0-.ic59"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0xe1177267
+
+[[region.file]]
+name   = "db_a-l0-.ic68"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0xd82b167e
+
+[[region]]
+name = "soundcpu"
+size = 0x010000
+
+[[region.file]]
+name   = "db_a-sp-.ic14"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x54a61560
+
+[[region]]
+name = "samples"
+size = 0x020000
+
+[[region.file]]
+name   = "db_a-v0-.ic11"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x312f7282
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "db_k800m.00.ic2"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xc027a8cf
+
+[[region.file]]
+name   = "db_k801m.10.ic5"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x093faf33
+
+[[region.file]]
+name   = "db_k802m.20.ic12"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0x055b4c59
+
+[[region.file]]
+name   = "db_k803m.30.ic14"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x8ed63922
+
+[[region]]
+name = "tiles"
+size = 0x080000
+
+[[region.file]]
+name   = "db_k804m.a0.ic50"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x4c83e92e
+
+[[region.file]]
+name   = "db_k805m.a1.ic49"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x835ef268
+
+[[region.file]]
+name   = "db_k806m.a2.ic51"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0x5117f114
+
+[[region.file]]
+name   = "db_k807m.a3.ic52"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x8eb0c978
+
+[[region]]
+name = "proms"
+size = 0x065c
+
+[[region.file]]
+name   = "m81_a-9l-.ic72"
+offset = 0x0000
+size   = 0x0100
+crc32  = 0xb460c438
+
+[[region.file]]
+name   = "m81_a-9p-.ic74"
+offset = 0x0100
+size   = 0x0100
+crc32  = 0xa4f2c4bc
+
+[[region.file]]
+name   = "db_a-7d-.ic48"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0x421cecd6
+
+[[region.file]]
+name   = "m81_a-2h-.ic2"
+offset = 0x0317
+size   = 0x0117
+crc32  = 0x21ede612
+
+[[region.file]]
+name   = "m81_a-5l-.ic28"
+offset = 0x042e
+size   = 0x0117
+crc32  = 0x56c29834
+
+[[region.file]]
+name   = "m81_b-9h-.ic94"
+offset = 0x0545
+size   = 0x0117
+crc32  = 0x4bc1d393

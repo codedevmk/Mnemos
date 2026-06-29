@@ -72,24 +72,28 @@ size = 0x080000
 
 [[region.file]]
 name   = "r200.ic53"
+aliases = ["tom_m53.ic53"]
 offset = 0x00000
 size   = 0x20000
 crc32  = 0x0b83265f
 
 [[region.file]]
 name   = "r210.ic51"
+aliases = ["tom_m51.ic51"]
 offset = 0x20000
 size   = 0x20000
 crc32  = 0x8ec5f6f3
 
 [[region.file]]
 name   = "r220.ic49"
+aliases = ["tom_m49.ic49"]
 offset = 0x40000
 size   = 0x20000
 crc32  = 0xa41d3bfd
 
 [[region.file]]
 name   = "r230.ic47"
+aliases = ["tom_m47.ic47"]
 offset = 0x60000
 size   = 0x20000
 crc32  = 0x9d81a25b
@@ -100,24 +104,28 @@ size = 0x040000
 
 [[region.file]]
 name   = "r2a0.a0.ic21"
+aliases = ["tom_m21.ic21"]
 offset = 0x00000
 size   = 0x10000
 crc32  = 0x3ca3e771
 
 [[region.file]]
 name   = "r2a1.a1.ic22"
+aliases = ["tom_m22.ic22"]
 offset = 0x10000
 size   = 0x10000
 crc32  = 0x7a05ee2f
 
 [[region.file]]
 name   = "r2a2.a2.ic20"
+aliases = ["tom_m20.ic20"]
 offset = 0x20000
 size   = 0x10000
 crc32  = 0x79aa2335
 
 [[region.file]]
 name   = "r2a3.a3.ic23"
+aliases = ["tom_m23.ic23"]
 offset = 0x30000
 size   = 0x10000
 crc32  = 0x789e8b24
@@ -128,24 +136,28 @@ size = 0x040000
 
 [[region.file]]
 name   = "078.b0.ic26"
+aliases = ["tom_m26.ic26"]
 offset = 0x00000
 size   = 0x10000
 crc32  = 0x44626bf6
 
 [[region.file]]
 name   = "079.b1.ic27"
+aliases = ["tom_m27.ic27"]
 offset = 0x10000
 size   = 0x10000
 crc32  = 0x464952cf
 
 [[region.file]]
 name   = "080.b2.ic25"
+aliases = ["tom_m25.ic25"]
 offset = 0x20000
 size   = 0x10000
 crc32  = 0x3db9b2c7
 
 [[region.file]]
 name   = "081.b3.ic24"
+aliases = ["tom_m24.ic24"]
 offset = 0x30000
 size   = 0x10000
 crc32  = 0xf01fe899
@@ -156,6 +168,7 @@ size = 0x10000
 
 [[region.file]]
 name   = "082.ic44"
+aliases = ["tom_m44.ic44"]
 offset = 0x00000
 size   = 0x10000
 crc32  = 0x3ed51d1f

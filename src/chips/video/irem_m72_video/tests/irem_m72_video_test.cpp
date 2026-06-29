@@ -492,3 +492,21 @@ TEST_CASE("m72 video multi-cell sprites step 8 codes per column, 1 per row", "[m
     CHECK(frame.pixels[16U] == 0x000000FFU);                            // cell 8
     CHECK(frame.pixels[48U * frame.effective_stride()] == 0x00000000U); // below
 }
+
+TEST_CASE("m72 video renders the full latched sprite entry range", "[m72_video]") {
+    irem_m72_video video;
+    const auto sprites = make_sprites({1U});
+    const auto palette_a = make_palette(1U, 0x1FU, 0x1FU, 0U); // yellow
+    std::vector<std::uint8_t> sprite_ram(0x400U, 0U);
+    set_sprite(sprite_ram, 64U, 5, 7, 0U, 0U, false, false);
+
+    video.attach_sprites(sprites);
+    video.attach_palette_a(palette_a);
+    video.attach_sprite_ram(sprite_ram);
+    video.latch_sprites();
+
+    video.tick(frame_ticks);
+    const auto frame = video.framebuffer();
+    CHECK(frame.pixels[7U * frame.effective_stride() + 5U] == 0x00FFFF00U);
+    CHECK(frame.pixels[0] == 0U);
+}

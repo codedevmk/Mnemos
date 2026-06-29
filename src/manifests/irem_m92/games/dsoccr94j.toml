@@ -1,0 +1,187 @@
+# Dream Soccer '94 (Japan, M92 hardware) -- Irem M92-B-G set.
+# The local ZIP is a split M92 set. The CRC-identical high program pair, V35
+# sound pair, and sample dump are supplied by the local M107 dsoccr94 parent
+# media when launching with supplemental media.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "dsoccr94j"
+board       = "irem_m92"
+orientation = "horizontal"
+players     = 4
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "a3_-h0-e.ic37"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x8de1dbcd
+
+[[region.file]]
+name   = "a3_-l0-e.ic49"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0xd3df8bfd
+
+[[region.file]]
+name    = "a3_-h1-c.ic36"
+aliases = ["a3_h1-c-0.ic60"]
+offset  = 0x080001
+stride  = 2
+size    = 0x40000
+crc32   = 0x6109041b
+
+[[region.file]]
+name    = "a3_-l1-c.ic48"
+aliases = ["a3_l1-c-0.ic62"]
+offset  = 0x080000
+stride  = 2
+size    = 0x40000
+crc32   = 0x97a01f6b
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name    = "a3_-sh0-.ic24"
+aliases = ["a3-sh0-c-0.ic31"]
+offset  = 0x00001
+stride  = 2
+size    = 0x10000
+crc32   = 0x23fe6ffc
+
+[[region.file]]
+name    = "a3_-sl0-.ic31"
+aliases = ["a3-sl0-c-0.ic37"]
+offset  = 0x00000
+stride  = 2
+size    = 0x10000
+crc32   = 0x768132e5
+
+[[region]]
+name = "tiles"
+size = 0x400000
+
+[[region.file]]
+name   = "a3_-c0-.ic1"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0x83ea8a47
+
+[[region.file]]
+name   = "a3_-c1-.ic2"
+offset = 0x100000
+size   = 0x100000
+crc32  = 0x64063e6d
+
+[[region.file]]
+name   = "a3_-c2-.ic16"
+offset = 0x200000
+size   = 0x100000
+crc32  = 0xcc1f621a
+
+[[region.file]]
+name   = "a3_-c3-.ic17"
+offset = 0x300000
+size   = 0x100000
+crc32  = 0x515829e1
+
+[[region]]
+name = "sprites"
+size = 0x400000
+
+[[region.file]]
+name   = "a3_-000-w.ic44"
+offset = 0x000001
+stride = 2
+size   = 0x80000
+crc32  = 0xb094e5ad
+
+[[region.file]]
+name   = "a3_-001-w.ic32"
+offset = 0x000000
+stride = 2
+size   = 0x80000
+crc32  = 0x91f34018
+
+[[region.file]]
+name   = "a3_-010-w.ic45"
+offset = 0x100001
+stride = 2
+size   = 0x80000
+crc32  = 0xedddeef4
+
+[[region.file]]
+name   = "a3_-011-w.ic33"
+offset = 0x100000
+stride = 2
+size   = 0x80000
+crc32  = 0x274a9526
+
+[[region.file]]
+name   = "a3_-020-w.ic46"
+offset = 0x200001
+stride = 2
+size   = 0x80000
+crc32  = 0x32064393
+
+[[region.file]]
+name   = "a3_-021-w.ic34"
+offset = 0x200000
+stride = 2
+size   = 0x80000
+crc32  = 0x57bae3d9
+
+[[region.file]]
+name   = "a3_-030-w.ic47"
+offset = 0x300001
+stride = 2
+size   = 0x80000
+crc32  = 0xbe838e2f
+
+[[region.file]]
+name   = "a3_-031-w.ic35"
+offset = 0x300000
+stride = 2
+size   = 0x80000
+crc32  = 0xbf899f0d
+
+[[region]]
+name = "samples"
+size = 0x100000
+
+[[region.file]]
+name    = "ds_da0.ic10"
+aliases = ["ds_da0.ic24"]
+offset  = 0x000000
+size    = 0x100000
+crc32   = 0x67fc52fd
+
+[[region]]
+name = "plds"
+size = 0x000C00
+
+[[region.file]]
+name   = "m92_a-3m-.ic11"
+offset = 0x0000
+size   = 0x0117
+crc32  = 0xfc718efe
+
+[[region.file]]
+name   = "m92_a-7j-.ic41"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0x5730b25a
+
+[[region.file]]
+name   = "m92_a-9j-.ic51"
+offset = 0x0400
+size   = 0x0117
+crc32  = 0x92d477cf

@@ -1,0 +1,180 @@
+# Superior Soldiers (US) -- Irem M92-B-G set.
+# Schema mnemos-romset/1. The first-pass M92 board can load the set, but the
+# encrypted V35 sound program and GA21/GA22 video are not parity-authentic yet.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "ssoldier"
+board       = "irem_m92"
+orientation = "horizontal"
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "f3_-h0-h.ic37"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0xb63fb9da
+
+[[region.file]]
+name   = "f3_-l0-h.ic49"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0x419361a2
+
+[[region.file]]
+name   = "f3_-h1-a.ic36"
+offset = 0x080001
+stride = 2
+size   = 0x20000
+crc32  = 0xe3d9f619
+
+[[region.file]]
+name   = "f3_-l1-a.ic48"
+offset = 0x080000
+stride = 2
+size   = 0x20000
+crc32  = 0x8cb5c396
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name   = "f3_-sh0-.ic24"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0x90b55e5e
+
+[[region.file]]
+name   = "f3_-sl0-.ic31"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x77c16d57
+
+[[region]]
+name = "tiles"
+size = 0x200000
+
+[[region.file]]
+name   = "f3_w50.c0.ic1"
+offset = 0x000000
+size   = 0x40000
+crc32  = 0x47e788ee
+
+[[region.file]]
+name   = "f3_w51.c1.ic2"
+offset = 0x080000
+size   = 0x40000
+crc32  = 0x8e535e3f
+
+[[region.file]]
+name   = "f3_w52.c2.ic16"
+offset = 0x100000
+size   = 0x40000
+crc32  = 0xa6eb2e56
+
+[[region.file]]
+name   = "f3_w53.c3.ic17"
+offset = 0x180000
+size   = 0x40000
+crc32  = 0x2f992807
+
+[[region]]
+name = "sprites"
+size = 0x800000
+
+[[region.file]]
+name   = "f3_w37.000.ic44"
+offset = 0x000001
+stride = 2
+size   = 0x100000
+crc32  = 0xfd4cda03
+
+[[region.file]]
+name   = "f3_w38.001.ic32"
+offset = 0x000000
+stride = 2
+size   = 0x100000
+crc32  = 0x755bab10
+
+[[region.file]]
+name   = "f3_w39.010.ic45"
+offset = 0x200001
+stride = 2
+size   = 0x100000
+crc32  = 0xb21ced92
+
+[[region.file]]
+name   = "f3_w40.011.ic33"
+offset = 0x200000
+stride = 2
+size   = 0x100000
+crc32  = 0x2e906889
+
+[[region.file]]
+name   = "f3_w41.020.ic46"
+offset = 0x400001
+stride = 2
+size   = 0x100000
+crc32  = 0x02455d10
+
+[[region.file]]
+name   = "f3_w42.021.ic34"
+offset = 0x400000
+stride = 2
+size   = 0x100000
+crc32  = 0x124589b9
+
+[[region.file]]
+name   = "f3_w43.030.ic47"
+offset = 0x600001
+stride = 2
+size   = 0x100000
+crc32  = 0xdae7327a
+
+[[region.file]]
+name   = "f3_w44.031.ic35"
+offset = 0x600000
+stride = 2
+size   = 0x100000
+crc32  = 0xd0fc84ac
+
+[[region]]
+name = "samples"
+size = 0x080000
+
+[[region.file]]
+name   = "f3_w95.da.ic10"
+offset = 0x000000
+size   = 0x80000
+crc32  = 0xf7ca432b
+
+[[region]]
+name = "plds"
+size = 0x000C00
+
+[[region.file]]
+name   = "m92_a-3m-.ic11"
+offset = 0x0000
+size   = 0x0117
+crc32  = 0xfc718efe
+
+[[region.file]]
+name   = "m92_a-7j-.ic41"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0x5730b25a
+
+[[region.file]]
+name   = "m92_a-9j-.ic51"
+offset = 0x0400
+size   = 0x0117
+crc32  = 0x92d477cf

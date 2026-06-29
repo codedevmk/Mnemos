@@ -1,0 +1,46 @@
+# Gussun Oyoyo -- Irem M90 clone of Risky Challenge.
+# The split local set carries only its unique V35 program pair; the adapter
+# resolves shared Z80, graphics, and sample media from riskchal.zip.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "gussun"
+board       = "irem_m90"
+parent      = "riskchal"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "l4_a-h0.ic77"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x9d585e61
+
+[[region.file]]
+name   = "l4_a-l0.ic79"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0xc7b4c519
+
+[[region.file]]
+name          = "l4_a-h0.ic77"
+offset        = 0x0ffff1
+stride        = 2
+source_offset = 0x3fff8
+length        = 0x8
+size          = 0x40000
+crc32         = 0x9d585e61
+
+[[region.file]]
+name          = "l4_a-l0.ic79"
+offset        = 0x0ffff0
+stride        = 2
+source_offset = 0x3fff8
+length        = 0x8
+size          = 0x40000
+crc32         = 0xc7b4c519

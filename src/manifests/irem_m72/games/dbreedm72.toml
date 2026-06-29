@@ -261,6 +261,42 @@ chip      = "mcu"
 profile   = "irem_m72.dbreedm72_no_dump_mcu"
 rationale = "The set's i8751 dump is unavailable; this manifest declares the interim M72 no-dump protection profile rather than pretending a ROM exists."
 
+[[hle.sample_trigger]]
+trigger = 0
+start   = 0x00000
+
+[[hle.sample_trigger]]
+trigger = 1
+start   = 0x00020
+
+[[hle.sample_trigger]]
+trigger = 2
+start   = 0x02c40
+
+[[hle.sample_trigger]]
+trigger = 3
+start   = 0x08160
+
+[[hle.sample_trigger]]
+trigger = 4
+start   = 0x0c8c0
+
+[[hle.sample_trigger]]
+trigger = 5
+start   = 0x0ffe0
+
+[[hle.sample_trigger]]
+trigger = 6
+start   = 0x13000
+
+[[hle.sample_trigger]]
+trigger = 7
+start   = 0x15820
+
+[[hle.sample_trigger]]
+trigger = 8
+start   = 0x15f40
+
 [[region]]
 name = "maincpu"
 size = 0x100000

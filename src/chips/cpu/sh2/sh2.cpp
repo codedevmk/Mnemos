@@ -222,6 +222,14 @@ namespace mnemos::chips::cpu {
         install_fetch_invalidation(bus);
     }
 
+    bool sh2::read_onchip_extension8(std::uint32_t a, std::uint8_t& value) noexcept {
+        return onchip_extension_read_ && onchip_extension_read_(a, value);
+    }
+
+    bool sh2::write_onchip_extension8(std::uint32_t a, std::uint8_t value) noexcept {
+        return onchip_extension_write_ && onchip_extension_write_(a, value);
+    }
+
     // ---- raw memory: big-endian assembly over the byte bus ----
     // The on-chip peripheral window ($FFFFFE00..) is CPU-internal: intercept it
     // before the external bus so each core keeps its own peripheral state.
@@ -233,6 +241,10 @@ namespace mnemos::chips::cpu {
         }
         if (sh2_peripherals::in_window(a)) {
             account_onchip_access_wait(a, true);
+            std::uint8_t value = 0xFFU;
+            if (read_onchip_extension8(a, value)) {
+                return value;
+            }
             return peripherals_.read8(a);
         }
         return bus_ != nullptr ? bus_->read8(a) : 0xFFU;
@@ -244,6 +256,9 @@ namespace mnemos::chips::cpu {
             return;
         }
         if (sh2_peripherals::in_window(a)) {
+            if (write_onchip_extension8(a, v)) {
+                return;
+            }
             peripherals_.write8(a, v);
             return;
         }
@@ -257,10 +272,12 @@ namespace mnemos::chips::cpu {
             if (onchip) {
                 account_onchip_access_wait(a, true);
             }
-            const auto read_byte = [this](std::uint32_t addr) noexcept {
-                return sh2_peripherals::in_window(addr)
-                           ? peripherals_.read8(addr)
-                           : (bus_ != nullptr ? bus_->read8(addr) : 0xFFU);
+            const auto read_byte = [this](std::uint32_t addr) noexcept -> std::uint8_t {
+                if (sh2_peripherals::in_window(addr)) {
+                    std::uint8_t value = 0xFFU;
+                    return read_onchip_extension8(addr, value) ? value : peripherals_.read8(addr);
+                }
+                return bus_ != nullptr ? bus_->read8(addr) : 0xFFU;
             };
             return static_cast<std::uint16_t>((static_cast<std::uint16_t>(read_byte(a)) << 8U) |
                                               read_byte(a + 1U));
@@ -276,6 +293,9 @@ namespace mnemos::chips::cpu {
             }
             const auto write_byte = [this](std::uint32_t addr, std::uint8_t value) noexcept {
                 if (sh2_peripherals::in_window(addr)) {
+                    if (write_onchip_extension8(addr, value)) {
+                        return;
+                    }
                     peripherals_.write8(addr, value);
                     return;
                 }
@@ -295,10 +315,12 @@ namespace mnemos::chips::cpu {
             if (onchip) {
                 account_onchip_access_wait(a, true);
             }
-            const auto read_byte = [this](std::uint32_t addr) noexcept {
-                return sh2_peripherals::in_window(addr)
-                           ? peripherals_.read8(addr)
-                           : (bus_ != nullptr ? bus_->read8(addr) : 0xFFU);
+            const auto read_byte = [this](std::uint32_t addr) noexcept -> std::uint8_t {
+                if (sh2_peripherals::in_window(addr)) {
+                    std::uint8_t value = 0xFFU;
+                    return read_onchip_extension8(addr, value) ? value : peripherals_.read8(addr);
+                }
+                return bus_ != nullptr ? bus_->read8(addr) : 0xFFU;
             };
             return (static_cast<std::uint32_t>(read_byte(a)) << 24U) |
                    (static_cast<std::uint32_t>(read_byte(a + 1U)) << 16U) |
@@ -315,6 +337,9 @@ namespace mnemos::chips::cpu {
             }
             const auto write_byte = [this](std::uint32_t addr, std::uint8_t value) noexcept {
                 if (sh2_peripherals::in_window(addr)) {
+                    if (write_onchip_extension8(addr, value)) {
+                        return;
+                    }
                     peripherals_.write8(addr, value);
                     return;
                 }

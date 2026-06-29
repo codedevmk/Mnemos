@@ -1,0 +1,116 @@
+# MotoRace USA -- Irem travrusa ROM contract.
+# Local wrapper: D:\emu\irem\M52\motorace.zip -> motorace.zip.
+# Main CPU ROM0 is encrypted; Mnemos loads the set but does not yet model the
+# encrypted MotoRace program path authentically.
+# Shared sound, tile, and PROM dumps are inherited from the local travrusa parent.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "motorace"
+parent      = "travrusa"
+board       = "irem_travrusa"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x12000
+
+[[region.file]]
+name   = "mr.cpu"
+offset = 0x0000
+size   = 0x2000
+crc32  = 0x89030b0c
+
+[[region.file]]
+name   = "mr1.3l"
+offset = 0x2000
+size   = 0x2000
+crc32  = 0x0904ed58
+
+[[region.file]]
+name   = "mr2.3k"
+offset = 0x4000
+size   = 0x2000
+crc32  = 0x8a2374ec
+
+[[region.file]]
+name   = "mr3.3j"
+offset = 0x6000
+size   = 0x2000
+crc32  = 0x2f04c341
+
+[[region]]
+name = "soundcpu"
+size = 0x8000
+
+[[region.file]]
+name   = "mr10.1a"
+offset = 0x7000
+size   = 0x1000
+crc32  = 0xa02ad8a0
+
+[[region]]
+name = "tiles"
+size = 0x6000
+
+[[region.file]]
+name   = "mr7.3e"
+offset = 0x0000
+size   = 0x2000
+crc32  = 0x492a60be
+
+[[region.file]]
+name   = "mr8.3c"
+offset = 0x2000
+size   = 0x2000
+crc32  = 0x3a046dd1
+
+[[region.file]]
+name   = "mr9.3a"
+offset = 0x4000
+size   = 0x2000
+crc32  = 0x1cc3d3f4
+
+[[region]]
+name = "sprites"
+size = 0x6000
+
+[[region.file]]
+name   = "mr4.3n"
+offset = 0x0000
+size   = 0x2000
+crc32  = 0x5cf1a0d6
+
+[[region.file]]
+name   = "mr5.3m"
+offset = 0x2000
+size   = 0x2000
+crc32  = 0xf75f2aad
+
+[[region.file]]
+name   = "mr6.3k"
+offset = 0x4000
+size   = 0x2000
+crc32  = 0x518889a0
+
+[[region]]
+name = "proms"
+size = 0x0320
+
+[[region.file]]
+name   = "mmi6349.ij"
+offset = 0x0000
+size   = 0x0200
+crc32  = 0xc9724350
+
+[[region.file]]
+name   = "tbp18s.2"
+offset = 0x0200
+size   = 0x0020
+crc32  = 0xa1130007
+
+[[region.file]]
+name   = "tbp24s10.3"
+offset = 0x0220
+size   = 0x0100
+crc32  = 0x76062638

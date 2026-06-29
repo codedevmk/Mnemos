@@ -72,6 +72,18 @@ TEST_CASE("m6510 reports its identity") {
     CHECK(metadata.klass == mnemos::chips::chip_class::cpu);
 }
 
+TEST_CASE("m6510 can report a bare MOS 6502 variant") {
+    m6510 cpu;
+    cpu.set_variant(m6510::variant::mos_6502);
+    cpu.set_port_enabled(false);
+
+    const mnemos::chips::chip_metadata metadata = cpu.metadata();
+    CHECK(metadata.manufacturer == "MOS Technology");
+    CHECK(metadata.part_number == "6502");
+    CHECK(metadata.family == "6502");
+    CHECK(metadata.klass == mnemos::chips::chip_class::cpu);
+}
+
 TEST_CASE("m6510 power-on reset loads the reset vector and sets I") {
     test_system sys;
     sys.boot(0xE000U, {});

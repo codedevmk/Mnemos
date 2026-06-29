@@ -1,0 +1,24 @@
+#pragma once
+
+// GENERATED FILE -- do not edit. Produced by configure_file from
+// m75_embedded_game_manifests.hpp.in, with each constant's body read verbatim
+// from the canonical on-disk game manifest in src/manifests/irem_m75/games at
+// configure time. CMAKE_CONFIGURE_DEPENDS re-runs configuration whenever a
+// source .toml changes, so the embedded copy cannot drift from the file.
+//
+// Access these through game_manifest_toml() in m75_game_manifests.hpp.
+
+#include <array>
+#include <string_view>
+#include <utility>
+
+namespace mnemos::manifests::irem_m75::embedded {
+
+@MNEMOS_IREM_M75_EMBEDDED_CONSTANTS@
+    inline constexpr std::array<std::pair<std::string_view, std::string_view>,
+                                @MNEMOS_IREM_M75_GAME_MANIFEST_COUNT@>
+        game_manifests{{
+@MNEMOS_IREM_M75_EMBEDDED_ENTRIES@
+        }};
+
+} // namespace mnemos::manifests::irem_m75::embedded

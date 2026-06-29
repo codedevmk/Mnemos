@@ -1,0 +1,43 @@
+# Perfect Soldiers (Japan) -- Irem M92-B-G clone of ssoldier.
+# The local split clone carries only the changed program pair; sound, graphics,
+# samples, and PLDs resolve from the sibling Superior Soldiers parent.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "psoldier"
+parent      = "ssoldier"
+board       = "irem_m92"
+orientation = "horizontal"
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "f3_-h0-d.ic37"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x38f131fd
+
+[[region.file]]
+name   = "f3_-l0-d.ic49"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0x1662969c
+
+[[region.file]]
+name   = "f3_-h1-.ic36"
+offset = 0x080001
+stride = 2
+size   = 0x40000
+crc32  = 0xc8d1947c
+
+[[region.file]]
+name   = "f3_-l1-.ic48"
+offset = 0x080000
+stride = 2
+size   = 0x40000
+crc32  = 0x7b9492fc

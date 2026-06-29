@@ -1,0 +1,43 @@
+# R-Type Leo (Japan) -- Irem M92-C-N clone of rtypeleo.
+# The local split clone carries changed H0/L0 program ROMs; shared H1/L1,
+# sound, graphics, sample, and PLD media resolve from the sibling parent.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "rtypeleoj"
+parent      = "rtypeleo"
+board       = "irem_m92"
+orientation = "horizontal"
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "rtl_-h0-d.ic28"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x3dbac89f
+
+[[region.file]]
+name   = "rtl_-l0-d.ic25"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0xf85a2537
+
+[[region.file]]
+name   = "rtl_-h1-.ic27"
+offset = 0x080001
+stride = 2
+size   = 0x20000
+crc32  = 0x352ff444
+
+[[region.file]]
+name   = "rtl_-l1-.ic26"
+offset = 0x080000
+stride = 2
+size   = 0x20000
+crc32  = 0xfd34ea46

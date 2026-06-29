@@ -1,0 +1,182 @@
+# Vigilante (bootleg) -- clone of the complete World Rev E parent.
+# Local wrapper: D:\emu\irem\M75\vigilantbl.zip -> vigilantbl.zip.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "vigilantbl"
+parent      = "vigilant"
+board       = "irem_m75"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x030000
+
+[[region.file]]
+name   = "g07_c03.bin"
+offset = 0x000000
+size   = 0x08000
+crc32  = 0x9dcca081
+
+[[region.file]]
+name   = "j07_c04.bin"
+offset = 0x010000
+size   = 0x10000
+crc32  = 0xe0159105
+
+[[region]]
+name = "soundcpu"
+size = 0x010000
+
+[[region.file]]
+name    = "g05_c02.bin"
+aliases = ["vg_a-5j-.ic37"]
+offset  = 0x000000
+size    = 0x10000
+crc32   = 0x10582b2d
+
+[[region]]
+name = "chars"
+size = 0x020000
+
+[[region.file]]
+name    = "f05_c08.bin"
+aliases = ["vg_b-4f-.ic34"]
+offset  = 0x000000
+size    = 0x10000
+crc32   = 0x01579d20
+
+[[region.file]]
+name    = "h05_c09.bin"
+aliases = ["vg_b-4j-.ic35"]
+offset  = 0x010000
+size    = 0x10000
+crc32   = 0x4f5872f0
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name    = "n07_c12.bin"
+aliases = ["vg_b-6l-.ic62"]
+offset  = 0x000000
+size    = 0x10000
+crc32   = 0x10af8eb2
+
+[[region.file]]
+name    = "k07_c10.bin"
+aliases = ["vg_b-6k-.ic61"]
+offset  = 0x010000
+size    = 0x10000
+crc32   = 0x9576f304
+
+[[region.file]]
+name    = "o07_c13.bin"
+aliases = ["vg_b-6l-.ic62"]
+offset  = 0x020000
+size    = 0x10000
+crc32   = 0xb1d9d4dc
+
+[[region.file]]
+name    = "l07_c11.bin"
+aliases = ["vg_b-6k-.ic61"]
+offset  = 0x030000
+size    = 0x10000
+crc32   = 0x4598be4a
+
+[[region.file]]
+name    = "t07_c16.bin"
+aliases = ["vg_b-6p-.ic64"]
+offset  = 0x040000
+size    = 0x10000
+crc32   = 0xf5425e42
+
+[[region.file]]
+name    = "p07_c14.bin"
+aliases = ["vg_b-6n-.ic63"]
+offset  = 0x050000
+size    = 0x10000
+crc32   = 0xcb50a17c
+
+[[region.file]]
+name    = "v07_c17.bin"
+aliases = ["vg_b-6p-.ic64"]
+offset  = 0x060000
+size    = 0x10000
+crc32   = 0x959ba3c7
+
+[[region.file]]
+name    = "s07_c15.bin"
+aliases = ["vg_b-6n-.ic63"]
+offset  = 0x070000
+size    = 0x10000
+crc32   = 0x7f2e91c5
+
+[[region]]
+name = "bgtiles"
+size = 0x040000
+
+[[region.file]]
+name    = "d01_c05.bin"
+aliases = ["vg_b-1d-.ic2"]
+offset  = 0x000000
+size    = 0x10000
+crc32   = 0x81b1ee5c
+
+[[region.file]]
+name    = "e01_c06.bin"
+aliases = ["vg_b-1f-.ic3"]
+offset  = 0x010000
+size    = 0x10000
+crc32   = 0xd0d33673
+
+[[region.file]]
+name    = "h01_c07.bin"
+aliases = ["vg_b-1h-.ic4"]
+offset  = 0x020000
+size    = 0x10000
+crc32   = 0xaae81695
+
+[[region]]
+name = "samples"
+size = 0x010000
+
+[[region.file]]
+name    = "d04_c01.bin"
+aliases = ["vg_a-4d-.ic26"]
+offset  = 0x000000
+size    = 0x10000
+crc32   = 0x9b85101d
+
+[[region]]
+name = "proms"
+size = 0x000300
+
+[[region.file]]
+name   = "t10_129a.bin"
+offset = 0x000000
+size   = 0x00100
+crc32  = 0x1513df33
+
+[[region.file]]
+name   = "u10_129b.bin"
+offset = 0x000100
+size   = 0x00100
+crc32  = 0x06661d00
+
+[[region.file]]
+name   = "v10_129c.bin"
+offset = 0x000200
+size   = 0x00100
+crc32  = 0x3f186bc8
+
+[[region]]
+name = "plds"
+size = 0x000600
+
+[[region.file]]
+name   = "b01_16l8.bin"
+offset = 0x000000
+size   = 0x00104
+crc32  = 0x1beae498

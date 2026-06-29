@@ -1,0 +1,30 @@
+# Major Title 2 (World, set 2, 016 sound CPU) -- Irem M92-B-F clone.
+# The local split clone carries only the alternate sound CPU ROM pair; program,
+# graphics, samples, and PLDs resolve from the sibling majtitl2 parent.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "majtitl2a"
+parent      = "majtitl2"
+board       = "irem_m92"
+orientation = "horizontal"
+players     = 4
+sound       = "encrypted_v35"
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name   = "mt2_sh0-a.ic14"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0x50f076e5
+
+[[region.file]]
+name   = "mt2_sl0-a.ic17"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0xf4ecd7b5

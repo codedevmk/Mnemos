@@ -1,0 +1,42 @@
+# Ken-Go (World) -- local Irem M84 V35-family split clone of ltswords.
+# Schema mnemos-romset/1; this clone ZIP carries only its alternate V35 program
+# pair and inherits the checked-in Lightning Swords media contract.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "kengo"
+parent      = "ltswords"
+board       = "irem_m84"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "ken_d-h0-c.ic55"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0xf4ddeea5
+
+[[region.file]]
+name   = "ken_d-l0-c.ic61"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0x04dc0f81
+
+[[region.file]]
+name   = "ken_d-h0-c.ic55"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0xf4ddeea5
+
+[[region.file]]
+name   = "ken_d-l0-c.ic61"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0x04dc0f81
