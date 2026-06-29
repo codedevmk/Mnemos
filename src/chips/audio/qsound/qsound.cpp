@@ -644,17 +644,21 @@ namespace mnemos::chips::audio {
         ready_cycle_accum_ = 0U;
     }
 
+    void qsound::load_filter(fir_filter& f, std::int16_t tap_count) noexcept {
+        f.delay_pos = 0;
+        f.tap_count = tap_count;
+        f.taps.fill(0);
+        std::size_t count = 0U;
+        if (const std::int16_t* table = filter_table(f.table_pos, count)) {
+            const std::size_t copy_count =
+                std::min<std::size_t>(count, static_cast<std::size_t>(tap_count));
+            std::copy_n(table, copy_count, f.taps.begin());
+        }
+    }
+
     void qsound::refresh_filter_mode1() noexcept {
         for (std::size_t ch = 0; ch < filter_.size(); ++ch) {
-            fir_filter& f = filter_[ch];
-            f.delay_pos = 0;
-            f.tap_count = static_cast<std::int16_t>(filter_tap_capacity);
-            f.taps.fill(0);
-            std::size_t count = 0U;
-            if (const std::int16_t* table = filter_table(f.table_pos, count)) {
-                const std::size_t copy_count = std::min<std::size_t>(count, filter_tap_capacity);
-                std::copy_n(table, copy_count, f.taps.begin());
-            }
+            load_filter(filter_[ch], static_cast<std::int16_t>(filter_tap_capacity));
         }
         state_ = state_normal1;
         next_state_ = state_normal1;
@@ -662,25 +666,8 @@ namespace mnemos::chips::audio {
 
     void qsound::refresh_filter_mode2() noexcept {
         for (std::size_t ch = 0; ch < filter_.size(); ++ch) {
-            fir_filter& f = filter_[ch];
-            f.delay_pos = 0;
-            f.tap_count = 45;
-            f.taps.fill(0);
-            std::size_t count = 0U;
-            if (const std::int16_t* table = filter_table(f.table_pos, count)) {
-                const std::size_t copy_count = std::min<std::size_t>(count, 45U);
-                std::copy_n(table, copy_count, f.taps.begin());
-            }
-
-            fir_filter& alt = alt_filter_[ch];
-            alt.delay_pos = 0;
-            alt.tap_count = 44;
-            alt.taps.fill(0);
-            count = 0U;
-            if (const std::int16_t* table = filter_table(alt.table_pos, count)) {
-                const std::size_t copy_count = std::min<std::size_t>(count, 44U);
-                std::copy_n(table, copy_count, alt.taps.begin());
-            }
+            load_filter(filter_[ch], 45);
+            load_filter(alt_filter_[ch], 44);
         }
         state_ = state_normal2;
         next_state_ = state_normal2;

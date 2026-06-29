@@ -191,6 +191,8 @@ namespace mnemos::chips::audio {
         void initialize_mode1_defaults() noexcept;
         void refresh_filter_mode1() noexcept;
         void refresh_filter_mode2() noexcept;
+        // Reset one FIR channel and (re)load its tap table, capped to tap_count.
+        void load_filter(fir_filter& f, std::int16_t tap_count) noexcept;
         void update_sample() noexcept;
         void update_normal_sample() noexcept;
         [[nodiscard]] std::int16_t pcm_update(voice& v, std::int32_t& echo_out) noexcept;
