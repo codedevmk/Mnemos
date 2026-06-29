@@ -86,6 +86,7 @@ namespace mnemos::manifests::capcom_cps2 {
     inline constexpr std::size_t video_ram_size = 0x30000U;    // 192 KiB
     inline constexpr std::uint32_t main_ram_base = 0xFF0000U;  // 64 KiB work RAM
     inline constexpr std::size_t main_ram_size = 0x10000U;     // (0xFF0000-0xFFFFFF)
+    inline constexpr std::uint32_t m68k_address_mask = 0x00FFFFFFU;
 
     // CPS-A output-register word indices. CPS-2 keeps tile RAM and object RAM in
     // separate 68K windows, but the scroll/row-scroll/palette register decode is

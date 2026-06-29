@@ -32,6 +32,7 @@ add_library(
     mnemos_manifests_capcom_cps2
     cps2_crypto.cpp
     capcom_cps2_system.cpp
+    capcom_cps2_qsound_trace.cpp
 )
 add_library(mnemos::manifests::capcom_cps2 ALIAS mnemos_manifests_capcom_cps2)
 
