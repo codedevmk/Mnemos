@@ -1,0 +1,152 @@
+# Kaiketsu Yanchamaru -- Irem M62 raw-media contract.
+# Local wrapper: D:\emu\irem\M62\yanchamr.zip.
+# Region placement is a contiguous artifact contract only; exact M62 bus
+# mapping, video priority, and M6803/AY/MSM5205 behavior remain gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "yanchamr"
+board       = "irem_m62"
+orientation = "horizontal"
+
+[[region]]
+name = "raw_media"
+size = 0x70000
+
+[[region.file]]
+name   = "ky_a-3a-.bin"
+offset = 0x0
+size   = 0x4000
+crc32  = 0xcb365f3b
+
+[[region.file]]
+name   = "ky_a-4d-.bin"
+offset = 0x4000
+size   = 0x4000
+crc32  = 0x401af828
+
+[[region.file]]
+name   = "ky_a-4e-.bin"
+offset = 0x8000
+size   = 0x4000
+crc32  = 0xc73ad2d6
+
+[[region.file]]
+name   = "ky_b-3m-.bin"
+offset = 0xc000
+size   = 0x4000
+crc32  = 0xbe6cee44
+
+[[region.file]]
+name   = "ky_b-3n-.bin"
+offset = 0x10000
+size   = 0x4000
+crc32  = 0x0287c525
+
+[[region.file]]
+name   = "ky_b-4a-.bin"
+offset = 0x14000
+size   = 0x4000
+crc32  = 0xff2b9c8a
+
+[[region.file]]
+name   = "ky_b-4c-.bin"
+offset = 0x18000
+size   = 0x4000
+crc32  = 0x84d6b65d
+
+[[region.file]]
+name   = "ky_b-4d-.bin"
+offset = 0x1c000
+size   = 0x4000
+crc32  = 0xa2fc15f0
+
+[[region.file]]
+name   = "ky_b-4e-.bin"
+offset = 0x20000
+size   = 0x4000
+crc32  = 0xf91f9273
+
+[[region.file]]
+name   = "ky_b-4f-.bin"
+offset = 0x24000
+size   = 0x4000
+crc32  = 0x86e3d4a8
+
+[[region.file]]
+name   = "ky_b-4h-.bin"
+offset = 0x28000
+size   = 0x4000
+crc32  = 0x93e6665c
+
+[[region.file]]
+name   = "ky_b-4k-.bin"
+offset = 0x2c000
+size   = 0x4000
+crc32  = 0x263a9d10
+
+[[region.file]]
+name   = "ky_b-4l-.bin"
+offset = 0x30000
+size   = 0x4000
+crc32  = 0x19fa7558
+
+[[region.file]]
+name   = "ky_b-4m-.bin"
+offset = 0x34000
+size   = 0x4000
+crc32  = 0xeced5db9
+
+[[region.file]]
+name   = "ky_b-4n-.bin"
+offset = 0x38000
+size   = 0x4000
+crc32  = 0x764946e0
+
+[[region.file]]
+name   = "ky_t-2a-.bin"
+offset = 0x3c000
+size   = 0x8000
+crc32  = 0x0370fd82
+
+[[region.file]]
+name   = "ky_t-2c-.bin"
+offset = 0x44000
+size   = 0x8000
+crc32  = 0xcb9761fc
+
+[[region.file]]
+name   = "ky_t-2d-.bin"
+offset = 0x4c000
+size   = 0x8000
+crc32  = 0x59732741
+
+[[region.file]]
+name   = "ky_t-4l-.bin"
+offset = 0x54000
+size   = 0x4000
+crc32  = 0x1d0a9253
+
+[[region.file]]
+name   = "ky_t-4m-.bin"
+offset = 0x58000
+size   = 0x4000
+crc32  = 0x4075c396
+
+[[region.file]]
+name   = "ky_t-4n-.bin"
+offset = 0x5c000
+size   = 0x4000
+crc32  = 0x7564f2ff
+
+[[region.file]]
+name   = "ky_t-8k-.bin"
+offset = 0x60000
+size   = 0x8000
+crc32  = 0xe967de88
+
+[[region.file]]
+name   = "ky_t-8l-.bin"
+offset = 0x68000
+size   = 0x8000
+crc32  = 0xa929110b

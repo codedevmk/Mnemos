@@ -1,6 +1,9 @@
 set(_irem_m62_game_manifest_files
     "games/battroad.toml"
+    "games/bkungfu.toml"
     "games/horizon.toml"
+    "games/kidniki.toml"
+    "games/kungfum.toml"
     "games/ldrun.toml"
     "games/ldruna.toml"
     "games/ldrun2.toml"
@@ -9,6 +12,8 @@ set(_irem_m62_game_manifest_files
     "games/ldrun4.toml"
     "games/lotlot.toml"
     "games/spelunk2.toml"
+    "games/spartanx.toml"
+    "games/yanchamr.toml"
     "games/youjyudn.toml"
 )
 set(MNEMOS_IREM_M62_GAME_MANIFEST_COUNT 0)

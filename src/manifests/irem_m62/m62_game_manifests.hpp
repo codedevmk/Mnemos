@@ -1,10 +1,11 @@
 #pragma once
 
 // Checked-in Irem M62 manifests provide the local corpus contracts plus a
-// first-pass player smoke route. The first three Lode Runner entries now carry
-// explicit board regions; the remaining sets still use raw-media staging
-// contracts until each family is split and proven. Exact KNA video behavior and
-// mature Irem Audio scheduling remain board-family implementation gaps.
+// first-pass player smoke route. Regioned Lode Runner entries now carry
+// explicit board regions; the remaining local sets use raw-media staging
+// contracts until each title family is split and proven. Exact KNA video
+// behavior and mature Irem Audio scheduling remain board-family implementation
+// gaps.
 
 #include "m62_embedded_game_manifests.hpp"
 

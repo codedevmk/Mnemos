@@ -179,8 +179,9 @@ multiple independent open-source implementations.
   `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, and `spelunk2` now record explicit
   Z80 program, MC6803 sound ROM, graphics, PROM, and timing regions; `ldrun3j`
   resolves its shared MC6803, tile, PROM, and timing artifacts through the local
-  `ldrun3` parent fallback. The remaining M62 sets stay in raw-media staging
-  until their title-specific maps are wired.
+  `ldrun3` parent fallback. `battroad`, `bkungfu`, `horizon`, `kidniki`,
+  `kungfum`, `ldruna`, `spartanx`, `yanchamr`, and `youjyudn` stay in raw-media
+  staging until their title-specific maps are wired.
   The Horizon local wrapper is stored under the local `M72`
   corpus folder, but public Irem M62 driver metadata classifies it with the M62
   Z80/M6803-era family; Mnemos records it as an M62 set and routes the first-pass

@@ -49,7 +49,10 @@ namespace {
     expected_contracts() {
         static const std::map<std::string, expected_contract, std::less<>> contracts{
             {"battroad", {.raw_size = 0x30740U, .file_count = 33U}},
+            {"bkungfu", {.raw_size = 0x68720U, .file_count = 30U}},
             {"horizon", {.raw_size = 0x2e720U, .file_count = 21U}},
+            {"kidniki", {.raw_size = 0x80920U, .file_count = 34U}},
+            {"kungfum", {.raw_size = 0x2c720U, .file_count = 28U}},
             {"ldrun",
              {.regions = {{"maincpu", {.raw_size = 0x10000U, .file_count = 4U}},
                            {"soundcpu", {.raw_size = 0x10000U, .file_count = 2U}},
@@ -122,6 +125,8 @@ namespace {
                            {"spr_color_proms", {.raw_size = 0x300U, .file_count = 3U}},
                            {"r_proms", {.raw_size = 0x600U, .file_count = 4U}},
                            {"timing", {.raw_size = 0x100U, .file_count = 1U}}}}},
+            {"spartanx", {.raw_size = 0xE000U, .file_count = 5U}},
+            {"yanchamr", {.raw_size = 0x70000U, .file_count = 23U}},
             {"youjyudn", {.raw_size = 0x50a24U, .file_count = 27U}},
         };
         return contracts;
