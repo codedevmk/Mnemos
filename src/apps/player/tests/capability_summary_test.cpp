@@ -7,6 +7,7 @@
 #include "irem_m10_adapter.hpp"
 #include "irem_m102_adapter.hpp"
 #include "irem_m107_adapter.hpp"
+#include "irem_m119_adapter.hpp"
 #include "irem_m14_adapter.hpp"
 #include "irem_m15_adapter.hpp"
 #include "irem_m27_adapter.hpp"
@@ -51,6 +52,7 @@ namespace {
     namespace genesis = mnemos::apps::player::adapters::genesis;
     namespace irem_m10 = mnemos::apps::player::adapters::irem_m10;
     namespace irem_m102 = mnemos::apps::player::adapters::irem_m102;
+    namespace irem_m119 = mnemos::apps::player::adapters::irem_m119;
     namespace irem_m14 = mnemos::apps::player::adapters::irem_m14;
     namespace irem_m15 = mnemos::apps::player::adapters::irem_m15;
     namespace irem_m27 = mnemos::apps::player::adapters::irem_m27;
@@ -523,6 +525,17 @@ namespace {
         return rom;
     }
 
+    [[nodiscard]] std::vector<std::uint8_t> irem_m119_program() {
+        namespace m119 = mnemos::manifests::irem_m119;
+        std::vector<std::uint8_t> rom(m119::main_rom_size, 0x00U);
+        poke32_be(rom, 0x0U, 0x00000100U);
+        poke32_be(rom, 0x4U, m119::work_ram_base + m119::work_ram_size - 4U);
+        for (std::size_t at = 0x100U; at < 0x180U; at += 2U) {
+            poke16_be(rom, at, 0x0009U);
+        }
+        return rom;
+    }
+
     [[nodiscard]] std::vector<std::uint8_t> taito_f2_program() {
         std::vector<std::uint8_t> rom(mnemos::manifests::taito_f2::main_rom_size, 0xFFU);
         poke32_be(rom, 0x0U,
@@ -828,6 +841,16 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
         const auto summary = summary_for(adapter);
         require_common_session_controls(summary, true);
         require_available_media(summary, "media.rom_set");
+    }
+
+    SECTION("Irem M119") {
+        irem_m119::irem_m119_adapter adapter(irem_m119_program(), "Tiny M119");
+        const auto summary = summary_for(adapter);
+        require_common_session_controls(summary, true);
+        require_available_media(summary, "media.rom_set");
+        require_line(summary, "capability memory memory.hd6417708s.registers state=available");
+        require_line(summary, "capability memory memory.upd94244_210.registers state=available");
+        require_line(summary, "capability memory memory.ymz280b.registers state=available");
     }
 
     SECTION("Irem M92") {

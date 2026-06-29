@@ -614,7 +614,7 @@ function New-ArchiveItem {
     }
     $loadableByMnemos = $trackedMatch -and (Test-MnemosLoadableRoute -LoadRoute $loadRoute)
     $redalertSplitArchiveOnly = $redalertMatch -and ($loadRoute -eq "zip") -and -not (Test-SameStemSidecarDirectory -ArchivePath $File.FullName)
-    $contractOnly = ($redalertSplitArchiveOnly -or $m119Match) -and $loadableByMnemos
+    $contractOnly = $redalertSplitArchiveOnly -and $loadableByMnemos
     $supportedByMnemos = $loadableByMnemos -and -not $contractOnly
     $trackedFamily = Get-TrackedFamilyName -M10Match $m10Match -M14Match $m14Match -M15Match $m15Match -M27Match $m27Match -RedalertMatch $redalertMatch -M47Match $m47Match -M52Match $m52Match -M57Match $m57Match -M58Match $m58Match -M62Match $m62Match -M63Match $m63Match -M72Match $m72Match -M75Match $m75Match -M78Match $m78Match -M81Match $m81Match -M82Match $m82Match -M84Match $m84Match -M85Match $m85Match -M90Match $m90Match -M92Match $m92Match -M102Match $m102Match -M107Match $m107Match -M119Match $m119Match -TravrusaMatch $travrusaMatch
     $manifestParent = Get-ManifestParentForSet -SetId $setId
@@ -751,7 +751,7 @@ function New-DirectoryItem {
     $loadRoute = Get-LoadRouteForItem -Kind "directory" -Extension "" -NestedArchives @()
     $loadableByMnemos = $trackedMatch -and (Test-MnemosLoadableRoute -LoadRoute $loadRoute)
     $redalertSplitArchiveOnly = $redalertMatch -and ($loadRoute -eq "zip")
-    $contractOnly = ($redalertSplitArchiveOnly -or $m119Match) -and $loadableByMnemos
+    $contractOnly = $redalertSplitArchiveOnly -and $loadableByMnemos
     $supportedByMnemos = $loadableByMnemos -and -not $contractOnly
     $trackedFamily = Get-TrackedFamilyName -M10Match $m10Match -M14Match $m14Match -M15Match $m15Match -M27Match $m27Match -RedalertMatch $redalertMatch -M47Match $m47Match -M52Match $m52Match -M57Match $m57Match -M58Match $m58Match -M62Match $m62Match -M63Match $m63Match -M72Match $m72Match -M75Match $m75Match -M78Match $m78Match -M81Match $m81Match -M82Match $m82Match -M84Match $m84Match -M85Match $m85Match -M90Match $m90Match -M92Match $m92Match -M102Match $m102Match -M107Match $m107Match -M119Match $m119Match -TravrusaMatch $travrusaMatch
     $manifestParent = Get-ManifestParentForSet -SetId $setId

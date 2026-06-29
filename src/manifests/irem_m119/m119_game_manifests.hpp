@@ -1,8 +1,9 @@
 #pragma once
 
-// Checked-in Irem M119 game manifests embedded for corpus tooling lookup. This
-// module is a ROM-contract surface only: Mnemos still lacks the SH-3-class CPU,
-// UPD94244-210 VDP, and YMZ280B devices needed for an executable M119 route.
+// Checked-in Irem M119 game manifests embedded for corpus tooling lookup. The
+// executable route is first-pass: SH7708/SH-3, uPD94244-210, and YMZ280B are
+// explicit Mnemos chips, while graphics/sound/timing authenticity is still
+// tracked separately from this ROM contract.
 
 #include "m119_embedded_game_manifests.hpp"
 

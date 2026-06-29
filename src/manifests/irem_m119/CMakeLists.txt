@@ -29,7 +29,11 @@ configure_file(
     @ONLY
 )
 
-add_library(mnemos_manifests_irem_m119 m119_game_manifests.cpp)
+add_library(
+    mnemos_manifests_irem_m119
+    m119_game_manifests.cpp
+    m119_system.cpp
+)
 add_library(mnemos::manifests::irem_m119 ALIAS mnemos_manifests_irem_m119)
 
 target_include_directories(
@@ -43,7 +47,13 @@ target_include_directories(
 target_link_libraries(
     mnemos_manifests_irem_m119
     PUBLIC
+        mnemos::chips::audio::ymz280b
+        mnemos::chips::cpu::sh3
+        mnemos::chips::video::upd94244
         mnemos::manifests::common
+        mnemos::topology
+    PRIVATE
+        mnemos::security::cryptography
 )
 
 mnemos_apply_common_target_options(mnemos_manifests_irem_m119 PUBLIC)
@@ -51,7 +61,12 @@ mnemos_declare_tier(
     NAME mnemos_manifests_irem_m119
     TIER 4
     DEPENDS
+        mnemos_chips_audio_ymz280b
+        mnemos_chips_cpu_sh3
+        mnemos_chips_video_upd94244
         mnemos_manifests_common
+        mnemos_topology
+        mnemos_security_cryptography
         mnemos_foundation
 )
 
@@ -69,5 +84,13 @@ if(BUILD_TESTING)
         mnemos_manifests_irem_m119_test
         PRIVATE
             MNEMOS_IREM_M119_GAMES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/games"
+    )
+
+    mnemos_add_test(
+        mnemos_manifests_irem_m119_system_test
+        SOURCES tests/m119_system_test.cpp
+        LIBRARIES
+            mnemos::manifests::irem_m119
+            mnemos::runtime
     )
 endif()

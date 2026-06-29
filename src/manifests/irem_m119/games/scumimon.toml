@@ -1,7 +1,7 @@
 # Slotters Club: Umi Monogatari -- Irem M119 ROM contract.
-# Manifest-only local corpus contract. Public board metadata identifies this
-# hardware as HD6417708S/SH-3-class main CPU, UPD94244-210 VDP, and YMZ280B
-# sound; Mnemos has no executable M119 board profile yet.
+# First-pass executable route: Mnemos models the HD6417708S/SH-3 shell,
+# uPD94244-210 VDP shell, and YMZ280B sample-player shell. Authentic raster,
+# SH-3 peripheral, and YMZ280B ADPCM behavior remains a later silicon pass.
 
 [set]
 schema      = "mnemos-romset/1"

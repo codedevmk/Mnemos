@@ -451,8 +451,8 @@ match checked-in manifests. Board-local `name-collisions` folders are skipped
 by both inventory and data-gated corpus source discovery. The inventory
 separates manifest tracking, media loadability, and player support: 331 items
 match a checked-in Irem manifest from non-ignored buckets, 179 are readable
-through current ZIP / single-inner-ZIP / folder routes, 178 are backed by an
-executable player-supported route, 1 is tracked contract-only, and 153
+through current ZIP / single-inner-ZIP / folder routes, all 179 are backed by an
+executable player-supported route, 0 are tracked contract-only, and 153
 manifest-backed items are metadata-only while awaiting ZIP/unpacked folders or
 supplemental media; the M58 artwork package is still ignored as non-ROM proof. ZIPs whose entries are only
 layout/images/docs now classify as `non_rom_artwork_package`, so packages such
@@ -526,7 +526,7 @@ generic sort work: `headon` (`sega/vicdual.cpp`) and `uniwars` / `uniwarsa`
 (`galaxian/galaxian.cpp`) are non-Irem reference zips and should not be counted
 as missing Irem implementation targets.
 The local M119 grouping now tracks `D:\emu\irem\M119\scumimon.zip` as a
-contract-only M119 ROM-contract route and `D:\emu\irem\M119\scumimon.7z` as
+first-pass player-loadable M119 route and `D:\emu\irem\M119\scumimon.7z` as
 metadata-only until converted or unpacked; `scumimon` no longer appears as an
 M92 board-family candidate.
 The local M78 grouping now tracks `D:\emu\irem\M78\bj92.zip` as a
@@ -547,10 +547,10 @@ candidate.
 The standard data-gated runner now also reports, runs, and oracle-registers
 every implemented Irem player-family corpus golden: M10, M14, M15, M27, M47,
 M52, M57, M58, M62, M63, travrusa, Red Alert, M72, M75, M78, M81, M82, M84,
-M85, M90, M92, M102, and M107, plus the M119 manifest-only data gate. The
+M85, M90, M92, M102, M107, and M119. The
 newest G6 high-water raises cover
 `GLD-M10-CORPUS`, `GLD-M14-CORPUS`, `GLD-M15-CORPUS`, `GLD-M27-CORPUS`, `GLD-M47-CORPUS`, `GLD-M52-CORPUS`, `GLD-M57-CORPUS`, `GLD-M58-CORPUS`, `GLD-M62-CORPUS`, `GLD-M63-CORPUS`, `GLD-TRAVRUSA-CORPUS`, `GLD-M78-CORPUS`,
-`GLD-M81-CORPUS`, `GLD-M82-CORPUS`, `GLD-M84-CORPUS`, `GLD-M85-CORPUS`, `GLD-M102-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
+`GLD-M81-CORPUS`, `GLD-M82-CORPUS`, `GLD-M84-CORPUS`, `GLD-M85-CORPUS`, `GLD-M102-CORPUS`, `GLD-M107-CORPUS`, and `GLD-M119-CORPUS`, closing the previous gap where those
 implemented player smoke gates existed but were absent from the common oracle
 proof command.
 M15 now has a checked-in `headoni` manifest plus an executable MOS 6502
@@ -1164,7 +1164,7 @@ electromechanical medal-game board, not a V33/V35 video-game platform.
 
 ---
 
-## Irem M119 — 1 / 2
+## Irem M119 — 2 / 3
 
 This section is split from M92/M107 because `scumimon` runs on late isolated
 M119 hardware, not the V33/V35/GA20 video-game boards.
@@ -1176,18 +1176,32 @@ M119 hardware, not the V33/V35/GA20 video-game boards.
   sizes, offsets, even/odd VDP interleave, and CRC-32 values. `MNEMOS_M119_SET_DIR=D:\emu\irem\M119`
   data-gates the sorted local ZIP and proves it loads CRC-clean through the
   embedded manifest; `scripts/irem/inventory-corpus.ps1` records two tracked
-  M119 local artifacts, one ZIP contract-only route, and one metadata-only `.7z`
+  M119 local artifacts, one ZIP first-pass player route, and one metadata-only `.7z`
   route · DONE · MED · S · beyond Emu · Evidence:
   `src/manifests/irem_m119/games/scumimon.toml` +
   `src/manifests/irem_m119/tests/m119_rom_contract_test.cpp` +
   `scripts/irem/inventory-corpus.ps1`
-- [ ] **I119-2** Executable M119 board profile — missing. Mnemos has no
-  SH-3/SH7708 CPU core, no uPD94244-210 VDP model, no YMZ280B sound device, and
-  no M119 memory/I/O/timing/player adapter. Current M119 evidence is therefore
-  ROM-contract-only and must not be counted as playable or correct graphics/music
-  support · MISSING · HIGH · L · beyond Emu · Evidence:
-  `src/chips/cpu/` and `src/chips/audio/` have no SH7708/SH-3 or YMZ280B device
-  implementations.
+- [x] **I119-2** Executable M119 first-pass board profile —
+  `src/chips/cpu/sh3`, `src/chips/video/upd94244`, and
+  `src/chips/audio/ymz280b` provide explicit first-pass SH7708/SH-3,
+  uPD94244-210, and YMZ280B chip surfaces, while
+  `src/manifests/irem_m119/m119_system.*` and
+  `src/apps/player/adapters/irem_m119` wire the sorted `scumimon.zip` corpus
+  into a player-selectable `irem_m119` route with diagnostics, frame stepping,
+  audio capture, and save-state smoke coverage. This is executable first-pass
+  support, not correct graphics/music parity · DONE · HIGH · L · beyond Emu ·
+  Evidence: `src/chips/cpu/sh3/tests/sh3_test.cpp` +
+  `src/chips/video/upd94244/tests/upd94244_test.cpp` +
+  `src/chips/audio/ymz280b/tests/ymz280b_test.cpp` +
+  `src/manifests/irem_m119/tests/m119_system_test.cpp` +
+  `src/apps/player/adapters/irem_m119/tests/irem_m119_adapter_test.cpp`
+- [ ] **I119-3** Authentic M119 silicon/parity — remaining work is real
+  SH7708 peripheral/MMU/timer/interrupt behavior, uPD94244 raster/tile/sprite
+  behavior, YMZ280B ADPCM/sample format accuracy, M119 board I/O and timing,
+  DIP/mechanical behavior, and verified correct visual/audio parity against
+  hardware reference captures · MISSING · HIGH · L · beyond Emu · Evidence:
+  the first-pass tests intentionally assert deterministic diagnostics and corpus
+  loadability only.
 
 ---
 

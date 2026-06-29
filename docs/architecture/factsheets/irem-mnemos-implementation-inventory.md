@@ -23,8 +23,8 @@ treats them as a separate `irem_travrusa` first-pass profile because the
 factsheet does not yet map the family to a numbered M-board. Of those 439
 items, 331 currently match a checked-in Mnemos Irem manifest, 179 are readable
 through the current ZIP, single-inner wrapper ZIP, or unpacked-folder media
-routes, 178 have an executable player-supported route, one is a tracked
-contract-only route, and 153 are manifest-backed metadata-only items. The count
+routes, all 179 have an executable player-supported route, zero are tracked
+contract-only routes, and 153 are manifest-backed metadata-only items. The count
 includes `scumimon` after it was moved from `D:\emu\irem\M92` to
 `D:\emu\irem\M119`, and it includes the M102 `hclimber` contract under
 `D:\emu\irem\M102`. M78 now has a first-pass `bj92` route: `bj92.zip` is
@@ -45,9 +45,10 @@ unpacked to `D:\emu\irem\M82\dkgensanm82`, and the unpacked folder plus `.7z`
 count as the two loadable tracked routes. M10 now has first-pass native 8085
 routes for `andromed` and `skychut`: `andromed.zip` and `skychut.zip` are
 supported, while `andromed.7z` and `skychut.7z` remain metadata-only until
-converted or unpacked. The remaining tracked contract-only local item is
-`D:\emu\irem\M119\scumimon.zip`; ignored
-buckets may still show filename-level manifest matches, but they contribute zero
+converted or unpacked. M119 now has a first-pass `scumimon` route:
+`scumimon.zip` is supported through `--system irem_m119`, while
+`scumimon.7z` remains metadata-only until converted or unpacked. Ignored buckets
+may still show filename-level manifest matches, but they contribute zero
 tracked, loadable, supported, contract-only, or metadata-only support counts.
 Another 153 tracked manifest matches remain metadata-only until converted,
 unpacked, or supplied with required supplemental media; the separate M58
@@ -75,8 +76,7 @@ untracked corpus classifications remain explicit: `headon` and
 The common data-gated runner now includes the M57 and M63 player corpus proofs
 plus G6-ratcheted corpus golden tests for every implemented Irem player family:
 M10, M14, M15, M27, M47, M52, M57, M58, M62, M63, travrusa, Red Alert, M72, M75,
-M78, M81, M82, M84, M85, M90, M92, M102, and M107, plus the M119
-manifest-only contract gate. For
+M78, M81, M82, M84, M85, M90, M92, M102, M107, and M119. For
 the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
 wires board-specific folders under `D:\emu\irem` into those data-gated tests;
 M92 also includes the M107 folder as supplemental media for the local
@@ -84,7 +84,7 @@ Dream Soccer '94 Japan M92 hardware split set, while M10, Red Alert, M102, and
 M119 wire the sorted `D:\emu\irem\M10`, `D:\emu\irem\M27`,
 `D:\emu\irem\M102`, and `D:\emu\irem\M119` buckets for the `andromed` /
 `skychut` player smoke, the `ww3` player smoke, the `hclimber` player smoke,
-and the `scumimon` ROM contract.
+and the `scumimon` player smoke.
 The strict full-M72 roster gate remains opt-in because it is a data-heavy player
 proof.
 
@@ -132,7 +132,7 @@ proof.
 | M92 | `irem_m92` | 68% first-pass | `bmaster`, `crossbld`, `dsoccr94j`, `geostorm`, `geostorma`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `hookj`, `inthunt`, `inthuntk`, `inthuntu`, `kaiteids`, `leaguemn`, `leaguemna`, `lethalth`, `majtitl2`, `majtitl2a`, `majtitl2b`, `majtitl2j`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`, `psoldier`, `rtypeleo`, `rtypeleoj`, `ssoldier`, `thndblst`, `uccops`, `uccopsar`, `uccopsj`, `uccopsu` | all 36 data-gated first-pass sets; Blade Master Japan, Dream Soccer '94 Japan M92 hardware with explicit `dsoccr94.zip` supplemental media, Geostorm, Hook Japan, In the Hunt US/Japan/Korea, GunForce, League-Man, Lethal Thunder/Thunder Blaster, Major Title 2, Mystic Riders, Ninja Baseball Bat Man, R-Type Leo, Superior/Perfect Soldiers, and Undercover Cops nonblank/save-state smokes; modeled V35 command/YM IRQ priority proof | None | Encrypted V35 sound CPU behavior/decryption, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
 | M102 | `irem_m102` first-pass | 12% | `hclimber` | local `hclimber.zip` through the adapter; nonblank diagnostic frame, GA20 capture path, and save-state proof | None | Authentic D70008AC/Z80 timing, medal/mechanical I/O, artwork/mechanical model, DIP behavior, title video timing, and visual/audio parity |
 | M107 | `irem_m107` | 58% | `airass`, `dsoccr94`, `firebarr` | all 3 checked-in sets are data-gated; Air Assault and Dream Soccer '94 have direct nonblank/save-state smoke; Fire Barrel is CRC-clean and player-routable; shared Fire Barrel/Air Assault SW1/SW2 default `0xffbf` and SW3 `COINS_DSW3` default `0xebff`; Dream Soccer SW3 Player Power default keeps `COINS_DSW3=0xffff`; service/test plus command/YM IRQ priority proof | None | V33/V35-specific behavior, deeper M107 I/O proof, GA21/GA22 video, cycle-exact V35 IRQ latency/GA20 analog mix, raster/parity |
-| M119 | `irem_m119` manifest-only | 3% | `scumimon` | None; ZIP loads CRC-clean as a contract-only data gate, but no player route exists | None | Implement SH-3/SH7708, uPD94244-210 VDP, YMZ280B sound, board I/O/timing, and player adapter |
+| M119 | `irem_m119` first-pass | 10% | `scumimon` | local `scumimon.zip` through the adapter; explicit SH7708/SH-3, uPD94244-210, and YMZ280B chip surfaces; nonblank diagnostic frame, YMZ capture path, and save-state proof | None | Authentic SH-3 peripherals/MMU/timers, uPD94244 raster/tile/sprite behavior, YMZ280B ADPCM/sample format, M119 board I/O/timing, DIP/mechanical behavior, and visual/audio parity |
 
 ## Correct Graphics And Music Certification
 
@@ -1036,18 +1036,20 @@ visual and audio parity proof.
 ### M119
 
 - **Techsheet games:** Slotters Club: Umi Monogatari (`scumimon`).
-- **Mnemos games:** `scumimon` as a checked-in manifest-only ROM contract under
-  `src/manifests/irem_m119`.
-- **Smoke playable:** none.
+- **Mnemos games:** `scumimon` as a first-pass player route under
+  `src/manifests/irem_m119` and `src/apps/player/adapters/irem_m119`.
+- **Smoke playable:** `scumimon` via `--system irem_m119`; this is diagnostic
+  first-pass rendering/audio, not authentic gameplay certification.
 - **Correct gfx/music:** none.
 - **Local corpus note:** `D:\emu\irem\M119` now holds `scumimon.zip` and
-  `scumimon.7z`; the ZIP is a tracked contract-only route and the `.7z` archive
-  remains metadata-only until converted or unpacked. The M119 contract verifies
-  the SH-3 program, UPD94244 VDP, and YMZ sample ROM filenames, sizes, offsets,
-  interleave, and CRC-32 values.
-- **Remaining:** implement the SH-3/SH7708 CPU family, uPD94244-210 video path,
-  YMZ280B audio, M119 memory/I/O/timing, and a player adapter before any
-  Scumimon runtime or correctness claim.
+  `scumimon.7z`; the ZIP is a tracked first-pass player route and the `.7z`
+  archive remains metadata-only until converted or unpacked. The M119 contract
+  verifies the SH-3 program, UPD94244 VDP, and YMZ sample ROM filenames, sizes,
+  offsets, interleave, and CRC-32 values.
+- **Remaining:** replace the SH-2-delegated SH-3 shell with authentic SH7708
+  peripherals/MMU/timing, implement uPD94244 rendering, implement YMZ280B native
+  sample decoding, prove board I/O/DIP/mechanical behavior, and add
+  visual/audio parity before any Scumimon correctness claim.
 
 ## Immediate Closure Candidates
 

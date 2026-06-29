@@ -7,6 +7,7 @@
 #include "genesis_adapter.hpp"
 #include "irem_m10_adapter.hpp"
 #include "irem_m107_adapter.hpp"
+#include "irem_m119_adapter.hpp"
 #include "irem_m14_adapter.hpp"
 #include "irem_m15_adapter.hpp"
 #include "irem_m27_adapter.hpp"
@@ -68,6 +69,7 @@ namespace mnemos::apps::player {
         adapters::irem_m92::force_link();
         adapters::irem_m102::force_link();
         adapters::irem_m107::force_link();
+        adapters::irem_m119::force_link();
         adapters::taito_f2::force_link();
         adapters::capcom_cps1::force_link();
         adapters::capcom_cps2::force_link();

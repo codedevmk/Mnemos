@@ -110,6 +110,7 @@ namespace mnemos::apps::player {
             family == system_family::irem_m84 || family == system_family::irem_m85 ||
             family == system_family::irem_m90 || family == system_family::irem_m92 ||
             family == system_family::irem_m102 || family == system_family::irem_m107 ||
+            family == system_family::irem_m119 ||
             family == system_family::taito_f2 || family == system_family::capcom_cps1 ||
             family == system_family::capcom_cps2;
         auto loaded = arcade_family ? load_rom_verbatim(options.rom_paths.front())
@@ -128,7 +129,8 @@ namespace mnemos::apps::player {
              family == system_family::irem_m81 || family == system_family::irem_m82 ||
              family == system_family::irem_m84 || family == system_family::irem_m85 ||
              family == system_family::irem_m90 || family == system_family::irem_m92 ||
-             family == system_family::irem_m102 || family == system_family::irem_m107);
+             family == system_family::irem_m102 || family == system_family::irem_m107 ||
+             family == system_family::irem_m119);
         if (!loaded || (loaded->bytes.empty() && !directory_backed_irem)) {
             std::fprintf(stderr, "could not read ROM: %s\n", options.rom_paths.front().c_str());
             outcome.exit_code = 1;
@@ -151,7 +153,8 @@ namespace mnemos::apps::player {
                 family == system_family::irem_m81 || family == system_family::irem_m82 ||
                 family == system_family::irem_m84 || family == system_family::irem_m85 ||
                 family == system_family::irem_m90 || family == system_family::irem_m92 ||
-                family == system_family::irem_m102 || family == system_family::irem_m107;
+                family == system_family::irem_m102 || family == system_family::irem_m107 ||
+                family == system_family::irem_m119;
             auto extra = irem_family ? load_rom_verbatim(options.rom_paths[i])
                                      : load_rom(options.rom_paths[i]);
             const bool directory_backed_extra = extra && extra->directory_source && irem_family;
@@ -223,6 +226,7 @@ namespace mnemos::apps::player {
         case system_family::irem_m92:
         case system_family::irem_m102:
         case system_family::irem_m107:
+        case system_family::irem_m119:
         case system_family::taito_f2:
         case system_family::capcom_cps1:
         case system_family::capcom_cps2:
