@@ -117,11 +117,11 @@ namespace mnemos::manifests::common {
         // own files first, then the parent's) -- every file is still CRC-verified
         // regardless of which zip supplied it. Absent => a standalone set.
         // Constrained to a plain set id by the loader (no path separators).
-        // NOTE: capcom_cps1 and taito_f2 consume this by threading
-        // adapter_options.rom_path and composing the fallback. Other boards parse
-        // it but ignore it, so a `parent` there would report the shared files
-        // missing. Single level only -- the parent set must be standalone, not
-        // itself a clone.
+        // NOTE: capcom_cps1, taito_f2, irem_m52, and irem_m62 consume this by
+        // composing a clone-first fallback provider from the ROM path. Other boards
+        // parse it but ignore it, so a `parent` there would report the shared files
+        // missing. Single level only -- the parent set must be standalone, not itself
+        // a clone.
         std::optional<std::string> parent;
         // Optional CPS-B board / PAL profile id: capcom_cps1 boards select their
         // hardware profile by this numeric id; absent on families that don't use it.

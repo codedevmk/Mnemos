@@ -87,7 +87,7 @@ proof.
 | M52 | `irem_m52` first-pass | 42% | `mpatrol`, `mpatrolw` | local Moon Patrol wrappers; service/test input proof; manual-backed DIP defaults; sound-Z80-owned AY/MSM write proof; RAM/GFX-backed sprite pass; text flip-screen position proof; optional visual/audio hash oracle | None | Authentic parallax/road/background priority, exact sound CPU port/protocol timing, discrete analog path, Moon Patrol / Tropical Angel board-split proof, DIP runtime/parity behavior, pinned raster/audio/video parity hashes |
 | M57 | `irem_m57` first-pass raw-media route | 12% | `newtangl` | local New Tropical Angel ZIP through the adapter; direct `mnemos_player --system irem_m57` nonblank screenshot and `--system m57` save-state proof | None | Authentic M57 memory/I/O timing, video/color, Irem Audio, inputs/DIPs, visual/audio parity |
 | M58 | `irem_m58` first-pass | 28% | `10yard`, `10yardj`, `vs10yard`, `vs10yardj` | all 4 local ZIP sets through the adapter; real `soundcpu` reset vector proves the MC6803 high-ROM path; direct `mnemos_player --system irem_m58` nonblank screenshot and `--system m58` save-state proof for parent/Japan sets | None | Authentic 10-Yard Fight memory/I/O timing, video priority/color/radar details, exact MC6803 port/timer/audio timing, DIP/manual behavior, visual/audio parity hashes |
-| M62 | `irem_m62` first-pass Lode Runner/Lot Lot/Spelunker II MC6803/SSG/MSM5205 route plus raw-media fallback | 28% | `battroad`, `horizon`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, `spelunk2`, `youjyudn` | all 11 local ZIP routes through the adapter; `ldrun`, `ldrun2`, `ldrun3`, `ldrun4`, `lotlot`, and `spelunk2` region contracts load Z80 program, MC6803 sound ROM, graphics, PROM, and timing regions with the MC6803 reset vector proven in the `$8000-$ffff` sound-ROM window; direct `mnemos_player --system irem_m62` nonblank screenshot/save-state proof for `ldrun`, `ldrun2`, `ldrun3`, `ldrun4`, `lotlot`, and `spelunk2` | None | Exact M62 title bus maps, MC6803 port/timer timing, exact dual MSM5205 stream/control timing, KNA custom video, inputs/DIPs, visual/audio parity |
+| M62 | `irem_m62` first-pass Lode Runner/Lot Lot/Spelunker II MC6803/SSG/MSM5205 route plus raw-media and clone-parent fallback | 29% | `battroad`, `horizon`, `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, `spelunk2`, `youjyudn` | all 11 local ZIP routes through the adapter; `ldrun`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, and `spelunk2` region contracts load Z80 program, MC6803 sound ROM, graphics, PROM, and timing regions with the MC6803 reset vector proven in the `$8000-$ffff` sound-ROM window; direct `mnemos_player --system irem_m62` nonblank screenshot/save-state proof for `ldrun`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`, and `spelunk2` | None | Exact M62 title bus maps, MC6803 port/timer timing, exact dual MSM5205 stream/control timing, KNA custom video, inputs/DIPs, visual/audio parity |
 | M63 | `irem_m63` first-pass | 14% | `wilytowr` | local Wily Tower ZIP through the adapter; direct `mnemos_player --system irem_m63` nonblank screenshot and `--system m63` save-state proof | None | Authentic Z80 + 8039/AY/sample board profile, video/color PROM path, Fighting Basketball manifest, input/DIP behavior, visual/audio parity |
 | Traverse USA / Zippy Race | `irem_travrusa` first-pass | 23% | `travrusa`, `motorace`, `travrusab`, `travrusab2` | local parent/copy-suffixed parent and split wrappers; direct `mnemos_player --system irem_travrusa` nonblank screenshot and `--system travrusa` save-state proof | None | Authentic MotoRace encrypted ROM handling, exact Irem Audio timing, video priority/scroll/color/input behavior, visual/audio parity |
 | M72 | `irem_m72` | 70% | 23 checked-in manifests | all 23 checked-in sets are media-clean smoke-proven; `dbreedm72` also has nonzero rendered-audio smoke proof | None | Remaining MCU/protection artifacts, no-dump HLE depth, DIP/manual proof, visual/audio parity |
@@ -148,10 +148,11 @@ targets:
   `D:\emu\irem\M58\artwork`.
 - M62 now has eleven ROM-set contracts plus a first-pass player route with
   CRC-clean local wrapper-ZIP load proof, nonblank screenshot proof, and
-  save-state proof. `ldrun`, `ldrun2`, and `ldrun3` have been promoted from
-  raw-media-only staging to explicit Z80 program, MC6803 sound ROM, graphics,
-  PROM, and timing regions, and the board route wires a first-pass MC6803
-  direct-page latch/dual-SSG path for the Lode Runner family.
+  save-state proof. `ldrun`, `ldrun2`, `ldrun3`, and the parent-backed
+  `ldrun3j` clone have been promoted from raw-media-only staging to explicit
+  Z80 program, MC6803 sound ROM, graphics, PROM, and timing regions, and the
+  board route wires a first-pass MC6803 direct-page latch/dual-SSG path for the
+  Lode Runner family.
   M62 remains smoke-playable only, not authentic KNA/MSM5205/audio-video parity.
 - M63 now has a single `wilytowr` ROM contract plus a first-pass executable
   Z80 diagnostic player route. `MNEMOS_M63_SET_DIR=D:\emu\irem\M63` proves the
@@ -391,7 +392,8 @@ visual and audio parity proof.
 
 - **Techsheet games:** Kung-Fu Master / Spartan X, Kid Niki, Lode Runner,
   Lot Lot, Spelunker, Lightning Swords, Youjyuden, The Battle-Road, Horizon.
-- **Mnemos games:** explicit `ldrun`, `ldrun2`, `ldrun3`, `ldrun4`, `lotlot`, and `spelunk2` region contracts plus
+- **Mnemos games:** explicit `ldrun`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`,
+  `lotlot`, and `spelunk2` region contracts plus
   raw-media manifests and first-pass player routes for
   `battroad`, `horizon`,
   `ldrun`, `ldruna`, `ldrun2`, `ldrun3`, `ldrun3j`, `ldrun4`, `lotlot`,
@@ -406,6 +408,10 @@ visual and audio parity proof.
   screenshot and a 24,902-byte save-state after 90 frames.
   `ldrun3` now has matching direct proof: a nonblank 256x256 screenshot and a
   16,127-byte save-state after 90 frames.
+  `ldrun3j` now has parent-backed direct proof through `ldrun3`: a nonblank
+  256x256 screenshot, a 16,189-byte save-state after 90 frames, a 298,324-byte
+  rendered WAV, and capability output exposing both YM2149 and both MSM5205
+  register surfaces.
   `ldrun4` now has matching direct proof: a nonblank 256x256 screenshot, a
   20,040-byte save-state after 90 frames, and a rendered WAV from the mixed
   beeper/SSG/MSM path.
@@ -418,12 +424,15 @@ visual and audio parity proof.
 - **Correct gfx/music:** none.
 - **Current implementation:** `src/manifests/irem_m62` embeds local ROM-set
   contracts generated from the Lode Runner, Lot Lot, Spelunker II, Battle Road,
-  Horizon, and Youjyuden artifacts. `ldrun`, `ldrun2`, `ldrun3`, `ldrun4`, `lotlot`, and `spelunk2` now map
-  into explicit `maincpu`, `soundcpu`, graphics, PROM, and timing regions,
-  including the MC6803 reset vector in the `$8000-$ffff` sound-ROM window. The
-  remaining M62 sets stay in `raw_media` staging so CRCs, sizes, and set
-  grouping are preserved without asserting unfinished title-specific bus
-  placement.
+  Horizon, and Youjyuden artifacts. `ldrun`, `ldrun2`, `ldrun3`, `ldrun3j`,
+  `ldrun4`, `lotlot`, and `spelunk2` now map into explicit `maincpu`,
+  `soundcpu`, graphics, PROM, and timing regions, including the MC6803 reset
+  vector in the `$8000-$ffff` sound-ROM window. The M62 adapter now resolves
+  clone-parent sibling ZIPs, direct parent directories, and single-inner parent
+  ZIP wrappers so `ldrun3j` can inherit shared `ldrun3` artifacts while keeping
+  clone-specific program and graphics dumps CRC-verified. The remaining M62
+  sets stay in `raw_media` staging so CRCs, sizes, and set grouping are
+  preserved without asserting unfinished title-specific bus placement.
   `src/manifests/irem_m62/m62_system.cpp` runs the Z80 execution window, a
   diagnostic graphics window, RAM/input/sound-latch surfaces, nonblank video,
   beeper-backed compatibility audio for synthetic programs, and a first-pass

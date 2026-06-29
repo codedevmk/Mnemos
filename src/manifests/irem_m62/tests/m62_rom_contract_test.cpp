@@ -41,6 +41,7 @@ namespace {
     struct expected_contract final {
         std::size_t raw_size{};
         std::size_t file_count{};
+        std::string parent{};
         std::map<std::string, expected_region_contract, std::less<>> regions{};
     };
 
@@ -78,7 +79,17 @@ namespace {
                            {"spr_color_proms", {.raw_size = 0x300U, .file_count = 3U}},
                            {"chr_color_proms", {.raw_size = 0x300U, .file_count = 3U}},
                            {"timing", {.raw_size = 0x100U, .file_count = 1U}}}}},
-            {"ldrun3j", {.raw_size = 0x18000U, .file_count = 6U}},
+            {"ldrun3j",
+             {.parent = "ldrun3",
+              .regions = {{"maincpu", {.raw_size = 0x10000U, .file_count = 3U}},
+                           {"soundcpu", {.raw_size = 0x10000U, .file_count = 2U}},
+                           {"gfx1", {.raw_size = 0xC000U, .file_count = 3U}},
+                           {"gfx2", {.raw_size = 0x18000U, .file_count = 6U}},
+                           {"proms", {.raw_size = 0x100U, .file_count = 1U}},
+                           {"spr_height_prom", {.raw_size = 0x20U, .file_count = 1U}},
+                           {"spr_color_proms", {.raw_size = 0x300U, .file_count = 3U}},
+                           {"chr_color_proms", {.raw_size = 0x300U, .file_count = 3U}},
+                           {"timing", {.raw_size = 0x100U, .file_count = 1U}}}}},
             {"ldrun4",
              {.regions = {{"maincpu", {.raw_size = 0x10000U, .file_count = 2U}},
                            {"soundcpu", {.raw_size = 0x10000U, .file_count = 2U}},
@@ -428,7 +439,12 @@ TEST_CASE("m62 embedded manifests cover local ROM contracts", "[m62][romset]") {
         CHECK(decl.name == set_name);
         CHECK(decl.board == "irem_m62");
         CHECK(decl.orientation == mnemos::manifests::common::screen_orientation::horizontal);
-        CHECK_FALSE(decl.parent.has_value());
+        if (contract->second.parent.empty()) {
+            CHECK_FALSE(decl.parent.has_value());
+        } else {
+            REQUIRE(decl.parent.has_value());
+            CHECK(*decl.parent == contract->second.parent);
+        }
         if (contract->second.regions.empty()) {
             REQUIRE(decl.regions.size() == 1U);
 
@@ -516,14 +532,25 @@ TEST_CASE("m62 local wrapper artifacts load CRC-clean through embedded manifests
         INFO("set=" << set_name);
         const auto contract_it = expected_contracts().find(set_name);
         REQUIRE(contract_it != expected_contracts().end());
-        const auto decl = require_embedded_decl(set_name);
+        auto decl = require_embedded_decl(set_name);
 
         const auto source_it = indexed_sources.find(set_name);
         REQUIRE(source_it != indexed_sources.end());
         INFO("source=" << source_it->second.string());
 
-        const auto image =
-            mnemos::manifests::common::load_rom_set(decl, require_provider(source_it->second));
+        auto provider = require_provider(source_it->second);
+        if (decl.parent.has_value()) {
+            INFO("parent=" << *decl.parent);
+            const auto parent_source_it = indexed_sources.find(*decl.parent);
+            REQUIRE(parent_source_it != indexed_sources.end());
+            INFO("parent_source=" << parent_source_it->second.string());
+            provider = mnemos::manifests::common::make_fallback_rom_provider(
+                std::move(provider), require_provider(parent_source_it->second));
+            const auto parent_decl = require_embedded_decl(*decl.parent);
+            decl = mnemos::manifests::common::inherit_parent_regions(parent_decl, std::move(decl));
+        }
+
+        const auto image = mnemos::manifests::common::load_rom_set(decl, provider);
         for (const auto& issue : image.issues) {
             INFO(issue.file << ": " << issue.message);
         }
@@ -535,7 +562,8 @@ TEST_CASE("m62 local wrapper artifacts load CRC-clean through embedded manifests
                 require_loaded_region(image, region_name, region_contract.raw_size);
             }
             if (set_name == "ldrun" || set_name == "ldrun2" || set_name == "ldrun3" ||
-                set_name == "ldrun4" || set_name == "lotlot" || set_name == "spelunk2") {
+                set_name == "ldrun3j" || set_name == "ldrun4" || set_name == "lotlot" ||
+                set_name == "spelunk2") {
                 require_m6803_reset_vector(image, 0xFA00U);
             }
         }

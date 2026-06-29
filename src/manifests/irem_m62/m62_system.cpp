@@ -72,6 +72,9 @@ namespace mnemos::manifests::irem_m62 {
             if (layout == "m62_spelunk2_regioned") {
                 return 7U;
             }
+            if (layout == "m62_ldrun3j_regioned") {
+                return 8U;
+            }
             return 0U;
         }
 
@@ -166,6 +169,11 @@ namespace mnemos::manifests::irem_m62 {
         if (set_name == "ldrun3") {
             return {.cpu_clock_hz = cpu_clock_hz,
                     .rom_layout = "m62_ldrun3_regioned",
+                    .dip_default = ldrun_dip_default};
+        }
+        if (set_name == "ldrun3j") {
+            return {.cpu_clock_hz = cpu_clock_hz,
+                    .rom_layout = "m62_ldrun3j_regioned",
                     .dip_default = ldrun_dip_default};
         }
         if (set_name == "ldrun4") {
