@@ -23,7 +23,7 @@ treats them as a separate `irem_travrusa` first-pass profile because the
 factsheet does not yet map the family to a numbered M-board. Of those 439
 items, 331 currently match a checked-in Mnemos Irem manifest, 179 are readable
 through the current ZIP, single-inner wrapper ZIP, or unpacked-folder media
-routes, 175 have an executable player-supported route, four are tracked
+routes, 177 have an executable player-supported route, two are tracked
 contract-only routes, and 153 are manifest-backed metadata-only items. The count
 includes `scumimon` after it was moved from `D:\emu\irem\M92` to
 `D:\emu\irem\M119`, and it includes the M102 `hclimber` contract under
@@ -42,9 +42,11 @@ player route; `wilytowr.zip` is supported while the two local `.7z` Wily Tower a
 remain metadata-only until converted or unpacked. M82 now includes
 `dkgensanm82`: the local split ZIP is metadata-only, the standalone `.7z` was
 unpacked to `D:\emu\irem\M82\dkgensanm82`, and the unpacked folder plus `.7z`
-count as the two loadable tracked routes. The four tracked contract-only local
-items are `D:\emu\irem\M10\andromed.zip`, `D:\emu\irem\M10\skychut.zip`,
-`D:\emu\irem\M102\hclimber.zip`, and `D:\emu\irem\M119\scumimon.zip`; ignored
+count as the two loadable tracked routes. M10 now has first-pass native 8085
+routes for `andromed` and `skychut`: `andromed.zip` and `skychut.zip` are
+supported, while `andromed.7z` and `skychut.7z` remain metadata-only until
+converted or unpacked. The two tracked contract-only local items are
+`D:\emu\irem\M102\hclimber.zip` and `D:\emu\irem\M119\scumimon.zip`; ignored
 buckets may still show filename-level manifest matches, but they contribute zero
 tracked, loadable, supported, contract-only, or metadata-only support counts.
 Another 153 tracked manifest matches remain metadata-only until converted,
@@ -72,16 +74,17 @@ untracked corpus classifications remain explicit: `headon` and
 `galaxian/galaxian.cpp`.
 The common data-gated runner now includes the M57 and M63 player corpus proofs
 plus G6-ratcheted corpus golden tests for every implemented Irem player family:
-M14, M15, M27, M47, M52, M57, M58, M62, M63, travrusa, Red Alert, M72, M75,
+M10, M14, M15, M27, M47, M52, M57, M58, M62, M63, travrusa, Red Alert, M72, M75,
 M78, M81, M82, M84, M85, M90, M92, and M107, plus the M102 and M119
 manifest-only contract gates. For
 the current Windows local corpus layout, `scripts\irem\run-local-corpus.ps1`
 wires board-specific folders under `D:\emu\irem` into those data-gated tests;
 M92 also includes the M107 folder as supplemental media for the local
-Dream Soccer '94 Japan M92 hardware split set, while Red Alert, M102, and M119
-wire the sorted `D:\emu\irem\M27`, `D:\emu\irem\M102`, and `D:\emu\irem\M119`
-buckets for the `ww3` player smoke and the `hclimber` and `scumimon` ROM
-contracts.
+Dream Soccer '94 Japan M92 hardware split set, while M10, Red Alert, M102, and
+M119 wire the sorted `D:\emu\irem\M10`, `D:\emu\irem\M27`,
+`D:\emu\irem\M102`, and `D:\emu\irem\M119` buckets for the `andromed` /
+`skychut` player smoke, the `ww3` player smoke, and the `hclimber` and
+`scumimon` ROM contracts.
 The strict full-M72 roster gate remains opt-in because it is a data-heavy player
 proof.
 
@@ -106,8 +109,8 @@ proof.
 
 | Techsheet system | Mnemos profile | Impl. % | Mnemos game/set coverage | Smoke playable now | Correct gfx/music certified | Main remaining work |
 |---|---:|---:|---|---|---|---|
-| M10 / M15 | `irem_m15` subset | 35% overall / 55% for Head On subset | `headoni` | `headoni` nonblank + save/load | None | M10-family breadth, analog sound/sample mapping, analog color, exact raster phase, screenshot/audio parity |
-| M14 | `irem_m14` first-pass | 16% | `ptrmj` | local P.T. Reach Mahjong ZIPs through the adapter; direct `mnemos_player --system irem_m14` nonblank screenshot and `--system m14` save-state proof | None | Authentic NEC D8085AC/8085 CPU timing instead of the temporary 8080-compatible surrogate, video/color, paddle/mahjong/input behavior, discrete/sample sound, visual/audio parity |
+| M10 / M15 | `irem_m10` + `irem_m15` first-pass | 42% overall / 20% for M10 subset / 55% for Head On subset | `andromed`, `skychut`, `headoni` | `andromed` / `skychut` through native 8085 M10 route; `headoni` nonblank + save/load | None | Exact 8085 board timing, M10/M15 analog sound/sample mapping, analog color, exact raster phase, screenshot/audio parity |
+| M14 | `irem_m14` first-pass | 18% | `ptrmj` | local P.T. Reach Mahjong ZIPs through native 8085 adapter; direct `mnemos_player --system irem_m14` nonblank screenshot and `--system m14` save-state proof | None | Deeper NEC D8085AC/8085 interrupt/timing proof, video/color, paddle/mahjong/input behavior, discrete/sample sound, visual/audio parity |
 | M27 | `irem_m27` first-pass | 18% | `panther` | local Panther ZIPs through the adapter; direct `mnemos_player --system irem_m27` nonblank screenshot and `--system m27` save-state proof | None | Authentic M27 memory/I/O timing, bitmap/char video and color behavior, input/DIP behavior, Panther audio-board behavior, raster/audio/video parity |
 | Red Alert / WW III | `irem_redalert` first-pass | 12% | `ww3` | local unpacked WW III folder and split `ww3.zip` plus same-stem sidecar folder through the adapter; synthetic memory-map/video/audio/save-state proof | None | Replace the first-pass M6502/video/beeper route with authentic Red Alert timing, M37B audio-board runtime, exact video/color/input/DIP behavior, parent Red Alert contract, and visual/audio parity |
 | M47 | `irem_m47` first-pass | 22% | `olibochu`, `punchkid` | local Oli-Boo-Chu parent and Punching Kid split clone ZIPs; direct `mnemos_player --system irem_m47` nonblank screenshot and `--system m47` save-state proof | None | Authentic M47 memory/I/O timing, video/color PROM behavior, AY/sample sound timing, input/DIP parity, visual/audio parity |
@@ -151,8 +154,12 @@ targets:
   the text layer while mirroring text-layer final positions under flip-screen.
   `GLD-M52-PARITY-HASH` is registered as a skipped-until-pinned
   visual/audio SHA-256 oracle for a reference-captured M52 set.
+- M10 now has Andromeda SS and Sky Chuter ROM contracts plus a first-pass native
+  8085 player route. `MNEMOS_M10_SET_DIR=D:\emu\irem\M10` proves the local ZIPs
+  through the adapter. Current graphics and audio remain diagnostic first-pass
+  output, not board-authentic M10 parity.
 - M14 now has a P.T. Reach Mahjong ROM contract plus a first-pass executable
-  Z80-backed 8080-compatible surrogate route. `MNEMOS_M14_SET_DIR=D:\emu\irem\M14`
+  native 8085 route. `MNEMOS_M14_SET_DIR=D:\emu\irem\M14`
   proves the local ZIPs through the adapter. Current graphics and audio remain
   diagnostic first-pass output, not board-authentic M14 parity.
 - M27 now has a Panther ROM contract plus a first-pass executable MOS 6502
@@ -193,7 +200,8 @@ targets:
   tests, four R-Type II set routes, and Major Title parent/Japan wrapper routes;
   Major Title's dedicated background ROM region now feeds the rear tilemap when
   present.
-- M15, M47, M58, M75, M81, M84, M85, M90, M92, and M107 all have player-routable first-pass boards with
+- M10, M14, M15, M27, M47, M52, M57, M58, M62, M63, travrusa, Red Alert, M75,
+  M78, M81, M84, M85, M90, M92, and M107 all have player-routable first-pass boards with
   nonblank local smoke evidence, but each still has explicit authenticity gaps.
   M75 currently covers the complete local Vigilante parent wrapper plus official
   regional and bootleg clone wrappers and the local Meikyu Jima / Kickle Cubicle
@@ -229,14 +237,21 @@ visual and audio parity proof.
 
 - **Techsheet games:** IPM Invader, Space Beam, Sky Chuter, Head On, Green Beret,
   Andromeda.
-- **Mnemos games:** `headoni`.
-- **Smoke playable:** `headoni` loads through `--system irem_m15`, produces a
-  224x256 nonblank frame, and has save/load smoke through the local M15 corpus.
+- **Mnemos games:** `andromed`, `skychut`, `headoni`.
+- **Smoke playable:** `andromed` and `skychut` load through `--system irem_m10`
+  / `--system m10` and pass the local `MNEMOS_M10_SET_DIR=D:\emu\irem\M10`
+  corpus golden. Direct 120-frame player smokes wrote
+  `build\scratch\irem-m10\andromed.ppm` and
+  `build\scratch\irem-m10\skychut.ppm` at 224x256 with nonzero payload counts
+  of 169087/172032 and 169397/172032 bytes respectively. `headoni` loads
+  through `--system irem_m15`, produces a 224x256 nonblank frame, and has
+  save/load smoke through the local M15 corpus.
 - **Correct gfx/music:** not certified. Graphics are first-pass M15
-  tile/color/chargen output; sound is board-owned latch/edge evidence, not final
-  analog sample or music parity.
-- **Remaining:** broader M10/M15 roster, board-evidenced discrete sound and
-  analog color, exact raster phase, and screenshot/audio parity.
+  tile/color/chargen output plus M10 diagnostic GFX-ROM/RAM output; sound is
+  board-owned latch/edge or beeper evidence, not final analog sample or music
+  parity.
+- **Remaining:** exact M10/M15 reset, memory, I/O, interrupt, and raster timing,
+  board-evidenced discrete sound and analog color, and screenshot/audio parity.
 
 ### M14
 
@@ -259,14 +274,13 @@ visual and audio parity proof.
   wrapper, sizes, and CRC32 values. The focused test checks embedded TOML
   synchronization, region/file invariants, and optional real-corpus loading
   through `D:\emu\irem\M14`. `m14_system.cpp` adds a first-pass board shell with
-  a Z80 core used as an 8080-compatible surrogate, program ROM at `$0000`, RAM,
-  video, color, work, input/DIP/control MMIO, I/O-port mirroring for early CPU
-  code, a GFX-ROM-driven diagnostic compositor, a beeper-backed sound latch,
+  the native Intel 8085/8080 core configured as an 8085, program ROM at `$0000`,
+  RAM, video, color, work, input/DIP/control MMIO, I/O-port mirroring for early
+  CPU code, a GFX-ROM-driven diagnostic compositor, a beeper-backed sound latch,
   save-state identity, and player registration under `irem_m14` / `m14`.
-- **Remaining:** replace the surrogate with authentic NEC D8085AC/8085 CPU
-  timing and any 8085-specific I/O behavior, prove the real M14 memory and I/O
-  map, raster/color behavior, paddle/mahjong/input behavior, sparse discrete or
-  sample sound, and visual/audio parity.
+- **Remaining:** prove deeper NEC D8085AC/8085 interrupt/timing behavior and the
+  real M14 memory and I/O map, raster/color behavior, paddle/mahjong/input
+  behavior, sparse discrete or sample sound, and visual/audio parity.
 
 ### M27
 
@@ -1054,9 +1068,9 @@ visual and audio parity proof.
 7. Advance M57 New Tropical Angel from first-pass smoke-playable to authentic
    behavior: the real M57 memory/I/O map, video/color behavior, Irem Audio path,
    inputs/DIPs, timing, and visual/audio parity remain open.
-8. Advance M14 P.T. Reach Mahjong from first-pass smoke-playable to authentic
-   behavior by replacing the 8080-compatible surrogate with board-evidenced
-   8085 timing, input, color, and sound behavior.
+8. Advance M14 P.T. Reach Mahjong from first-pass native-8085 smoke-playable to
+   authentic behavior by proving board-evidenced 8085 timing, input, color, and
+   sound behavior.
 9. Advance M47 Oli-Boo-Chu / Punching Kid from first-pass smoke-playable to
    authentic behavior: memory/I/O timing, video/color PROM behavior, AY/sample
    sound timing, input/DIP parity, and visual/audio parity remain open.

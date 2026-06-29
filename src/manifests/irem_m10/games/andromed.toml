@@ -1,6 +1,6 @@
 # Andromeda SS -- Irem M11/M10-lineage ROM contract.
-# Manifest-only local corpus contract. Mnemos still lacks the executable
-# early M10/M11 CPU, discrete sound, and color PROM board model for this set.
+# Local corpus contract. Mnemos has a first-pass native 8085 player route, but
+# still lacks the final discrete sound and color PROM board model for this set.
 
 [set]
 schema      = "mnemos-romset/1"

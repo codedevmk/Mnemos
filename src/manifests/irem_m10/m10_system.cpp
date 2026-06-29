@@ -1,4 +1,4 @@
-#include "m14_system.hpp"
+#include "m10_system.hpp"
 
 #include "crc32.hpp"
 
@@ -11,7 +11,7 @@
 #include <string_view>
 #include <utility>
 
-namespace mnemos::manifests::irem_m14 {
+namespace mnemos::manifests::irem_m10 {
 
     namespace {
         [[nodiscard]] std::vector<std::uint8_t>&
@@ -39,7 +39,7 @@ namespace mnemos::manifests::irem_m14 {
         }
 
         [[nodiscard]] std::uint8_t layout_code(std::string_view layout) noexcept {
-            if (layout == "m14_ptrmj_8085") {
+            if (layout == "m10_early_8085") {
                 return 1U;
             }
             return 0U;
@@ -55,9 +55,9 @@ namespace mnemos::manifests::irem_m14 {
         }
 
         [[nodiscard]] std::uint32_t board_identity_crc(const common::rom_set_image& roms,
-                                                       const m14_board_params& params) {
+                                                       const m10_board_params& params) {
             std::uint32_t crc =
-                security::cryptography::crc32(std::string_view{"m14.board.identity.v1"});
+                security::cryptography::crc32(std::string_view{"m10.board.identity.v1"});
             const std::array<std::uint8_t, 2> params_bytes{layout_code(params.rom_layout),
                                                            params.dip_default};
             crc = security::cryptography::crc32(
@@ -74,7 +74,7 @@ namespace mnemos::manifests::irem_m14 {
             return crc;
         }
 
-        [[nodiscard]] std::uint8_t read_main_rom_byte(const m14_system& system,
+        [[nodiscard]] std::uint8_t read_main_rom_byte(const m10_system& system,
                                                       std::uint16_t address) noexcept {
             const auto* main_prog = system.roms.region("maincpu");
             if (main_prog == nullptr || address >= main_prog->size()) {
@@ -116,16 +116,16 @@ namespace mnemos::manifests::irem_m14 {
 
     } // namespace
 
-    m14_board_params board_params_for(std::string_view set_name) noexcept {
-        if (set_name == "ptrmj") {
+    m10_board_params board_params_for(std::string_view set_name) noexcept {
+        if (set_name == "andromed" || set_name == "skychut") {
             return {.cpu_clock_hz = cpu_clock_hz,
-                    .rom_layout = "m14_ptrmj_8085",
-                    .dip_default = ptrmj_dip_default};
+                    .rom_layout = "m10_early_8085",
+                    .dip_default = m10_dip_default};
         }
         return {};
     }
 
-    std::uint8_t m14_cpu_bus::read8(std::uint32_t address) {
+    std::uint8_t m10_cpu_bus::read8(std::uint32_t address) {
         if (system_ == nullptr) {
             return 0xFFU;
         }
@@ -157,13 +157,13 @@ namespace mnemos::manifests::irem_m14 {
             break;
         }
 
-        if (a >= program_rom_base && a < program_rom_limit) {
+        if ((a >= program_rom_base && a < program_rom_limit) || a >= vector_rom_base) {
             return read_main_rom_byte(*system_, a);
         }
         return 0xFFU;
     }
 
-    void m14_cpu_bus::write8(std::uint32_t address, std::uint8_t value) {
+    void m10_cpu_bus::write8(std::uint32_t address, std::uint8_t value) {
         if (system_ == nullptr) {
             return;
         }
@@ -200,35 +200,35 @@ namespace mnemos::manifests::irem_m14 {
         }
     }
 
-    m14_video::m14_video()
+    m10_video::m10_video()
         : pixels_(static_cast<std::size_t>(visible_width) * visible_height, 0U) {
         reset(chips::reset_kind::power_on);
     }
 
-    chips::chip_metadata m14_video::metadata() const noexcept {
+    chips::chip_metadata m10_video::metadata() const noexcept {
         return {.manufacturer = "Irem",
-                .part_number = "m14_video_first_pass",
-                .family = "irem_m14",
+                .part_number = "m10_video_first_pass",
+                .family = "irem_m10",
                 .klass = chips::chip_class::video,
                 .revision = 1U};
     }
 
-    void m14_video::tick(std::uint64_t cycles) { elapsed_cycles_ += cycles; }
+    void m10_video::tick(std::uint64_t cycles) { elapsed_cycles_ += cycles; }
 
-    void m14_video::reset(chips::reset_kind /*kind*/) {
+    void m10_video::reset(chips::reset_kind /*kind*/) {
         std::fill(pixels_.begin(), pixels_.end(), 0U);
         elapsed_cycles_ = 0U;
         frame_index_ = 0U;
     }
 
-    chips::frame_buffer_view m14_video::framebuffer() const noexcept {
+    chips::frame_buffer_view m10_video::framebuffer() const noexcept {
         return {.pixels = pixels_.data(),
                 .width = visible_width,
                 .height = visible_height,
                 .stride = visible_width};
     }
 
-    void m14_video::compose(std::span<const std::uint8_t> video_ram,
+    void m10_video::compose(std::span<const std::uint8_t> video_ram,
                             std::span<const std::uint8_t> color_ram,
                             std::span<const std::uint8_t> gfx_rom,
                             std::span<const std::uint8_t> program_rom,
@@ -260,7 +260,7 @@ namespace mnemos::manifests::irem_m14 {
         ++frame_index_;
     }
 
-    void m14_video::save_state(chips::state_writer& writer) const {
+    void m10_video::save_state(chips::state_writer& writer) const {
         writer.u64(elapsed_cycles_);
         writer.u64(frame_index_);
         for (const std::uint32_t pixel : pixels_) {
@@ -268,7 +268,7 @@ namespace mnemos::manifests::irem_m14 {
         }
     }
 
-    void m14_video::load_state(chips::state_reader& reader) {
+    void m10_video::load_state(chips::state_reader& reader) {
         elapsed_cycles_ = reader.u64();
         frame_index_ = reader.u64();
         for (std::uint32_t& pixel : pixels_) {
@@ -276,10 +276,10 @@ namespace mnemos::manifests::irem_m14 {
         }
     }
 
-    m14_system::m14_system(common::rom_set_image image, m14_board_params board_params)
+    m10_system::m10_system(common::rom_set_image image, m10_board_params board_params)
         : roms(std::move(image)), params(board_params) {
         (void)pinned_region(roms, "maincpu", main_rom_size);
-        (void)pinned_region(roms, "gfx1", gfx_rom_size);
+        (void)pinned_region(roms, "tiles", tiles_rom_size);
         dip_switches = params.dip_default;
 
         main_bus.attach(*this);
@@ -289,6 +289,9 @@ namespace mnemos::manifests::irem_m14 {
         main_cpu.set_port_out(
             [this](std::uint16_t port, std::uint8_t value) { write_io_port(port, value); });
         main_cpu.reset(chips::reset_kind::power_on);
+        auto regs = main_cpu.cpu_registers();
+        regs.pc = program_rom_base;
+        main_cpu.set_registers(regs);
 
         speaker.set_clock(params.cpu_clock_hz, audio_rate_hz);
         speaker.enable_audio_capture(true);
@@ -296,7 +299,7 @@ namespace mnemos::manifests::irem_m14 {
         speaker.set_speaker(speaker_output_high);
     }
 
-    void m14_system::run_frame() {
+    void m10_system::run_frame() {
         std::uint64_t cycles_elapsed = 0U;
         for (std::uint32_t line = 0U; line < frame_lines; ++line) {
             const std::uint64_t next_cycle =
@@ -319,7 +322,7 @@ namespace mnemos::manifests::irem_m14 {
         }
         main_cpu.set_irq_line(false);
 
-        const auto* gfx = roms.region("gfx1");
+        const auto* gfx = roms.region("tiles");
         const auto* program = roms.region("maincpu");
         video.compose(video_ram, color_ram,
                       gfx != nullptr ? std::span<const std::uint8_t>(*gfx)
@@ -329,13 +332,13 @@ namespace mnemos::manifests::irem_m14 {
                       flip_screen, params.rom_layout);
     }
 
-    void m14_system::set_inputs(std::uint8_t p1, std::uint8_t p2, std::uint8_t system) noexcept {
+    void m10_system::set_inputs(std::uint8_t p1, std::uint8_t p2, std::uint8_t system) noexcept {
         input_p1 = p1;
         input_p2 = p2;
         input_system = system;
     }
 
-    std::uint8_t m14_system::read_io_port(std::uint16_t port) const noexcept {
+    std::uint8_t m10_system::read_io_port(std::uint16_t port) const noexcept {
         switch (port & 0x00FFU) {
         case 0x00U:
             return input_p1;
@@ -350,7 +353,7 @@ namespace mnemos::manifests::irem_m14 {
         }
     }
 
-    void m14_system::write_io_port(std::uint16_t port, std::uint8_t value) noexcept {
+    void m10_system::write_io_port(std::uint16_t port, std::uint8_t value) noexcept {
         switch (port & 0x00FFU) {
         case 0x04U:
             write_sound_latch(value);
@@ -365,7 +368,7 @@ namespace mnemos::manifests::irem_m14 {
         }
     }
 
-    void m14_system::write_sound_latch(std::uint8_t value) noexcept {
+    void m10_system::write_sound_latch(std::uint8_t value) noexcept {
         ++sound_latch_write_count;
         sound_latch = value;
         const bool output = speaker_output_from_latch(value);
@@ -376,8 +379,8 @@ namespace mnemos::manifests::irem_m14 {
         speaker.set_speaker(speaker_output_high);
     }
 
-    void m14_system::save_state(chips::state_writer& writer) const {
-        writer.u32(m14_system_state_version);
+    void m10_system::save_state(chips::state_writer& writer) const {
+        writer.u32(m10_system_state_version);
         writer.u8(layout_code(params.rom_layout));
         writer.u8(params.dip_default);
         writer.u32(params.cpu_clock_hz);
@@ -402,8 +405,8 @@ namespace mnemos::manifests::irem_m14 {
         writer.u64(control_write_count);
     }
 
-    void m14_system::load_state(chips::state_reader& reader) {
-        if (reader.u32() != m14_system_state_version) {
+    void m10_system::load_state(chips::state_reader& reader) {
+        if (reader.u32() != m10_system_state_version) {
             reader.fail();
             return;
         }
@@ -436,9 +439,9 @@ namespace mnemos::manifests::irem_m14 {
         }
     }
 
-    std::unique_ptr<m14_system> assemble_m14(common::rom_set_image image,
-                                             m14_board_params board_params) {
-        return std::make_unique<m14_system>(std::move(image), board_params);
+    std::unique_ptr<m10_system> assemble_m10(common::rom_set_image image,
+                                             m10_board_params board_params) {
+        return std::make_unique<m10_system>(std::move(image), board_params);
     }
 
-} // namespace mnemos::manifests::irem_m14
+} // namespace mnemos::manifests::irem_m10

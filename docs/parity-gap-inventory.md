@@ -451,8 +451,8 @@ match checked-in manifests. Board-local `name-collisions` folders are skipped
 by both inventory and data-gated corpus source discovery. The inventory
 separates manifest tracking, media loadability, and player support: 331 items
 match a checked-in Irem manifest from non-ignored buckets, 179 are readable
-through current ZIP / single-inner-ZIP / folder routes, 173 are backed by an
-executable player-supported route, 6 are tracked contract-only, and 153
+through current ZIP / single-inner-ZIP / folder routes, 177 are backed by an
+executable player-supported route, 2 are tracked contract-only, and 153
 manifest-backed items are metadata-only while awaiting ZIP/unpacked folders or
 supplemental media; the M58 artwork package is still ignored as non-ROM proof. ZIPs whose entries are only
 layout/images/docs now classify as `non_rom_artwork_package`, so packages such
@@ -485,6 +485,10 @@ metadata-only archives in `scripts/irem/inventory-corpus.ps1` output.
 The local M14 grouping now tracks `D:\emu\irem\M14\ptrmj.zip` and
 `D:\emu\irem\M14\ptrmj (1).zip` as first-pass player-loadable `ptrmj`
 items; `ptrmj.7z` remains metadata-only until converted or unpacked.
+The local M10 grouping now tracks `D:\emu\irem\M10\andromed.zip` and
+`D:\emu\irem\M10\skychut.zip` as first-pass native-8085 player-loadable M10
+items; `andromed.7z` and `skychut.7z` remain metadata-only until converted or
+unpacked.
 The local M27 grouping now tracks `D:\emu\irem\M27\panther.zip` and
 `D:\emu\irem\M27\panther (1).zip` as first-pass player-loadable `panther`
 items; `panther.7z` remains metadata-only until converted or unpacked.
@@ -526,7 +530,7 @@ contract-only M119 ROM-contract route and `D:\emu\irem\M119\scumimon.7z` as
 metadata-only until converted or unpacked; `scumimon` no longer appears as an
 M92 board-family candidate.
 The local M78 grouping now tracks `D:\emu\irem\M78\bj92.zip` as a
-contract-only M78 ROM-contract route and `D:\emu\irem\M78\bj92.7z` as
+first-pass player-loadable M78 route and `D:\emu\irem\M78\bj92.7z` as
 metadata-only until converted or unpacked; `bj92` no longer appears as an M78
 board-family candidate.
 The local M102 grouping now tracks `D:\emu\irem\M102\hclimber.zip` as a
@@ -541,12 +545,12 @@ selects the unpacked directory because the local `ww3.zip` is a split/incomplete
 archive, and `ww3` no longer appears as an unsupported M27 board-family
 candidate.
 The standard data-gated runner now also reports, runs, and oracle-registers
-every implemented Irem player-family corpus golden: M14, M15, M27, M47, M52,
-M57, M58, M62, M63, travrusa, Red Alert, M72, M75, M81, M82, M84, M85, M90,
-M92, and M107, plus the M78, M102, and M119 manifest-only data gates. The
+every implemented Irem player-family corpus golden: M10, M14, M15, M27, M47,
+M52, M57, M58, M62, M63, travrusa, Red Alert, M72, M75, M78, M81, M82, M84,
+M85, M90, M92, and M107, plus the M102 and M119 manifest-only data gates. The
 newest G6 high-water raises cover
-`GLD-M14-CORPUS`, `GLD-M15-CORPUS`, `GLD-M27-CORPUS`, `GLD-M47-CORPUS`, `GLD-M52-CORPUS`, `GLD-M57-CORPUS`, `GLD-M58-CORPUS`, `GLD-M62-CORPUS`, `GLD-M63-CORPUS`, `GLD-TRAVRUSA-CORPUS`, `GLD-M81-CORPUS`,
-`GLD-M82-CORPUS`, `GLD-M84-CORPUS`, `GLD-M85-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
+`GLD-M10-CORPUS`, `GLD-M14-CORPUS`, `GLD-M15-CORPUS`, `GLD-M27-CORPUS`, `GLD-M47-CORPUS`, `GLD-M52-CORPUS`, `GLD-M57-CORPUS`, `GLD-M58-CORPUS`, `GLD-M62-CORPUS`, `GLD-M63-CORPUS`, `GLD-TRAVRUSA-CORPUS`, `GLD-M78-CORPUS`,
+`GLD-M81-CORPUS`, `GLD-M82-CORPUS`, `GLD-M84-CORPUS`, `GLD-M85-CORPUS`, and `GLD-M107-CORPUS`, closing the previous gap where those
 implemented player smoke gates existed but were absent from the common oracle
 proof command.
 M15 now has a checked-in `headoni` manifest plus an executable MOS 6502
@@ -652,10 +656,11 @@ hardware using explicit `dsoccr94.zip` supplemental shared media.
 They remain
 diagnostic, not graphics/music-authentic, until encrypted V35 sound CPU handling
 and GA21/GA22 video behavior are proven.
-M15, M82, M84, M90, M92, and M107 now have executable board/profile layers, but all
-six still need board-authentic video/priority, sound, exact raster phase, and
-screenshot-parity closure before they can be called authentic; M84, M90, M92,
-and M107 also retain memory/I/O and DIP validation gaps.
+M10, M14, M15, M82, M84, M90, M92, and M107 now have executable board/profile
+layers, but all eight still need board-authentic video/priority, sound, exact
+raster phase, and screenshot-parity closure before they can be called
+authentic; M10, M14, M84, M90, M92, and M107 also retain memory/I/O and DIP
+validation gaps.
 
 Video note: the M72 sprite renderer now traverses the full 0x400-byte latched sprite RAM entry range, so single-width entries beyond the old 64-entry software cap remain visible. The M72 palette CPU map now models the disconnected A9 mirror and low-byte-only 5-bit gun writes/reads while preserving the renderer's canonical R/G/B plane storage.
 
@@ -670,6 +675,18 @@ Video note: the M72 sprite renderer now traverses the full 0x400-byte latched sp
 
 ---
 
+## Irem M10 — 2 / 2
+
+This section is split from M15 because the local Andromeda SS and Sky Chuter
+artifacts are M10/M11-lineage 8085 routes rather than the later Head On M15
+6502 route.
+
+#### Manifests / board bring-up
+- [x] **I10-1** Local M10 ROM-set contracts — `src/manifests/irem_m10` carries checked-in embedded ROM-contract manifests for `andromed` and `skychut`, with parser/region-contract coverage for their 8085 program ROM windows, GFX ROMs, local aliases, region sizes, offsets, and CRC32 values. `MNEMOS_M10_SET_DIR=D:\emu\irem\M10` data-gates the local M10 ZIPs and proves they load CRC-clean through the embedded manifest; `scripts/irem/inventory-corpus.ps1` records four tracked M10 artifacts, two supported ZIP routes, and two metadata-only `.7z` routes · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m10/games/*.toml` + `src/manifests/irem_m10/tests/m10_system_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
+- [~] **I10-2** Executable M10 board profile — First-pass route exists for Andromeda SS and Sky Chuter: `src/manifests/irem_m10/m10_system.cpp` assembles a native Intel 8085 board shell with main program placement at `$1000-$2FFF`, reset-vector mirror at `$FC00`, scratch/video/color/work RAM, input/DIP/control MMIO, mirrored I/O ports, GFX-ROM diagnostic video, beeper-backed sound latch, save-state identity, and player adapter registration. `src/apps/player/adapters/irem_m10` registers `--system irem_m10` / `m10`, supports ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml` manifests, resident media validation, rollback-ready save-state, capability discovery, and real local player smoke through `MNEMOS_M10_SET_DIR=D:\emu\irem\M10`. Direct 120-frame player smokes wrote 224x256 nonblank PPMs for `andromed` and `skychut`. This is smoke-playable, not authentic parity: deeper 8085 interrupt/timing proof, exact reset/bus map evidence, video/color, discrete sound, raster phase, and trusted visual/audio parity remain open · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/chips/cpu/i8080/*` + `src/manifests/irem_m10/m10_system.cpp` + `src/manifests/irem_m10/tests/m10_system_test.cpp` + `src/apps/player/adapters/irem_m10/*` + `MNEMOS_M10_SET_DIR=D:\emu\irem\M10` corpus golden + direct `mnemos_player --system irem_m10` / `--system m10` smoke
+
+---
+
 ## Irem M14 — 2 / 2
 
 This section is split from M10/M15 because the local P.T. Reach Mahjong artifact
@@ -678,7 +695,7 @@ than the existing M15 Head On route.
 
 #### Manifests / board bring-up
 - [x] **I14-1** Local M14 ROM-set contract — `src/manifests/irem_m14` carries a checked-in embedded ROM-contract manifest for `ptrmj`, with parser/region-contract coverage for the eight 1 KiB 8085 program ROMs, two 1 KiB graphics ROMs, local nested-wrapper aliases, region sizes, offsets, and CRC32 values. `MNEMOS_M14_SET_DIR=D:\emu\irem\M14` data-gates the local `ptrmj` ZIPs and proves they load CRC-clean through the embedded manifest; `scripts/irem/inventory-corpus.ps1` records the board-bucket wrappers as tracked M14 artifacts instead of leaving them as `classify_or_sort_corpus_item` · DONE · MED · S · beyond Emu · Evidence: `src/manifests/irem_m14/games/ptrmj.toml` + `src/manifests/irem_m14/tests/m14_rom_contract_test.cpp` + `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
-- [~] **I14-2** Executable M14 board profile — First-pass route exists for P.T. Reach Mahjong: `src/manifests/irem_m14/m14_system.cpp` assembles a board shell with a Z80 core used as an 8080-compatible surrogate for the missing 8085 core, program ROM `$0000-$1FFF`, scratch/video/color/work RAM, input/DIP/control MMIO, mirrored I/O ports, GFX-ROM diagnostic video, a beeper-backed sound latch, save-state identity, and player adapter registration. `src/apps/player/adapters/irem_m14` registers `--system irem_m14` / `m14`, supports ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml` manifests, resident media validation, rollback-ready save-state, capability discovery, and real local P.T. Reach Mahjong player smoke through `MNEMOS_M14_SET_DIR=D:\emu\irem\M14`. This is smoke-playable, not authentic parity: true NEC D8085AC/8085 timing, exact M14 memory/I/O behavior, video/color, paddle/mahjong input behavior, sparse discrete/sample sound, raster phase, and trusted visual/audio parity remain open · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/manifests/irem_m14/m14_system.cpp` + `src/manifests/irem_m14/tests/m14_system_test.cpp` + `src/apps/player/adapters/irem_m14/*` + `MNEMOS_M14_SET_DIR=D:\emu\irem\M14` corpus golden + direct `mnemos_player --system irem_m14` / `--system m14` smoke
+- [~] **I14-2** Executable M14 board profile — First-pass route exists for P.T. Reach Mahjong: `src/manifests/irem_m14/m14_system.cpp` assembles a board shell with the native Intel 8085/8080 core configured as an 8085, program ROM `$0000-$1FFF`, scratch/video/color/work RAM, input/DIP/control MMIO, mirrored I/O ports, GFX-ROM diagnostic video, a beeper-backed sound latch, save-state identity, and player adapter registration. `src/apps/player/adapters/irem_m14` registers `--system irem_m14` / `m14`, supports ZIPs, single-inner wrapper ZIPs, unpacked set folders, embedded or in-archive `game.toml` manifests, resident media validation, rollback-ready save-state, capability discovery, and real local P.T. Reach Mahjong player smoke through `MNEMOS_M14_SET_DIR=D:\emu\irem\M14`. This is smoke-playable, not authentic parity: deeper NEC D8085AC/8085 interrupt/timing proof, exact M14 memory/I/O behavior, video/color, paddle/mahjong input behavior, sparse discrete/sample sound, raster phase, and trusted visual/audio parity remain open · PARTIAL · HIGH · M-L · beyond Emu · Evidence: `src/chips/cpu/i8080/*` + `src/manifests/irem_m14/m14_system.cpp` + `src/manifests/irem_m14/tests/m14_system_test.cpp` + `src/apps/player/adapters/irem_m14/*` + `MNEMOS_M14_SET_DIR=D:\emu\irem\M14` corpus golden + direct `mnemos_player --system irem_m14` / `--system m14` smoke
 
 ---
 
@@ -847,7 +864,7 @@ carries 13 public SW1/SW2 DIP entries and folds to `dsw1=0xff`,
 
 ---
 
-## Irem M78 — 1 / 2
+## Irem M78 — 2 / 2
 
 This section tracks Black Jack (`bj92`) as an isolated sparse M78
 gambling/satellite board instead of folding it into M72 or the V30 M8x family.
@@ -861,18 +878,20 @@ gambling/satellite board instead of folding it into M72 or the V30 M8x family.
   as an explicit zero-filled `m72_audio` region with no fake file entries.
   `MNEMOS_M78_SET_DIR=D:\emu\irem\M78` data-gates the local `bj92.zip` and
   proves the dumped regions load CRC-clean through the embedded manifest.
-  `scripts/irem/inventory-corpus.ps1` classifies `bj92.zip` as contract-only and
-  leaves `bj92.7z` metadata-only until converted or unpacked, so BJ92 no longer
-  appears as an unsupported M78 board-family candidate · DONE · MED · S ·
+  `scripts/irem/inventory-corpus.ps1` classifies `bj92.zip` as a direct
+  player-loadable first-pass route and leaves `bj92.7z` metadata-only until
+  converted or unpacked, so BJ92 no longer appears as an unsupported M78
+  board-family candidate · DONE · MED · S ·
   beyond Emu · Evidence: `src/manifests/irem_m78/games/bj92.toml` +
   `src/manifests/irem_m78/tests/m78_rom_contract_test.cpp` +
   `scripts/irem/inventory-corpus.ps1` + `scripts/irem/run-local-corpus.ps1`
-- [ ] **I78-2** Executable M78 board profile — missing. Mnemos has no M78
-  dual-Z80 board implementation, BJ92 I/O/comms model, video-register model,
-  satellite/main-screen routing, YM2151 plus M72-style DAC/sample behavior,
-  input/DIP behavior, player adapter, or visual/audio parity proof. The public
-  metadata still lists unresolved I/O, video registers, communications, no-sound
-  status, imperfect graphics, imperfect colors, and no-dump sample ROMs.
+- [~] **I78-2** Executable M78 board profile — First-pass route exists for
+  Black Jack (`bj92`): `src/manifests/irem_m78` assembles a sparse dual-Z80
+  board shell with YM2151/DAC save-state proof, media validation, player adapter
+  registration, and direct nonblank 512x384 screenshot proof. This is
+  smoke-playable, not authentic parity: exact BJ92 I/O/comms, video-register
+  model, satellite/main-screen routing, sample-ROM/no-dump behavior, input/DIP
+  behavior, and trusted visual/audio parity remain open.
 
 ---
 

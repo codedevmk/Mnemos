@@ -30,7 +30,11 @@ configure_file(
     @ONLY
 )
 
-add_library(mnemos_manifests_irem_m10 m10_game_manifests.cpp)
+add_library(
+    mnemos_manifests_irem_m10
+    m10_game_manifests.cpp
+    m10_system.cpp
+)
 add_library(mnemos::manifests::irem_m10 ALIAS mnemos_manifests_irem_m10)
 
 target_include_directories(
@@ -44,7 +48,11 @@ target_include_directories(
 target_link_libraries(
     mnemos_manifests_irem_m10
     PUBLIC
+        mnemos::chips::audio::beeper
+        mnemos::chips::cpu::i8080
         mnemos::manifests::common
+    PRIVATE
+        mnemos::security::cryptography
 )
 
 mnemos_apply_common_target_options(mnemos_manifests_irem_m10 PUBLIC)
@@ -53,6 +61,9 @@ mnemos_declare_tier(
     TIER 4
     DEPENDS
         mnemos_manifests_common
+        mnemos_chips_audio_beeper
+        mnemos_chips_cpu_i8080
+        mnemos_security_cryptography
         mnemos_foundation
 )
 
@@ -70,5 +81,13 @@ if(BUILD_TESTING)
         mnemos_manifests_irem_m10_test
         PRIVATE
             MNEMOS_IREM_M10_GAMES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/games"
+    )
+
+    mnemos_add_test(
+        mnemos_manifests_irem_m10_system_test
+        SOURCES tests/m10_system_test.cpp
+        LIBRARIES
+            mnemos::manifests::irem_m10
+            mnemos::runtime
     )
 endif()

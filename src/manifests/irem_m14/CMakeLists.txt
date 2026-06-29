@@ -45,7 +45,7 @@ target_link_libraries(
     PUBLIC
         mnemos::manifests::common
         mnemos::chips::audio::beeper
-        mnemos::chips::cpu::z80
+        mnemos::chips::cpu::i8080
     PRIVATE
         mnemos::security::cryptography
 )
@@ -57,7 +57,7 @@ mnemos_declare_tier(
     DEPENDS
         mnemos_manifests_common
         mnemos_chips_audio_beeper
-        mnemos_chips_cpu_z80
+        mnemos_chips_cpu_i8080
         mnemos_security_cryptography
         mnemos_foundation
 )

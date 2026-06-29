@@ -6,7 +6,7 @@ mnemos_fetch_sdl3()
 # pick which systems it supports, and so adapters can be unit-tested in
 # isolation. Cross-system primitives (video_region, market) live in
 # `chips/shared/region.hpp`; system-specific cart-header parsers live in each
-# manifest. Currently wired: Genesis, SMS, C64, Sega CD, 32X, M14, M15, M27, M47, M52, M57, M58,
+# manifest. Currently wired: Genesis, SMS, C64, Sega CD, 32X, M10, M14, M15, M27, M47, M52, M57, M58,
 # M62, M63, travrusa, Red Alert, M72, M75, M78, M81, M82, M84, M85, M90, M92, M107, Taito F2,
 # CPS1, CPS2, Spectrum, NES, MSX, Amiga 500.
 add_subdirectory(adapters/common)
@@ -15,6 +15,7 @@ add_subdirectory(adapters/sms)
 add_subdirectory(adapters/c64)
 add_subdirectory(adapters/segacd)
 add_subdirectory(adapters/sega32x)
+add_subdirectory(adapters/irem_m10)
 add_subdirectory(adapters/irem_m14)
 add_subdirectory(adapters/irem_m15)
 add_subdirectory(adapters/irem_m27)
@@ -77,6 +78,7 @@ target_link_libraries(
         mnemos::apps::player::c64_adapter
         mnemos::apps::player::segacd_adapter
         mnemos::apps::player::sega32x_adapter
+        mnemos::apps::player::irem_m10_adapter
         mnemos::apps::player::irem_m14_adapter
         mnemos::apps::player::irem_m15_adapter
         mnemos::apps::player::irem_m27_adapter
@@ -153,6 +155,7 @@ if(BUILD_TESTING)
             mnemos::apps::player::c64_adapter
             mnemos::apps::player::segacd_adapter
             mnemos::apps::player::sega32x_adapter
+            mnemos::apps::player::irem_m10_adapter
             mnemos::apps::player::irem_m14_adapter
             mnemos::apps::player::irem_m15_adapter
             mnemos::apps::player::irem_m27_adapter
