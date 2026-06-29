@@ -239,12 +239,12 @@ multiple independent open-source implementations.
   `src/manifests/irem_m92/games/` use public MAME M92 driver metadata for dump
   filenames, offsets, region sizes, CRC-32s, cabinet/player metadata, and the
   encrypted V35 sound-program classification, including the Lethal Thunder /
-  Thunder Blaster and R-Type Leo parent/clone board variants. The first-pass M92
-  board constants and memory windows are cross-checked against public
-  driver-level hardware notes; no MAME driver code or ROM bytes are copied into
-  Mnemos. Current M92 execution remains diagnostic rather than parity-authentic
-  until encrypted V35 sound and GA21/GA22 video behavior are implemented from
-  acceptable evidence.
+  Thunder Blaster, R-Type Leo, and Undercover Cops parent/clone board variants.
+  The first-pass M92 board constants and memory windows are cross-checked
+  against public driver-level hardware notes; no MAME driver code or ROM bytes
+  are copied into Mnemos. Current M92 execution remains diagnostic rather than
+  parity-authentic until encrypted V35 sound and GA21/GA22 video behavior are
+  implemented from acceptable evidence.
 - **Irem M107 ROM-set metadata and board constants** — declarative game manifests under
   `src/manifests/irem_m107/games/` use public MAME M107 driver metadata for dump
   filenames, offsets, boot-vector coverage, region sizes, CRC-32s, cabinet

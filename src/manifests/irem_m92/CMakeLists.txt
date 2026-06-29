@@ -18,6 +18,10 @@ set(_irem_m92_game_manifest_files
     "games/rtypeleo.toml"
     "games/rtypeleoj.toml"
     "games/thndblst.toml"
+    "games/uccops.toml"
+    "games/uccopsar.toml"
+    "games/uccopsj.toml"
+    "games/uccopsu.toml"
 )
 set(MNEMOS_IREM_M92_GAME_MANIFEST_COUNT 0)
 set(MNEMOS_IREM_M92_EMBEDDED_CONSTANTS "")
