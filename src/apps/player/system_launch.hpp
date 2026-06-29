@@ -24,6 +24,7 @@ namespace mnemos::apps::player {
         bool rtc{};
         bool msx2{};
         std::optional<std::uint16_t> dip_override{};
+        std::optional<std::string> keyboard_layout_override{};
     };
 
     struct system_launch_outcome final {

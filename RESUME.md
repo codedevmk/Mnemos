@@ -29,9 +29,14 @@ ctest --preset windows-msvc-debug --output-on-failure
 - `feature/msx2`
 - `feature/taito-arcade`
 - `feature/irem-arcade`
+- `feature/Amiga500`
 
 Use `git log --oneline --decorate --first-parent master` for the exact merge
 commit order and `git branch --merged master` for current branch inclusion.
+
+## Amiga Merge Note
+
+- `feature/Amiga500` merged as a partial bring-up. Real Kickstart/ADF completion remains unproven; validate from current tests and real-media artifacts before claiming Amiga compatibility.
 
 ## Evidence Discipline
 

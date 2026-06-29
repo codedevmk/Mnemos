@@ -117,6 +117,10 @@ namespace mnemos::frontend_sdk {
         // overlay). Empty entries (or an empty vector) mean "boot without that
         // image"; the adapter decides whether that is viable.
         std::vector<std::vector<std::uint8_t>> bios_images;
+        // Optional physical keyboard layout token. Computer adapters can use
+        // this to map host HID usages to the target machine's raw key matrix.
+        // Empty = adapter default. Console/arcade families ignore it.
+        std::string keyboard_layout_override;
         // Optional scheduler-construction override. null = adapter falls back
         // to its built-in scheduler. Non-null lets tooling (deterministic
         // replay, profilers, slice-based multi-clock for 32X/Saturn/CD)

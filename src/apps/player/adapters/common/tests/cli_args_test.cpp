@@ -18,6 +18,7 @@ namespace {
     using mnemos::apps::player::adapters::parse_extract_audio_args;
     using mnemos::apps::player::adapters::parse_fm_unit_arg;
     using mnemos::apps::player::adapters::parse_help_arg;
+    using mnemos::apps::player::adapters::parse_keyboard_layout_arg;
     using mnemos::apps::player::adapters::parse_load_state_arg;
     using mnemos::apps::player::adapters::parse_mapper2_arg;
     using mnemos::apps::player::adapters::parse_mapper_arg;
@@ -136,6 +137,18 @@ TEST_CASE("cli_args: --capabilities enables the headless capability summary") {
 
     auto b = make_argv({"player", "--system", "c64", "--rom", "g.d64", "--capabilities"});
     CHECK(parse_capabilities_arg(b.argc(), b.argv.data()));
+}
+
+TEST_CASE("cli_args: --keyboard-layout accepts a concrete token") {
+    auto a = make_argv(
+        {"player", "--system", "amiga500", "--rom", "kick.rom", "--keyboard-layout", "de_DE"});
+    REQUIRE(parse_keyboard_layout_arg(a.argc(), a.argv.data()) == "de_DE");
+
+    auto missing = make_argv({"player", "--keyboard-layout"});
+    CHECK(parse_keyboard_layout_arg(missing.argc(), missing.argv.data()) == std::nullopt);
+
+    auto option = make_argv({"player", "--keyboard-layout", "--rom", "kick.rom"});
+    CHECK(parse_keyboard_layout_arg(option.argc(), option.argv.data()) == std::nullopt);
 }
 
 TEST_CASE("cli_args: --fm enables the optional FM expansion") {
@@ -420,8 +433,8 @@ TEST_CASE("cli_args: parse_press_events parses [pN:]button@frame[+duration]") {
 }
 
 TEST_CASE("cli_args: parse_press_events lowercases and skips bad specs") {
-    auto a = make_argv({"player", "--press", "P2:START@30", "--press", "bogus@5",
-                        "--press", "p0:a@10", "--press", "noat"});
+    auto a = make_argv({"player", "--press", "P2:START@30", "--press", "bogus@5", "--press",
+                        "p0:a@10", "--press", "noat"});
     const auto ev = parse_press_events(a.argc(), a.argv.data());
     REQUIRE(ev.size() == 1U); // unknown button + bad port + missing '@' dropped
     CHECK(ev[0].port_index == 1U);
@@ -441,8 +454,8 @@ TEST_CASE("cli_args: input_for_frame holds a button over its [frame, frame+durat
 }
 
 TEST_CASE("cli_args: input_for_frame combines overlapping events") {
-    auto a = make_argv({"player", "--press", "left@10+20", "--press", "a@15+2",
-                        "--press", "p2:b@16+2", "--press", "p2:right@10+20"});
+    auto a = make_argv({"player", "--press", "left@10+20", "--press", "a@15+2", "--press",
+                        "p2:b@16+2", "--press", "p2:right@10+20"});
     const auto ev = parse_press_events(a.argc(), a.argv.data());
     const auto at16 = input_for_frame(ev, 16U);
     CHECK(at16.left);

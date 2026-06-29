@@ -490,6 +490,7 @@ int main(int argc, char* argv[]) {
     using mnemos::apps::player::adapters::parse_fm_unit_arg;
     using mnemos::apps::player::adapters::parse_four_score_arg;
     using mnemos::apps::player::adapters::parse_help_arg;
+    using mnemos::apps::player::adapters::parse_keyboard_layout_arg;
     using mnemos::apps::player::adapters::parse_light_gun_arg;
     using mnemos::apps::player::adapters::parse_load_state_arg;
     using mnemos::apps::player::adapters::parse_mapper2_arg;
@@ -530,6 +531,7 @@ int main(int argc, char* argv[]) {
     const bool rtc = parse_rtc_arg(argc, argv);
     const bool msx2 = parse_msx2_arg(argc, argv);
     const auto dip_arg = parse_dip_arg(argc, argv);
+    const auto keyboard_layout_arg = parse_keyboard_layout_arg(argc, argv);
     const mnemos::apps::player::headless_requests headless{
         .screenshot = parse_screenshot_args(argc, argv),
         .save_state = parse_save_state_args(argc, argv),
@@ -541,18 +543,20 @@ int main(int argc, char* argv[]) {
         .capabilities = parse_capabilities_arg(argc, argv),
     };
 
-    auto launch = mnemos::apps::player::launch_system({.rom_paths = rom_paths,
-                                                       .system_arg = system_arg,
-                                                       .autostart = autostart,
-                                                       .region_override = region_arg,
-                                                       .mapper_override = mapper_arg,
-                                                       .mapper2_override = mapper2_arg,
-                                                       .fm_unit = fm_unit,
-                                                       .light_gun = light_gun,
-                                                       .four_score = four_score,
-                                                       .rtc = rtc,
-                                                       .msx2 = msx2,
-                                                       .dip_override = dip_arg});
+    auto launch =
+        mnemos::apps::player::launch_system({.rom_paths = rom_paths,
+                                             .system_arg = system_arg,
+                                             .autostart = autostart,
+                                             .region_override = region_arg,
+                                             .mapper_override = mapper_arg,
+                                             .mapper2_override = mapper2_arg,
+                                             .fm_unit = fm_unit,
+                                             .light_gun = light_gun,
+                                             .four_score = four_score,
+                                             .rtc = rtc,
+                                             .msx2 = msx2,
+                                             .dip_override = dip_arg,
+                                             .keyboard_layout_override = keyboard_layout_arg});
     if (launch.exit_code != 0) {
         return launch.exit_code;
     }

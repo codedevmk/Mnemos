@@ -18,8 +18,11 @@
 
 namespace mnemos::manifests::amiga500 {
 
+    enum class amiga500_keyboard_layout : std::uint8_t { us, qwerty_international, german, azerty };
+
     struct amiga500_config final {
         mnemos::video_region video_region{mnemos::video_region::pal};
+        amiga500_keyboard_layout keyboard_layout{amiga500_keyboard_layout::us};
     };
 
     // Commodore Amiga 500, OCS baseline: MC68000 + Agnus + Denise + Paula +
@@ -32,6 +35,7 @@ namespace mnemos::manifests::amiga500 {
         static constexpr std::size_t kickstart_window_size = 512U * 1024U;
         static constexpr std::size_t floppy_cylinders = 80U;
         static constexpr std::size_t floppy_heads = 2U;
+        static constexpr std::size_t floppy_track_count = floppy_cylinders * floppy_heads;
         static constexpr std::size_t floppy_sectors_per_track = 11U;
         static constexpr std::size_t floppy_sector_size = 512U;
         static constexpr std::size_t floppy_dd_size =
@@ -39,6 +43,7 @@ namespace mnemos::manifests::amiga500 {
         static constexpr std::size_t floppy_drive_count = 4U;
         static constexpr std::uint8_t no_floppy_drive = 0xFFU;
         static constexpr std::uint32_t floppy_index_pulses_per_second = 5U;
+        static constexpr std::size_t keyboard_raw_key_count = 128U;
         static constexpr std::size_t keyboard_queue_capacity = 16U;
         static constexpr std::uint8_t keyboard_reset_warning_code = 0x78U;
         static constexpr std::uint8_t keyboard_last_code_bad_code = 0xF9U;
@@ -134,10 +139,24 @@ namespace mnemos::manifests::amiga500 {
         struct floppy_drive_state final {
             std::vector<std::uint8_t> image{};
             std::vector<std::uint8_t> track_stream{};
+            std::vector<std::uint8_t> weak_bit_stream{};
+            std::array<std::vector<std::uint8_t>, floppy_track_count> raw_track_cache{};
+            std::array<std::vector<std::uint8_t>, floppy_track_count> weak_bit_cache{};
             std::size_t stream_offset{};
+            std::size_t track_stream_track_index{};
+            std::uint8_t stream_bit_offset{};
+            std::uint8_t stream_read_shift{};
+            std::uint8_t stream_read_bit_count{};
+            std::uint8_t stream_write_latch{};
+            std::uint8_t stream_write_shift{};
+            std::uint8_t stream_write_bits_remaining{};
+            std::uint16_t weak_bit_lfsr{0xACE1U};
             std::uint8_t cylinder_pos{};
+            bool connected{};
+            bool motor_on{};
             bool write_protected{true};
             bool change_latch{true};
+            bool track_stream_dirty{};
             std::uint32_t index_line_accumulator{};
             std::uint64_t byte_clock_accumulator{};
         };
@@ -151,6 +170,7 @@ namespace mnemos::manifests::amiga500 {
         bool floppy_step_line{true};
         bool floppy_direction_inward{};
         std::array<std::uint8_t, keyboard_queue_capacity> keyboard_queue{};
+        std::array<bool, keyboard_raw_key_count> keyboard_key_down{};
         std::size_t keyboard_queue_head{};
         std::size_t keyboard_queue_count{};
         bool keyboard_byte_in_flight{};
@@ -180,12 +200,12 @@ namespace mnemos::manifests::amiga500 {
         [[nodiscard]] bool mount_floppy(std::size_t drive, std::span<const std::uint8_t> adf_image);
         void unmount_floppy() noexcept;
         void unmount_floppy(std::size_t drive) noexcept;
+        void set_floppy_change_latch(std::size_t drive, bool changed) noexcept;
         void set_floppy_write_protected(std::size_t drive, bool write_protected) noexcept;
         void set_joystick(std::size_t hardware_port, std::uint8_t mask) noexcept;
         void set_mouse(std::size_t hardware_port, std::int16_t delta_x, std::int16_t delta_y,
                        bool left_button, bool right_button, bool middle_button) noexcept;
-        void set_pot_position(std::size_t hardware_port, std::uint8_t x,
-                              std::uint8_t y) noexcept;
+        void set_pot_position(std::size_t hardware_port, std::uint8_t x, std::uint8_t y) noexcept;
         [[nodiscard]] bool enqueue_keyboard_key(std::uint8_t raw_keycode, bool pressed) noexcept;
         [[nodiscard]] bool enqueue_keyboard_control_code(std::uint8_t code) noexcept;
         [[nodiscard]] bool press_caps_lock() noexcept;
@@ -198,13 +218,18 @@ namespace mnemos::manifests::amiga500 {
 
         [[nodiscard]] std::uint8_t cia_a_port_a_inputs() const noexcept;
         [[nodiscard]] std::uint16_t read_potinp() const noexcept;
-        [[nodiscard]] std::uint32_t cpu_bus_wait_cycles(std::uint32_t address, bool program,
-                                                        bool write) const noexcept;
+        [[nodiscard]] std::uint32_t
+        cpu_bus_wait_cycles(std::uint32_t address, bool program, bool write,
+                            std::uint32_t instruction_cycles_before_access,
+                            std::uint32_t instruction_wait_cycles) const noexcept;
         void write_cia_a_sp(bool level) noexcept;
         void write_cia_b_port_b(std::uint8_t value);
         void request_interrupt(std::uint16_t mask) noexcept;
+        [[nodiscard]] std::uint16_t visible_intreq() const noexcept;
         void update_irq_level() noexcept;
         void update_overlay_from_cia() noexcept;
+        void reset_board(chips::reset_kind kind) noexcept;
+        void reset_board_from_cpu() noexcept;
         [[nodiscard]] std::uint16_t read_pot_counter(std::size_t hardware_port) noexcept;
         void start_blitter(std::uint16_t value) noexcept;
         void start_blitter_line(std::uint32_t length) noexcept;
@@ -213,15 +238,18 @@ namespace mnemos::manifests::amiga500 {
         void transmit_keyboard_code(std::uint8_t code) noexcept;
         [[nodiscard]] floppy_drive_state* active_floppy_drive_state() noexcept;
         [[nodiscard]] const floppy_drive_state* active_floppy_drive_state() const noexcept;
+        void preserve_dirty_floppy_track(std::size_t drive) noexcept;
         void update_floppy_track_stream();
         void update_floppy_track_stream(std::size_t drive);
         [[nodiscard]] bool flush_floppy_track_to_image(std::size_t drive) noexcept;
         [[nodiscard]] std::uint8_t next_floppy_byte() noexcept;
+        void accept_floppy_byte(std::uint8_t byte) noexcept;
+        [[nodiscard]] bool shift_floppy_read_bit() noexcept;
+        void shift_floppy_write_bit() noexcept;
         void tick_floppy_scanline() noexcept;
         void tick_floppy_data_cycle() noexcept;
         void complete_disk_dma_byte() noexcept;
         void transfer_disk_dma_byte(std::uint8_t byte) noexcept;
-        void transfer_disk_dma_write_byte() noexcept;
         void start_disk_dma(std::uint16_t value) noexcept;
         void save_state(chips::state_writer& writer) const;
         void load_state(chips::state_reader& reader);

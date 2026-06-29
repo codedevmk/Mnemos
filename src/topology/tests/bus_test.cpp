@@ -112,6 +112,58 @@ TEST_CASE("bus MMIO routes to the supplied handlers") {
     CHECK(last_write == 0x77U);
 }
 
+TEST_CASE("bus MMIO16 routes big-endian word accesses to wide handlers") {
+    std::uint8_t byte_write = 0U;
+    std::uint16_t word_write = 0U;
+    std::uint32_t word_write_addr = 0U;
+    std::size_t byte_write_count = 0U;
+    std::size_t word_write_count = 0U;
+    std::size_t word_read_count = 0U;
+    bus b(16U, mnemos::topology::endianness::big);
+    b.map_mmio16(
+        0xD000U, 0x10U, [](std::uint32_t) -> std::uint8_t { return 0x11U; },
+        [&](std::uint32_t, std::uint8_t v) {
+            ++byte_write_count;
+            byte_write = v;
+        },
+        [&](std::uint32_t) -> std::uint16_t {
+            ++word_read_count;
+            return 0xBEEFU;
+        },
+        [&](std::uint32_t a, std::uint16_t v) {
+            ++word_write_count;
+            word_write_addr = a;
+            word_write = v;
+        });
+
+    b.write16_be(0xD004U, 0xCAFEU);
+    CHECK(word_write_count == 1U);
+    CHECK(word_write_addr == 0xD004U);
+    CHECK(word_write == 0xCAFEU);
+    CHECK(byte_write_count == 0U);
+
+    CHECK(b.read16_be(0xD006U) == 0xBEEFU);
+    CHECK(word_read_count == 1U);
+
+    b.write8(0xD005U, 0x77U);
+    CHECK(byte_write_count == 1U);
+    CHECK(byte_write == 0x77U);
+
+    std::vector<mnemos::topology::access_event> events;
+    b.set_access_observer([&](const mnemos::topology::access_event& ev) {
+        events.push_back(ev);
+    });
+    b.write16_be(0xD008U, 0x1234U);
+    REQUIRE(events.size() == 2U);
+    CHECK(events[0].address == 0xD008U);
+    CHECK(events[0].value == 0x12U);
+    CHECK(events[0].write);
+    CHECK(events[1].address == 0xD009U);
+    CHECK(events[1].value == 0x34U);
+    CHECK(events[1].write);
+    CHECK(word_write == 0x1234U);
+}
+
 TEST_CASE("bus resolves disjoint regions and their boundaries") {
     std::array<std::uint8_t, 0x100> low{};
     std::array<std::uint8_t, 0x100> high{};

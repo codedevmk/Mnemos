@@ -17,7 +17,6 @@
 namespace mnemos::apps::player::adapters::amiga500 {
 
     class amiga500_adapter;
-
     void force_link() noexcept;
     [[nodiscard]] runtime::save_target build_save_target(amiga500_adapter& adapter);
 
@@ -64,22 +63,33 @@ namespace mnemos::apps::player::adapters::amiga500 {
             return disk_index_;
         }
         bool insert_media(std::size_t index) noexcept override;
+        [[nodiscard]] std::vector<std::uint8_t> save_state() override;
+        [[nodiscard]] runtime::load_result load_state(std::span<const std::uint8_t> data) override;
 
         [[nodiscard]] manifests::amiga500::amiga500_system& system() noexcept { return *sys_; }
         [[nodiscard]] runtime::scheduler& scheduler() noexcept { return scheduler_; }
 
       private:
+        friend runtime::save_target build_save_target(amiga500_adapter& adapter);
+
+        void save_adapter_state(chips::state_writer& writer) const;
+        void load_adapter_state(chips::state_reader& reader);
+
         frontend_sdk::session_capability_info session_{};
         frontend_sdk::media_capability_info media_{};
         std::unique_ptr<manifests::amiga500::amiga500_system> sys_;
+        std::unique_ptr<chips::ichip> board_debug_chip_;
         instrumentation::span_memory_view chip_ram_view_;
         std::array<instrumentation::memory_view*, 1> system_mem_view_{};
-        std::array<chips::ichip*, 6> chip_view_{};
+        std::array<chips::ichip*, 7> chip_view_{};
         runtime::scheduler scheduler_;
         mnemos::video_region region_;
+        manifests::amiga500::amiga500_keyboard_layout keyboard_layout_;
         double target_fps_;
         std::vector<frontend_sdk::spec_field> spec_{};
         std::array<frontend_sdk::controller_state, 6> ports_{};
+        std::array<bool, manifests::amiga500::amiga500_system::keyboard_raw_key_count>
+            reported_keyboard_keys_{};
         std::vector<std::vector<std::uint8_t>> disks_{};
         std::size_t disk_index_{};
         bool mouse_position_valid_{};

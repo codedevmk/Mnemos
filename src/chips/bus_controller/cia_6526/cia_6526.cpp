@@ -126,8 +126,8 @@ namespace mnemos::chips::bus_controller {
         tod_.src_hz = cfg_.tod_src_hz != 0U ? cfg_.tod_src_hz : 60U;
         tod_.divider_reload = cfg_.tod_tick_hz / tod_.src_hz;
         tod_.divider = tod_.divider_reload;
-        tod_.phase_reload = 6U;
-        tod_.phase = 6U;
+        tod_.phase_reload = binary_tod() ? 1U : 6U;
+        tod_.phase = tod_.phase_reload;
 
         sdr_ = sdr_state{};
 
@@ -146,6 +146,10 @@ namespace mnemos::chips::bus_controller {
         publish_sp(true);
     }
 
+    void cia_6526::refresh_irq_line() noexcept {
+        irq_line_ = (icr_latch_ & imr_ & 0x1FU) != 0U;
+    }
+
     void cia_6526::irq_pin_update() {
         const bool asserted = irq_line_;
         if (irq_out_ != asserted) {
@@ -159,9 +163,7 @@ namespace mnemos::chips::bus_controller {
     void cia_6526::icr_raise(std::uint8_t bits) {
         const auto edge = static_cast<std::uint8_t>(bits & 0x1FU);
         icr_latch_ = static_cast<std::uint8_t>(icr_latch_ | edge);
-        if ((edge & imr_) != 0U) {
-            irq_line_ = true;
-        }
+        refresh_irq_line();
     }
 
     std::uint8_t cia_6526::port_b_driven() const noexcept {
@@ -215,6 +217,13 @@ namespace mnemos::chips::bus_controller {
                                          (pins & static_cast<std::uint8_t>(~ddra_)));
     }
 
+    std::uint8_t cia_6526::port_b_pins() const {
+        const std::uint8_t pins = cfg_.read_port_b ? cfg_.read_port_b() : 0xFFU;
+        const std::uint8_t latched = port_b_driven();
+        return static_cast<std::uint8_t>((latched & ddrb_) |
+                                         (pins & static_cast<std::uint8_t>(~ddrb_)));
+    }
+
     std::uint8_t cia_6526::port_a_output() const noexcept {
         return static_cast<std::uint8_t>(pra_out_ & ddra_);
     }
@@ -252,6 +261,23 @@ namespace mnemos::chips::bus_controller {
             const std::uint8_t start = is_timer_a ? cra_start : crb_start;
             t.cr = static_cast<std::uint8_t>(t.cr & ~start);
             t.running = false;
+        }
+    }
+
+    void cia_6526::write_timer_high(timer_state& t, std::uint8_t value,
+                                    std::uint8_t start_bit, std::uint8_t runmode_bit) {
+        t.latch = static_cast<std::uint16_t>((t.latch & 0x00FFU) |
+                                             (static_cast<std::uint16_t>(value) << 8U));
+        if (binary_tod() && (t.cr & runmode_bit) != 0U) {
+            t.counter = t.latch;
+            t.cr = static_cast<std::uint8_t>(t.cr | start_bit);
+            t.running = true;
+            t.force_load_phase = 0U;
+            t.start_delay = 1U;
+            return;
+        }
+        if (!t.running) {
+            t.counter = t.latch;
         }
     }
 
@@ -302,6 +328,36 @@ namespace mnemos::chips::bus_controller {
             } else {
                 --t.counter;
             }
+        }
+    }
+
+    bool cia_6526::binary_tod() const noexcept { return cfg_.rev == revision::mos_8520; }
+
+    std::uint32_t cia_6526::tod_binary_value() const noexcept {
+        return (static_cast<std::uint32_t>(tod_.min) << 16U) |
+               (static_cast<std::uint32_t>(tod_.sec) << 8U) |
+               static_cast<std::uint32_t>(tod_.ten);
+    }
+
+    std::uint32_t cia_6526::tod_binary_alarm() const noexcept {
+        return (static_cast<std::uint32_t>(tod_.alm_min) << 16U) |
+               (static_cast<std::uint32_t>(tod_.alm_sec) << 8U) |
+               static_cast<std::uint32_t>(tod_.alm_ten);
+    }
+
+    void cia_6526::set_tod_binary_value(std::uint32_t value) noexcept {
+        value &= 0x00FF'FFFFU;
+        tod_.ten = static_cast<std::uint8_t>(value);
+        tod_.sec = static_cast<std::uint8_t>(value >> 8U);
+        tod_.min = static_cast<std::uint8_t>(value >> 16U);
+        tod_.hr = 0U;
+    }
+
+    void cia_6526::tod_binary_advance() {
+        const std::uint32_t next = (tod_binary_value() + 1U) & 0x00FF'FFFFU;
+        set_tod_binary_value(next);
+        if (next == tod_binary_alarm()) {
+            icr_raise(icr_alarm);
         }
     }
 
@@ -376,16 +432,39 @@ namespace mnemos::chips::bus_controller {
         case reg_tb_hi:
             return static_cast<std::uint8_t>(timer_b_.counter >> 8U);
         case reg_tod_ten:
+            if (binary_tod()) {
+                if (tod_.latched) {
+                    tod_.latched = false;
+                    return tod_.ltch_ten;
+                }
+                return tod_.ten;
+            }
             if (tod_.latched) {
                 tod_.latched = false;
                 return tod_.ltch_ten;
             }
             return tod_.ten;
         case reg_tod_sec:
+            if (binary_tod()) {
+                return tod_.latched ? tod_.ltch_sec : tod_.sec;
+            }
             return tod_.latched ? tod_.ltch_sec : tod_.sec;
         case reg_tod_min:
+            if (binary_tod()) {
+                if (!tod_.latched) {
+                    tod_.latched = true;
+                    tod_.ltch_ten = tod_.ten;
+                    tod_.ltch_sec = tod_.sec;
+                    tod_.ltch_min = tod_.min;
+                    tod_.ltch_hr = 0U;
+                }
+                return tod_.ltch_min;
+            }
             return tod_.latched ? tod_.ltch_min : tod_.min;
         case reg_tod_hr:
+            if (binary_tod()) {
+                return 0U;
+            }
             if (!tod_.latched) {
                 tod_.latched = true;
                 tod_.ltch_ten = tod_.ten;
@@ -404,7 +483,7 @@ namespace mnemos::chips::bus_controller {
                 v = static_cast<std::uint8_t>(v | icr_ir);
             }
             icr_latch_ = 0U;
-            irq_line_ = false;
+            refresh_irq_line();
             irq_pin_update();
             return v;
         }
@@ -448,26 +527,32 @@ namespace mnemos::chips::bus_controller {
             timer_a_.latch = static_cast<std::uint16_t>((timer_a_.latch & 0xFF00U) | value);
             return;
         case reg_ta_hi:
-            timer_a_.latch = static_cast<std::uint16_t>((timer_a_.latch & 0x00FFU) |
-                                                        (static_cast<std::uint16_t>(value) << 8U));
-            if (!timer_a_.running) {
-                timer_a_.counter = timer_a_.latch;
-            }
+            write_timer_high(timer_a_, value, cra_start, cra_runmode);
             return;
         case reg_tb_lo:
             timer_b_.latch = static_cast<std::uint16_t>((timer_b_.latch & 0xFF00U) | value);
             return;
         case reg_tb_hi:
-            timer_b_.latch = static_cast<std::uint16_t>((timer_b_.latch & 0x00FFU) |
-                                                        (static_cast<std::uint16_t>(value) << 8U));
-            if (!timer_b_.running) {
-                timer_b_.counter = timer_b_.latch;
-            }
+            write_timer_high(timer_b_, value, crb_start, crb_runmode);
             return;
 
         case reg_tod_ten:
-            if ((timer_b_.cr & crb_alarm) != 0U) {
+            if (binary_tod() && (timer_b_.cr & crb_alarm) != 0U) {
+                tod_.alm_ten = value;
+            } else if ((timer_b_.cr & crb_alarm) != 0U) {
                 tod_.alm_ten = static_cast<std::uint8_t>(value & 0x0FU);
+            } else if (binary_tod()) {
+                if (tod_.write_frozen) {
+                    tod_.ten = value;
+                    tod_.sec = tod_.wr_sec;
+                    tod_.min = tod_.wr_min;
+                    tod_.hr = 0U;
+                    tod_.write_frozen = false;
+                } else {
+                    tod_.ten = value;
+                }
+                tod_.divider = tod_.divider_reload;
+                tod_.phase = tod_.phase_reload;
             } else {
                 if (tod_.write_frozen) {
                     tod_.ten = static_cast<std::uint8_t>(value & 0x0FU);
@@ -483,8 +568,14 @@ namespace mnemos::chips::bus_controller {
             }
             return;
         case reg_tod_sec:
-            if ((timer_b_.cr & crb_alarm) != 0U) {
+            if (binary_tod() && (timer_b_.cr & crb_alarm) != 0U) {
+                tod_.alm_sec = value;
+            } else if ((timer_b_.cr & crb_alarm) != 0U) {
                 tod_.alm_sec = static_cast<std::uint8_t>(value & 0x7FU);
+            } else if (binary_tod() && tod_.write_frozen) {
+                tod_.wr_sec = value;
+            } else if (binary_tod()) {
+                tod_.sec = value;
             } else if (tod_.write_frozen) {
                 tod_.wr_sec = static_cast<std::uint8_t>(value & 0x7FU);
             } else {
@@ -492,8 +583,16 @@ namespace mnemos::chips::bus_controller {
             }
             return;
         case reg_tod_min:
-            if ((timer_b_.cr & crb_alarm) != 0U) {
+            if (binary_tod() && (timer_b_.cr & crb_alarm) != 0U) {
+                tod_.alm_min = value;
+            } else if ((timer_b_.cr & crb_alarm) != 0U) {
                 tod_.alm_min = static_cast<std::uint8_t>(value & 0x7FU);
+            } else if (binary_tod()) {
+                tod_.write_frozen = true;
+                tod_.wr_ten = tod_.ten;
+                tod_.wr_sec = tod_.sec;
+                tod_.wr_min = value;
+                tod_.wr_hr = 0U;
             } else if (tod_.write_frozen) {
                 tod_.wr_min = static_cast<std::uint8_t>(value & 0x7FU);
             } else {
@@ -501,6 +600,9 @@ namespace mnemos::chips::bus_controller {
             }
             return;
         case reg_tod_hr:
+            if (binary_tod()) {
+                return;
+            }
             if ((timer_b_.cr & crb_alarm) != 0U) {
                 tod_.alm_hr = static_cast<std::uint8_t>(value & 0x9FU);
             } else {
@@ -531,6 +633,7 @@ namespace mnemos::chips::bus_controller {
             } else {
                 imr_ = static_cast<std::uint8_t>(imr_ & ~mask);
             }
+            refresh_irq_line();
             return;
         }
 
@@ -547,8 +650,10 @@ namespace mnemos::chips::bus_controller {
                 publish_port_b();
             }
             if (((old_cr ^ value) & cra_todin) != 0U) {
-                tod_.phase_reload = (value & cra_todin) != 0U ? 5U : 6U;
-                tod_.phase = tod_.phase_reload;
+                if (!binary_tod()) {
+                    tod_.phase_reload = (value & cra_todin) != 0U ? 5U : 6U;
+                    tod_.phase = tod_.phase_reload;
+                }
             }
             const bool was_output_mode = sdr_.output_mode;
             sdr_.output_mode = (value & cra_spmode) != 0U;
@@ -642,7 +747,9 @@ namespace mnemos::chips::bus_controller {
             if (tod_.divider_reload != 0U && !tod_.write_frozen) {
                 if (--tod_.divider == 0U) {
                     tod_.divider = tod_.divider_reload;
-                    if (tod_.phase_reload != 0U && --tod_.phase == 0U) {
+                    if (binary_tod()) {
+                        tod_binary_advance();
+                    } else if (tod_.phase_reload != 0U && --tod_.phase == 0U) {
                         tod_.phase = tod_.phase_reload;
                         tod_bcd_advance();
                         if (tod_.ten == tod_.alm_ten && tod_.sec == tod_.alm_sec &&

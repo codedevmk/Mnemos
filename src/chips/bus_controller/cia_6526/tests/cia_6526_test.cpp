@@ -55,18 +55,37 @@ TEST_CASE("cia_6526 Timer A one-shot stops after a single underflow") {
     CHECK((cia.read(0x0EU) & 0x01U) == 0U); // START self-cleared
 }
 
-TEST_CASE("cia_6526 NMOS edge IRQ: enabling the mask after the source latched stays quiet") {
+TEST_CASE("cia_6526 one-shot high-byte writes do not auto-start stopped timers") {
     cia_6526 cia;
-    cia.write(0x04U, 0x01U);
-    cia.write(0x05U, 0x00U);
-    cia.write(0x0EU, 0x09U); // one-shot START, mask not set
 
-    cia.tick(10U); // underflows once, then stops; source latched, line masked away
+    cia.write(0x0DU, 0x82U); // Enable Timer B mask.
+    cia.write(0x0FU, 0x08U); // CRB: RUNMODE one-shot, START clear.
+    cia.write(0x06U, 0x02U);
+    cia.write(0x07U, 0x00U);
+
+    cia.tick(10U);
+    CHECK_FALSE(cia.irq_asserted());
+    CHECK((cia.read(0x0FU) & 0x01U) == 0U);
+    CHECK((cia.read(0x0DU) & 0x02U) == 0U);
+}
+
+TEST_CASE("cia_6526 ICR mask changes recompute the IRQ request from latched sources") {
+    cia_6526 cia;
+    cia.flag_edge(); // source latches while masked
+
     CHECK_FALSE(cia.irq_asserted());
 
-    cia.write(0x0DU, 0x81U); // enable Timer A mask *after* the edge
-    cia.tick(2U);
-    CHECK_FALSE(cia.irq_asserted()); // no spurious IRQ (Lorenz imr behaviour)
+    cia.write(0x0DU, 0x90U); // enable FLAG mask after the edge
+    cia.tick(1U);
+    CHECK(cia.irq_asserted());
+
+    cia.write(0x0DU, 0x10U); // clear FLAG mask without reading the latch
+    cia.tick(1U);
+    CHECK_FALSE(cia.irq_asserted());
+
+    const auto icr = cia.read(0x0DU);
+    CHECK((icr & 0x10U) != 0U);
+    CHECK((icr & 0x80U) == 0U);
 }
 
 TEST_CASE("cia_6526 Timer B cascades on Timer A underflow") {
@@ -97,6 +116,20 @@ TEST_CASE("cia_6526 port A composites the output latch and input pins through DD
     // output bits: $5C & $F0 = $50; input bits: $AA & $0F = $0A -> $5A
     CHECK(cia.read(0x00U) == 0x5AU);
     CHECK(driven == 0x5CU); // write_port_a saw the latch
+}
+
+TEST_CASE("cia_6526 port B pins composite timer/latch output and input pins through DDR") {
+    cia_6526 cia;
+    cia_6526::config cfg;
+    cfg.read_port_b = []() -> std::uint8_t { return 0xAAU; };
+    cia.configure(cfg);
+
+    cia.write(0x03U, 0xF0U); // DDRB: high nibble output
+    cia.write(0x01U, 0x5CU); // PRB output latch
+
+    CHECK(cia.read(0x01U) == 0x5AU);
+    CHECK(cia.port_b_pins() == 0x5AU);
+    CHECK(cia.port_b_output() == 0x50U);
 }
 
 TEST_CASE("cia_6526 TOD advances tenths from the source divider") {

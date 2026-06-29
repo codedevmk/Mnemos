@@ -69,6 +69,12 @@ namespace mnemos::apps::player::adapters {
     // framebuffer (a PNG when `path` ends in .png, otherwise a PPM), exit.
     // Missing --frames captures the boot frame; the path must be present and must
     // not be another option.
+
+    // Select the physical keyboard layout token used by computer adapters that
+    // expose a raw keyboard matrix (`--keyboard-layout <token>`). Missing,
+    // empty, or option-shaped values leave the adapter default in place.
+    [[nodiscard]] std::optional<std::string> parse_keyboard_layout_arg(int argc, char* argv[]);
+
     struct screenshot_request final {
         std::string path;
         std::uint64_t frames{};
@@ -84,8 +90,7 @@ namespace mnemos::apps::player::adapters {
         std::uint64_t frames{};
     };
 
-    [[nodiscard]] std::optional<save_state_request> parse_save_state_args(int argc,
-                                                                          char* argv[]);
+    [[nodiscard]] std::optional<save_state_request> parse_save_state_args(int argc, char* argv[]);
 
     // --dump-battery <path> [--frames N]: headless run, advances N frames
     // (default 0), writes the live battery-backed media image, and exits. The

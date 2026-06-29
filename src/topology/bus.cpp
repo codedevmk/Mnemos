@@ -91,6 +91,13 @@ namespace mnemos::topology {
 
     void bus::map_mmio(std::uint32_t start, std::uint32_t size, read_handler on_read,
                        write_handler on_write, int priority, active_predicate active) {
+        map_mmio16(start, size, std::move(on_read), std::move(on_write), {}, {}, priority,
+                   std::move(active));
+    }
+
+    void bus::map_mmio16(std::uint32_t start, std::uint32_t size, read_handler on_read,
+                         write_handler on_write, read16_handler on_read16,
+                         write16_handler on_write16, int priority, active_predicate active) {
         if (size == 0U) {
             return; // a zero size would underflow `end` and claim the whole space
         }
@@ -101,6 +108,8 @@ namespace mnemos::topology {
         r.priority = priority;
         r.on_read = std::move(on_read);
         r.on_write = std::move(on_write);
+        r.on_read16 = std::move(on_read16);
+        r.on_write16 = std::move(on_write16);
         r.active = std::move(active);
         regions_.push_back(std::move(r));
         invalidate_fast_path();
@@ -274,6 +283,24 @@ namespace mnemos::topology {
                                                   p[off + 1U]);
             }
         }
+        if (addr + 1U > addr) {
+            const region* r = resolve(addr, false);
+            if (r != nullptr && r->backing == kind::mmio && r->on_read16 &&
+                addr + 1U <= r->end && resolve((addr + 1U) & address_mask_, false) == r) {
+                const read16_handler handler = r->on_read16;
+                r = nullptr;
+                const std::uint16_t value = handler(addr);
+                if (observer_) {
+                    observer_({.address = addr,
+                               .value = static_cast<std::uint8_t>(value >> 8U),
+                               .write = false});
+                    observer_({.address = (addr + 1U) & address_mask_,
+                               .value = static_cast<std::uint8_t>(value),
+                               .write = false});
+                }
+                return value;
+            }
+        }
         return ibus::read16_be(address);
     }
 
@@ -315,6 +342,24 @@ namespace mnemos::topology {
                 } // ROM ignores writes
                 if (i != 0U) {
                     std::swap(fast_[0], fast_[i]);
+                }
+                return;
+            }
+        }
+        if (addr + 1U > addr) {
+            const region* r = resolve(addr, true);
+            if (r != nullptr && r->backing == kind::mmio && r->on_write16 &&
+                addr + 1U <= r->end && resolve((addr + 1U) & address_mask_, true) == r) {
+                const write16_handler handler = r->on_write16;
+                r = nullptr;
+                handler(addr, value);
+                if (observer_) {
+                    observer_({.address = addr,
+                               .value = static_cast<std::uint8_t>(value >> 8U),
+                               .write = true});
+                    observer_({.address = (addr + 1U) & address_mask_,
+                               .value = static_cast<std::uint8_t>(value),
+                               .write = true});
                 }
                 return;
             }

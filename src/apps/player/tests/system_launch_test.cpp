@@ -1,3 +1,6 @@
+#include "amiga500_adapter.hpp"
+#include "amiga500_system.hpp"
+#include "deflate.hpp"
 #include "system_launch.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -19,6 +22,9 @@
 
 namespace {
     namespace fs = std::filesystem;
+
+    using mnemos::apps::player::adapters::amiga500::amiga500_adapter;
+    using mnemos::manifests::amiga500::amiga500_system;
 
     [[nodiscard]] std::optional<std::string> read_env(const char* name) {
 #if defined(_MSC_VER)
@@ -334,6 +340,92 @@ namespace {
         });
     }
 
+
+    [[nodiscard]] std::vector<std::uint8_t> tiny_kickstart() {
+        std::vector<std::uint8_t> rom(amiga500_system::kickstart_window_size, 0x00U);
+        const auto w16 = [&](std::size_t offset, std::uint16_t value) {
+            rom[offset] = static_cast<std::uint8_t>(value >> 8U);
+            rom[offset + 1U] = static_cast<std::uint8_t>(value);
+        };
+        const auto w32 = [&](std::size_t offset, std::uint32_t value) {
+            rom[offset + 0U] = static_cast<std::uint8_t>(value >> 24U);
+            rom[offset + 1U] = static_cast<std::uint8_t>(value >> 16U);
+            rom[offset + 2U] = static_cast<std::uint8_t>(value >> 8U);
+            rom[offset + 3U] = static_cast<std::uint8_t>(value);
+        };
+        w32(0x0000U, 0x0007F000U);
+        w32(0x0004U, amiga500_system::kickstart_base + 0x0008U);
+        w16(0x0008U, 0x46FCU); // MOVE #$2700,SR
+        w16(0x000AU, 0x2700U);
+        w16(0x000CU, 0x60FEU); // BRA.S self
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> tiny_adf() {
+        std::vector<std::uint8_t> adf(amiga500_system::floppy_dd_size, 0x00U);
+        adf[0] = 0x44U;
+        adf[1] = 0x89U;
+        return adf;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t>
+    deflated_zip(std::string_view entry_name, std::span<const std::uint8_t> data) {
+        const std::vector<std::uint8_t> payload = mnemos::compression::deflate_raw(data);
+        REQUIRE(entry_name.size() <= 0xFFFFU);
+        REQUIRE(payload.size() <= 0xFFFFFFFFULL);
+        REQUIRE(data.size() <= 0xFFFFFFFFULL);
+
+        const auto name_size = static_cast<std::uint16_t>(entry_name.size());
+        const auto compressed_size = static_cast<std::uint32_t>(payload.size());
+        const auto uncompressed_size = static_cast<std::uint32_t>(data.size());
+        std::vector<std::uint8_t> zip;
+        zip.reserve(30U + entry_name.size() + payload.size() + 46U + entry_name.size() + 22U);
+
+        append_u32_le(zip, 0x04034B50U);
+        append_u16_le(zip, 20U);
+        append_u16_le(zip, 0U);
+        append_u16_le(zip, 8U);
+        append_u16_le(zip, 0U);
+        append_u16_le(zip, 0U);
+        append_u32_le(zip, 0U);
+        append_u32_le(zip, compressed_size);
+        append_u32_le(zip, uncompressed_size);
+        append_u16_le(zip, name_size);
+        append_u16_le(zip, 0U);
+        append_ascii(zip, entry_name);
+        zip.insert(zip.end(), payload.begin(), payload.end());
+
+        const auto central_offset = static_cast<std::uint32_t>(zip.size());
+        append_u32_le(zip, 0x02014B50U);
+        append_u16_le(zip, 20U);
+        append_u16_le(zip, 20U);
+        append_u16_le(zip, 0U);
+        append_u16_le(zip, 8U);
+        append_u16_le(zip, 0U);
+        append_u16_le(zip, 0U);
+        append_u32_le(zip, 0U);
+        append_u32_le(zip, compressed_size);
+        append_u32_le(zip, uncompressed_size);
+        append_u16_le(zip, name_size);
+        append_u16_le(zip, 0U);
+        append_u16_le(zip, 0U);
+        append_u16_le(zip, 0U);
+        append_u16_le(zip, 0U);
+        append_u32_le(zip, 0U);
+        append_u32_le(zip, 0U);
+        append_ascii(zip, entry_name);
+
+        const auto central_size = static_cast<std::uint32_t>(zip.size() - central_offset);
+        append_u32_le(zip, 0x06054B50U);
+        append_u16_le(zip, 0U);
+        append_u16_le(zip, 0U);
+        append_u16_le(zip, 1U);
+        append_u16_le(zip, 1U);
+        append_u32_le(zip, central_size);
+        append_u32_le(zip, central_offset);
+        append_u16_le(zip, 0U);
+        return zip;
+    }
 
     [[nodiscard]] constexpr std::uint32_t i(std::uint8_t op, std::uint8_t rs, std::uint8_t rt,
                                             std::uint16_t imm) {
@@ -1444,4 +1536,73 @@ TEST_CASE("launch_system boots Taito G-NET package with BIOS env",
 
     launch.system->step_one_frame();
     CHECK(launch.system->current_frame().pixels != nullptr);
+}
+
+TEST_CASE("player launch boots Amiga500 from Kickstart env without disk media",
+          "[apps][player][launch][amiga500]") {
+    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick13.rom";
+    write_image(rom_path, tiny_kickstart());
+    REQUIRE(set_env("MNEMOS_AMIGA500_KICKSTART", rom_path.string()) == 0);
+    REQUIRE(set_env("MNEMOS_AMIGA500_KEYBOARD_LAYOUT", "azerty") == 0);
+
+    auto outcome =
+        mnemos::apps::player::launch_system({.system_arg = std::string{"amiga500"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(outcome.primary_media_path.empty());
+    CHECK(outcome.system->media_count() == 0U);
+    CHECK(has_spec(*outcome.system, "BIOS", rom_path.stem().string()));
+    CHECK(has_spec(*outcome.system, "Keyboard", "AZERTY"));
+
+    fs::remove_all(dir);
+}
+
+TEST_CASE("player launch treats a zip-wrapped Amiga ADF as disk media",
+          "[apps][player][launch][amiga500]") {
+    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick13.rom";
+    const fs::path disk_path = dir / "workbench.zip";
+    write_image(rom_path, tiny_kickstart());
+    const std::vector<std::uint8_t> disk_image = tiny_adf();
+    write_image(disk_path, deflated_zip("Workbench.adf", disk_image));
+    REQUIRE(set_env("MNEMOS_AMIGA500_KICKSTART", rom_path.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system(
+        {.rom_paths = {disk_path.string()}, .system_arg = std::string{"amiga500"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(outcome.primary_media_path == disk_path.string());
+    CHECK(outcome.system->media_count() == 1U);
+    auto* adapter = dynamic_cast<amiga500_adapter*>(outcome.system.get());
+    REQUIRE(adapter != nullptr);
+    CHECK(adapter->system().floppy_loaded());
+    CHECK(adapter->system().floppy_size() == amiga500_system::floppy_dd_size);
+    CHECK_FALSE(adapter->system().floppy_drives[0].change_latch);
+    CHECK(has_spec(*outcome.system, "Disk", "Workbench"));
+
+    fs::remove_all(dir);
+}
+
+TEST_CASE("player launch passes keyboard layout override to Amiga500 adapter",
+          "[apps][player][launch][amiga500]") {
+    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick13.rom";
+    write_image(rom_path, tiny_kickstart());
+
+    auto outcome = mnemos::apps::player::launch_system({.rom_paths = {rom_path.string()},
+                                                        .system_arg = std::string{"amiga500"},
+                                                        .keyboard_layout_override =
+                                                            std::string{"azerty"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(has_spec(*outcome.system, "Keyboard", "AZERTY"));
+
+    fs::remove_all(dir);
 }

@@ -33,7 +33,7 @@ namespace mnemos::chips::video {
     //     vertical/horizontal blank windows.
     //   * Copper co-processor — the WAIT / SKIP / MOVE list walker that
     //     pokes the display registers at programmed beam positions.
-    //   * Display sequencer — at the end of each frame it walks the active
+    //   * Display sequencer — as each scanline completes it walks the active
     //     bitplane pointers across the attached chip RAM and decodes the
     //     planar pixels through the 32-entry 12-bit colour palette into a
     //     0x00RRGGBB framebuffer, including OCS HAM, EHB, and
@@ -54,12 +54,12 @@ namespace mnemos::chips::video {
     //     the data-fetch window (DDFSTRT / DDFSTOP) bounds the per-line
     //     bitplane fetch. Colour index 0 is the background everywhere.
     //
-    // tick(cycles) advances the beam one color clock per cycle; entering the
-    // vertical-blank region renders the completed frame (frame-at-once) and
-    // bumps frame_index(). The scanline callback fires at the start of every
-    // line with its number; the board derives its vertical-blank interrupt
-    // and Copper-driven raster effects from it. The Copper runs from the
-    // attached chip RAM during the visible field.
+    // tick(cycles) advances the beam one color clock per cycle; wrapping back
+    // to scanline 0 finishes the completed frame, bumps frame_index(), and
+    // fires the vertical-blank callback. The scanline callback fires at the
+    // start of every line with its number; the board derives scanline-paced
+    // glue from it. The Copper runs from the attached chip RAM during the
+    // visible field.
     class agnus final : public ivideo {
       public:
         // Raster geometry, in color clocks (7.09 MHz ticks). PAL lines round
@@ -159,10 +159,18 @@ namespace mnemos::chips::video {
         [[nodiscard]] bool dma_sprite() const noexcept;
         [[nodiscard]] bool dma_disk() const noexcept;
         [[nodiscard]] bool dma_audio(int channel) const noexcept;
+
+        struct display_dma_wait final {
+            std::uint32_t cycles{};
+        };
         // Additional 68000 cycles before the CPU can use chip RAM while display
-        // DMA owns every open memory slot. This is exact for OCS four-plane
-        // high-resolution fetch windows; partial-slot modes remain board work.
-        [[nodiscard]] std::uint32_t display_dma_cpu_wait_cycles() const noexcept;
+        // DMA owns the current open memory slot.
+        [[nodiscard]] display_dma_wait
+        display_dma_cpu_wait(std::uint32_t instruction_cycles_before_access) const noexcept;
+        [[nodiscard]] std::uint32_t
+        display_dma_cpu_wait_cycles(std::uint32_t instruction_cycles_before_access) const noexcept;
+        [[nodiscard]] std::uint32_t
+        sprite_dma_cpu_wait_cycles(std::uint32_t instruction_cycles_before_access) const noexcept;
 
         // Blitter status bits reflected into DMACONR (driven by the board's
         // blitter subsystem once it lands).
@@ -173,6 +181,9 @@ namespace mnemos::chips::video {
         // writes (or by the copper). Pointers are 20-bit word-aligned chip
         // RAM byte addresses; modulos are signed per-line byte adjustments.
         void set_bitplane_pointer(std::uint32_t plane, std::uint32_t byte_address) noexcept;
+        void write_bitplane_pointer_word(std::uint32_t plane, bool high,
+                                         std::uint16_t value) noexcept;
+        [[nodiscard]] std::uint32_t bitplane_pointer(std::uint32_t plane) const noexcept;
         void set_bitplane_modulo_even(std::int16_t modulo) noexcept { modulo_even_ = modulo; }
         void set_bitplane_modulo_odd(std::int16_t modulo) noexcept { modulo_odd_ = modulo; }
         // BPLCON0: bit 15 = HIRES, bits 14:12 = bitplane count (BPU), bit
@@ -202,6 +213,7 @@ namespace mnemos::chips::video {
         // chip-RAM byte addresses. DATA writes arm the manual sprite output;
         // POS/CTL writes disarm it, matching the comparator reset rule.
         void set_sprite_pointer(std::uint32_t sprite, std::uint32_t byte_address) noexcept;
+        [[nodiscard]] std::uint32_t sprite_pointer(std::uint32_t sprite) const noexcept;
         void write_sprite_pointer_word(std::uint32_t sprite, bool high,
                                        std::uint16_t value) noexcept;
         void write_sprite_pos(std::uint32_t sprite, std::uint16_t value) noexcept;
@@ -210,14 +222,21 @@ namespace mnemos::chips::video {
         void write_sprite_data_b(std::uint32_t sprite, std::uint16_t value) noexcept;
 
         // Copper list base pointers + control. COPJMP1/COPJMP2 reload the
-        // live program counter; COPCON bit 1 (DANGER) gates writes below
-        // register $080. The copper writes display registers back through
-        // this chip via apply_copper_move().
+        // live program counter. Copper MOVEs cannot target $000-$03e, while
+        // COPCON bit 1 (DANGER) opens the protected $040-$07e blitter range;
+        // $080+ custom registers are always writable. The copper writes
+        // display registers back through this chip via apply_copper_move().
         void set_custom_write_callback(custom_write_callback cb) noexcept {
             custom_write_cb_ = std::move(cb);
         }
-        void write_cop1lc(std::uint32_t value) noexcept { cop1lc_ = value & 0x001FFFFEU; }
-        void write_cop2lc(std::uint32_t value) noexcept { cop2lc_ = value & 0x001FFFFEU; }
+        void write_cop1lc(std::uint32_t value) noexcept { cop1lc_ = value & 0x0007FFFEU; }
+        void write_cop2lc(std::uint32_t value) noexcept { cop2lc_ = value & 0x0007FFFEU; }
+        [[nodiscard]] std::uint16_t dmacon() const noexcept { return dmacon_; }
+        [[nodiscard]] std::uint32_t cop1lc() const noexcept { return cop1lc_; }
+        [[nodiscard]] std::uint32_t cop2lc() const noexcept { return cop2lc_; }
+        [[nodiscard]] std::uint32_t copper_pc() const noexcept { return copper_pc_; }
+        [[nodiscard]] bool copper_running() const noexcept { return copper_running_; }
+        [[nodiscard]] std::uint8_t copper_delay() const noexcept { return copper_delay_; }
         void write_copcon(std::uint16_t value) noexcept {
             copper_danger_ = (value & 0x0002U) != 0U;
         }
@@ -249,6 +268,23 @@ namespace mnemos::chips::video {
         [[nodiscard]] static std::uint32_t color_to_rgb(std::uint16_t color12) noexcept;
 
       private:
+        struct display_dma_slot final {
+            bool active{};
+            bool hires{};
+            std::uint32_t active_planes{};
+            std::uint32_t delayed_planes{};
+            std::uint32_t group_offset{};
+            std::uint32_t beam_clock{};
+            std::uint32_t normal_fetch_end{};
+            std::uint32_t fetch_end{};
+        };
+
+        struct sprite_dma_slot final {
+            bool active{};
+            std::uint32_t sprite{};
+            std::uint32_t beam_clock{};
+        };
+
         class introspection_surface final : public instrumentation::ichip_introspection {
           public:
             explicit introspection_surface(agnus& owner) noexcept : palette_(owner) {}
@@ -275,10 +311,28 @@ namespace mnemos::chips::video {
         [[nodiscard]] std::uint16_t chip_word(std::uint32_t byte_address) const noexcept;
         [[nodiscard]] std::uint16_t palette_word(std::uint32_t index) const noexcept;
         [[nodiscard]] std::uint32_t bitplane_count() const noexcept;
+        [[nodiscard]] display_dma_slot
+        display_dma_slot_at(std::uint32_t instruction_cycles_before_access) const noexcept;
+        [[nodiscard]] display_dma_slot
+        display_dma_slot_at_beam(std::uint32_t beam_line, std::uint32_t beam_clock) const noexcept;
+        [[nodiscard]] bool
+        display_dma_owns_memory_slot(const display_dma_slot& slot) const noexcept;
+        [[nodiscard]] bool display_dma_copper_blocked() const noexcept;
+        [[nodiscard]] sprite_dma_slot
+        sprite_dma_slot_at(std::uint32_t instruction_cycles_before_access) const noexcept;
+        [[nodiscard]] bool display_dma_steals_sprite_word(std::uint32_t sprite,
+                                                          std::uint32_t beam_line,
+                                                          std::uint32_t word_index) const noexcept;
+        [[nodiscard]] bool display_dma_steals_sprite_slot(std::uint32_t sprite,
+                                                          std::uint32_t beam_line) const noexcept;
+        [[nodiscard]] bool sprite_dma_fetch_requested(std::uint32_t sprite,
+                                                      std::uint32_t beam_line) const noexcept;
+        [[nodiscard]] bool sprite_dma_copper_blocked() const noexcept;
         void refresh_blank_flags() noexcept;
         void run_copper() noexcept;
         void apply_copper_move(std::uint16_t reg_addr, std::uint16_t value) noexcept;
-        void render_frame() noexcept;
+        void begin_frame_render() noexcept;
+        void render_scanline(std::uint32_t beam_line) noexcept;
         void render_sprites(std::uint32_t height) noexcept;
         void render_dma_sprite(std::uint32_t sprite) noexcept;
         void render_manual_sprite(std::uint32_t sprite) noexcept;
@@ -287,7 +341,8 @@ namespace mnemos::chips::video {
         [[nodiscard]] bool playfield_blocks_sprite(std::uint8_t playfields,
                                                    std::uint32_t sprite_group) const noexcept;
         [[nodiscard]] bool collision_bitplane_match(std::uint8_t plane_bits) const noexcept;
-        [[nodiscard]] std::uint8_t collision_sprite_groups(std::uint16_t sprite_bits) const noexcept;
+        [[nodiscard]] std::uint8_t
+        collision_sprite_groups(std::uint16_t sprite_bits) const noexcept;
         void latch_collisions(std::uint8_t sprite_groups, std::uint8_t plane_bits) noexcept;
 
         struct sprite_state final {
@@ -301,15 +356,12 @@ namespace mnemos::chips::video {
 
         std::vector<std::uint32_t> pixels_ = std::vector<std::uint32_t>(
             static_cast<std::size_t>(framebuffer_stride) * visible_height_pal);
-        std::vector<std::uint8_t> bitplane_sample_ =
-            std::vector<std::uint8_t>(static_cast<std::size_t>(framebuffer_stride) *
-                                      visible_height_pal);
-        std::vector<std::uint8_t> playfield_sample_ =
-            std::vector<std::uint8_t>(static_cast<std::size_t>(framebuffer_stride) *
-                                      visible_height_pal);
-        std::vector<std::uint16_t> sprite_sample_ =
-            std::vector<std::uint16_t>(static_cast<std::size_t>(framebuffer_stride) *
-                                       visible_height_pal);
+        std::vector<std::uint8_t> bitplane_sample_ = std::vector<std::uint8_t>(
+            static_cast<std::size_t>(framebuffer_stride) * visible_height_pal);
+        std::vector<std::uint8_t> playfield_sample_ = std::vector<std::uint8_t>(
+            static_cast<std::size_t>(framebuffer_stride) * visible_height_pal);
+        std::vector<std::uint16_t> sprite_sample_ = std::vector<std::uint16_t>(
+            static_cast<std::size_t>(framebuffer_stride) * visible_height_pal);
         // The decoded palette swatch debug view, rebuilt on demand.
         mutable std::vector<std::uint32_t> palette_sheet_;
 

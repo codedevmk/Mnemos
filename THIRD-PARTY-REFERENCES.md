@@ -399,6 +399,14 @@ accuracy targets, and is acknowledged here:
 - **BlastEm** — Sega Genesis cycle-timing reference.
 - **Nuked-OPN2** — die-accurate YM2612 FM reference.
 - **MAME** — cross-system hardware behaviour and timing reference.
+- **WinUAE** — Amiga CIA-A floppy status and selected-drive behaviour were
+  checked while bringing up the Amiga500 Kickstart/trackdisk path. Mnemos used
+  the observed active-low `/RDY`, `/TK0`, `/WPRO`, and `/CHNG` semantics only
+  as L5 behavioural guidance; no WinUAE source is vendored or copied.
+- **vAmiga** — Amiga floppy drive presence, selected-connected drive status,
+  and disk-change latch behaviour were checked while debugging Kickstart's
+  external-drive probes. Mnemos used this only as L5 behavioural guidance; no
+  vAmiga source is vendored or copied.
 
 ## Code adapted from sibling first-party projects
 

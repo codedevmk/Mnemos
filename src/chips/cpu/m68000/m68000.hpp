@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <functional>
 #include <span>
+#include <utility>
 
 namespace mnemos::chips::cpu {
 
@@ -122,13 +123,28 @@ namespace mnemos::chips::cpu {
             tas_callback_ = std::move(callback);
         }
 
+        // RESET asserts the external reset bus line; it does not reload the
+        // 68000's own SSP/PC vectors. Boards use this hook to reset attached
+        // devices while the CPU continues with the next instruction.
+        void set_reset_callback(std::function<void()> callback) noexcept {
+            reset_callback_ = std::move(callback);
+        }
+
         // Board-specific bus wait states for cycle-accounted memory accesses.
         // The callback returns additional 68000 cycles for one byte/word bus
         // transfer at `addr`; longword accesses call it once per halfword.
+        // `instruction_cycles_before_access` is the cycle position of this
+        // bus transfer within the current instruction before the transfer's
+        // base four cycles are charged.
+        // `instruction_wait_cycles` is the external wait already charged in
+        // this instruction, so boards can model a lockout window as residual
+        // wait instead of charging the same bus hold for every transfer.
         // Unset = no added latency. Used by Amiga chip-RAM DMA contention.
         void set_bus_wait_callback(
-            std::function<std::uint32_t(std::uint32_t addr, bool program, bool write)> callback)
-            noexcept {
+            std::function<std::uint32_t(std::uint32_t addr, bool program, bool write,
+                                        std::uint32_t instruction_cycles_before_access,
+                                        std::uint32_t instruction_wait_cycles)>
+                callback) noexcept {
             bus_wait_callback_ = std::move(callback);
         }
 
@@ -320,7 +336,10 @@ namespace mnemos::chips::cpu {
         int prev_irq_level_{}; // for the level-7 (NMI) edge
         std::function<void(int)> irq_ack_{};
         std::function<void(std::uint32_t)> tas_callback_{};
-        std::function<std::uint32_t(std::uint32_t addr, bool program, bool write)>
+        std::function<void()> reset_callback_{};
+        std::function<std::uint32_t(std::uint32_t addr, bool program, bool write,
+                                    std::uint32_t instruction_cycles_before_access,
+                                    std::uint32_t instruction_wait_cycles)>
             bus_wait_callback_{};
         std::function<void(std::uint32_t)> trace_callback_{};
         bool exception_raised_{};

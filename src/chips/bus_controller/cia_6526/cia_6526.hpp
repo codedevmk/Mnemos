@@ -13,8 +13,9 @@ namespace mnemos::chips::bus_controller {
     //
     // Full feature surface: two 8-bit ports with DDR, two 16-bit interval timers
     // with cascade/pin-output and the silicon-accurate force-load + start-delay
-    // pipelines, a BCD time-of-day clock with alarm, an 8-bit shift register with
-    // SP/CNT pins, and the NMOS edge-triggered interrupt control with a 1-φ2 /IRQ
+    // pipelines, a BCD time-of-day clock with alarm (6526/8521 mode), an 8520
+    // 24-bit binary event-counter TOD mode, an 8-bit shift register with SP/CNT
+    // pins, and the NMOS edge-triggered interrupt control with a 1-φ2 /IRQ
     // propagation delay. tick() advances one φ2 cycle; all time-domain behaviour
     // evolves on tick, never on register access.
     class cia_6526 final : public ibus_controller, public immio {
@@ -22,6 +23,7 @@ namespace mnemos::chips::bus_controller {
         enum class revision : std::uint8_t {
             nmos_6526, // edge-triggered IR (breadbin default)
             hmos_8521, // level-driven IR (selectable; behaves as NMOS for now)
+            mos_8520,  // Amiga/1581: 24-bit binary event-counter TOD
         };
 
         // Host wiring. Ports are read live through callbacks (input pins sampled
@@ -79,6 +81,7 @@ namespace mnemos::chips::bus_controller {
         // the VIC bank from CIA2's PA0-1 this way (the write_port_a callback only
         // reports the output latch, not the composed pins).
         [[nodiscard]] std::uint8_t port_a_pins() const;
+        [[nodiscard]] std::uint8_t port_b_pins() const;
 
         // The bits port A actively drives (output latch masked by DDRA); input bits
         // read 0. The C64 derives the IEC ATN/CLK/DATA out lines from CIA2 PA3-5
@@ -131,6 +134,7 @@ namespace mnemos::chips::bus_controller {
             bool pending_load{};
         };
 
+        void refresh_irq_line() noexcept;
         void irq_pin_update();
         void icr_raise(std::uint8_t bits);
         [[nodiscard]] std::uint8_t port_b_driven() const noexcept;
@@ -140,7 +144,14 @@ namespace mnemos::chips::bus_controller {
         [[nodiscard]] std::uint8_t read_pa_live();
         [[nodiscard]] std::uint8_t read_pb_live();
         void timer_handle_underflow(timer_state& t, bool is_timer_a);
+        void write_timer_high(timer_state& t, std::uint8_t value, std::uint8_t start_bit,
+                              std::uint8_t runmode_bit);
         void timer_step(timer_state& t, unsigned count, bool is_timer_a);
+        [[nodiscard]] bool binary_tod() const noexcept;
+        [[nodiscard]] std::uint32_t tod_binary_value() const noexcept;
+        [[nodiscard]] std::uint32_t tod_binary_alarm() const noexcept;
+        void set_tod_binary_value(std::uint32_t value) noexcept;
+        void tod_binary_advance();
         void tod_bcd_advance();
         void sdr_step_output_bit();
         void sdr_step_input_bit();

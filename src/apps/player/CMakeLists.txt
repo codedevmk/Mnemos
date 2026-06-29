@@ -164,7 +164,11 @@ if(BUILD_TESTING)
     mnemos_add_test(
         mnemos_apps_player_system_launch_test
         SOURCES tests/system_launch_test.cpp
-        LIBRARIES mnemos::apps::player::core
+        LIBRARIES
+            mnemos::apps::player::core
+            mnemos::apps::player::amiga500_adapter
+            mnemos::compression
+            mnemos::manifests::amiga500
     )
     mnemos_add_test(
         mnemos_apps_player_capability_summary_test

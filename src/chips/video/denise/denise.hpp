@@ -118,6 +118,9 @@ namespace mnemos::chips::video {
         void write_bplcon2(std::uint16_t value) noexcept { bplcon2_ = value; }
         void write_bplcon3(std::uint16_t value) noexcept { bplcon3_ = value; }
         [[nodiscard]] std::uint16_t read_bplcon0() const noexcept { return bplcon0_; }
+        [[nodiscard]] std::uint16_t read_bplcon1() const noexcept { return bplcon1_; }
+        [[nodiscard]] std::uint16_t read_bplcon2() const noexcept { return bplcon2_; }
+        [[nodiscard]] std::uint16_t read_bplcon3() const noexcept { return bplcon3_; }
 
         // Decoded BPLCON0 view (refreshed on every BPLCON0 write).
         struct bplcon0_decoded final {

@@ -656,7 +656,7 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
     SECTION("Amiga 500") {
         amiga500::amiga500_adapter adapter(amiga500_kickstart(), {}, "Tiny Kickstart");
         const auto summary = summary_for(adapter);
-        require_common_session_controls(summary);
+        require_common_session_controls(summary, true);
         require_degraded_media(summary, "media.kickstart");
     }
 
@@ -665,7 +665,7 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
         disks.push_back(amiga500_adf());
         amiga500::amiga500_adapter adapter(amiga500_kickstart(), {}, "Tiny ADF", std::move(disks));
         const auto summary = summary_for(adapter);
-        require_common_session_controls(summary);
+        require_common_session_controls(summary, true);
         require_degraded_media(summary, "media.disk_0");
     }
 
