@@ -36,6 +36,28 @@ namespace mnemos::chips::audio {
 
         constexpr std::int32_t step_index_max = 48;
 
+        constexpr std::array<std::array<const char*, 10>, adpcm_a::channel_count>
+            kChannelRegisterNames{{
+                {"CH0_PAN", "CH0_LEVEL", "CH0_START", "CH0_END", "CH0_ADDR",
+                 "CH0_ACTIVE", "CH0_ACC", "CH0_STEP", "CH0_END_EVENTS",
+                 "CH0_ROM_UNDERRUNS"},
+                {"CH1_PAN", "CH1_LEVEL", "CH1_START", "CH1_END", "CH1_ADDR",
+                 "CH1_ACTIVE", "CH1_ACC", "CH1_STEP", "CH1_END_EVENTS",
+                 "CH1_ROM_UNDERRUNS"},
+                {"CH2_PAN", "CH2_LEVEL", "CH2_START", "CH2_END", "CH2_ADDR",
+                 "CH2_ACTIVE", "CH2_ACC", "CH2_STEP", "CH2_END_EVENTS",
+                 "CH2_ROM_UNDERRUNS"},
+                {"CH3_PAN", "CH3_LEVEL", "CH3_START", "CH3_END", "CH3_ADDR",
+                 "CH3_ACTIVE", "CH3_ACC", "CH3_STEP", "CH3_END_EVENTS",
+                 "CH3_ROM_UNDERRUNS"},
+                {"CH4_PAN", "CH4_LEVEL", "CH4_START", "CH4_END", "CH4_ADDR",
+                 "CH4_ACTIVE", "CH4_ACC", "CH4_STEP", "CH4_END_EVENTS",
+                 "CH4_ROM_UNDERRUNS"},
+                {"CH5_PAN", "CH5_LEVEL", "CH5_START", "CH5_END", "CH5_ADDR",
+                 "CH5_ACTIVE", "CH5_ACC", "CH5_STEP", "CH5_END_EVENTS",
+                 "CH5_ROM_UNDERRUNS"},
+            }};
+
         // Decode one 4-bit ADPCM nibble against a running accumulator + step
         // index. `accumulator` is the 12-bit signed prediction; `step_index`
         // walks kStepSize. Returns the new 12-bit signed PCM value and mutates
@@ -174,9 +196,39 @@ namespace mnemos::chips::audio {
         }
     }
 
+    adpcm_a::channel_status adpcm_a::status(std::uint8_t channel_index) const noexcept {
+        if (channel_index >= channel_count) {
+            return {};
+        }
+        const channel& c = channels_[channel_index];
+        return {.pan_l = c.pan_l,
+                .pan_r = c.pan_r,
+                .level = c.level,
+                .start_byte = static_cast<std::uint32_t>(c.start_addr) << 8U,
+                .end_byte = (static_cast<std::uint32_t>(c.end_addr) << 8U) | 0xFFU,
+                .active = c.active,
+                .current_byte = c.cur_addr,
+                .high_nibble = c.high_nibble,
+                .accumulator = c.accumulator,
+                .step_index = c.step_index,
+                .end_events = c.end_events,
+                .rom_underruns = c.rom_underruns};
+    }
+
+    std::uint8_t adpcm_a::active_channel_mask() const noexcept {
+        std::uint8_t mask = 0U;
+        for (std::uint8_t i = 0; i < channel_count; ++i) {
+            if (channels_[i].active) {
+                mask = static_cast<std::uint8_t>(mask | (1U << i));
+            }
+        }
+        return mask;
+    }
+
     std::uint8_t adpcm_a::next_nibble(channel& c) noexcept {
         if (c.cur_addr >= rom_.size()) {
             c.active = false;
+            ++c.rom_underruns;
             return 0U;
         }
         const std::uint8_t byte = rom_[c.cur_addr];
@@ -200,9 +252,8 @@ namespace mnemos::chips::audio {
     void adpcm_a::step() noexcept {
         std::int32_t left = 0;
         std::int32_t right = 0;
-        // Master Total Level: 6-bit attenuation, 0 = full volume. Model as a
-        // linear gain of (63 - tl)/63 to keep the math integer and monotonic.
-        const std::int32_t master_gain = 63 - static_cast<std::int32_t>(tl_);
+        // Master Total Level is a 6-bit gain for the ADPCM-A output path.
+        const std::int32_t master_gain = static_cast<std::int32_t>(tl_);
 
         for (channel& c : channels_) {
             if (!c.active) {
@@ -213,6 +264,7 @@ namespace mnemos::chips::audio {
             const std::uint32_t end_byte = (static_cast<std::uint32_t>(c.end_addr) << 8U) | 0xFFU;
             if (c.cur_addr > end_byte) {
                 c.active = false;
+                ++c.end_events;
                 continue;
             }
 
@@ -223,7 +275,7 @@ namespace mnemos::chips::audio {
             const std::int32_t pcm = decode_nibble(c, nibble); // 12-bit signed
 
             // Per-channel 5-bit individual level (IL): higher = louder, 0x1F =
-            // full volume (0 = silent), then the master TL attenuation.
+            // full volume (0 = silent), then the master TL gain.
             const std::int32_t ch_gain = static_cast<std::int32_t>(c.level);
             // 12-bit PCM -> ~16-bit: x16 puts +-2048 near full scale; the
             // per-channel level and master TL are applied as /31 and /63
@@ -301,6 +353,8 @@ namespace mnemos::chips::audio {
             writer.boolean(c.high_nibble);
             writer.u32(static_cast<std::uint32_t>(c.accumulator));
             writer.u32(static_cast<std::uint32_t>(c.step_index));
+            writer.u32(c.end_events);
+            writer.u32(c.rom_underruns);
         }
         writer.u8(tl_);
         writer.u8(key_mask_);
@@ -323,6 +377,8 @@ namespace mnemos::chips::audio {
             c.high_nibble = reader.boolean();
             c.accumulator = static_cast<std::int32_t>(reader.u32());
             c.step_index = static_cast<std::int32_t>(reader.u32());
+            c.end_events = reader.u32();
+            c.rom_underruns = reader.u32();
         }
         tl_ = reader.u8();
         key_mask_ = reader.u8();
@@ -413,20 +469,30 @@ namespace mnemos::chips::audio {
 
     std::span<const register_descriptor> adpcm_a::register_snapshot() noexcept {
         using fmt = register_value_format;
-        const channel& c = channels_[0];
         register_view_[0] = {"KEY", key_mask_, 8U, fmt::flags};
         register_view_[1] = {"TL", tl_, 6U, fmt::unsigned_integer};
-        register_view_[2] = {"CH0_PAN", regs_[reg_ch_pan_level], 8U, fmt::flags};
-        register_view_[3] = {"CH0_LEVEL", c.level, 5U, fmt::unsigned_integer};
-        register_view_[4] = {"CH0_START", static_cast<std::uint64_t>(c.start_addr) << 8U, 24U,
-                             fmt::unsigned_integer};
-        register_view_[5] = {"CH0_END", static_cast<std::uint64_t>(c.end_addr) << 8U, 24U,
-                             fmt::unsigned_integer};
-        register_view_[6] = {"CH0_ADDR", c.cur_addr, 24U, fmt::unsigned_integer};
-        register_view_[7] = {"CH0_ACC", static_cast<std::uint64_t>(c.accumulator & 0xFFFFU), 16U,
-                             fmt::signed_integer};
-        register_view_[8] = {"CH0_STEP", static_cast<std::uint64_t>(c.step_index), 8U,
-                             fmt::unsigned_integer};
+        register_view_[2] = {"ACTIVE", active_channel_mask(), 6U, fmt::flags};
+        std::size_t out = 3U;
+        for (std::uint8_t i = 0; i < channel_count; ++i) {
+            const channel& c = channels_[i];
+            const auto& names = kChannelRegisterNames[i];
+            register_view_[out++] = {names[0], regs_[reg_ch_pan_level + i], 8U, fmt::flags};
+            register_view_[out++] = {names[1], c.level, 5U, fmt::unsigned_integer};
+            register_view_[out++] = {names[2], static_cast<std::uint64_t>(c.start_addr) << 8U,
+                                     24U, fmt::unsigned_integer};
+            register_view_[out++] = {names[3],
+                                     (static_cast<std::uint64_t>(c.end_addr) << 8U) | 0xFFU,
+                                     24U, fmt::unsigned_integer};
+            register_view_[out++] = {names[4], c.cur_addr, 24U, fmt::unsigned_integer};
+            register_view_[out++] = {names[5], c.active ? 1U : 0U, 1U, fmt::flags};
+            register_view_[out++] = {names[6],
+                                     static_cast<std::uint64_t>(c.accumulator & 0xFFFFU),
+                                     16U, fmt::signed_integer};
+            register_view_[out++] = {names[7], static_cast<std::uint64_t>(c.step_index), 8U,
+                                     fmt::unsigned_integer};
+            register_view_[out++] = {names[8], c.end_events, 32U, fmt::unsigned_integer};
+            register_view_[out++] = {names[9], c.rom_underruns, 32U, fmt::unsigned_integer};
+        }
         return register_view_;
     }
 

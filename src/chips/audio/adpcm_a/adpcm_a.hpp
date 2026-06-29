@@ -21,7 +21,7 @@ namespace mnemos::chips::audio {
     // (~18.5 kHz). Per channel there is a 24-bit ROM start/end address (the
     // registers hold the high 16 bits; the low 8 are implied zero), a 6-bit
     // pan + 5-bit individual level, and a key-on/off bit. A global 6-bit Total
-    // Level (TL) attenuates the master mix. A key-on jumps the channel to its
+    // Level (TL) scales the master mix. A key-on jumps the channel to its
     // start address; playback stops at the end address.
     //
     // The external sample ROM is host-set (set_sample_rom / sample_rom), exactly
@@ -40,12 +40,12 @@ namespace mnemos::chips::audio {
         // ADPCM-A ROM is 16 MiB. The host may set any size up to this.
         static constexpr std::size_t max_rom_size = 16U * 1024U * 1024U;
 
-        // Register block offsets (the OPN bank-$10..$3D window mapped local
-        // $00..$2D). Channel-specific blocks span `channel_count` consecutive
-        // offsets from their base.
+        // Register block offsets (the OPNB bank-B $00..$2D window).
+        // Channel-specific blocks span `channel_count` consecutive offsets
+        // from their base.
         enum reg : std::uint8_t {
             reg_key = 0x00,          // key on/off; bit7=DUMP(off), bits5:0 = channel mask
-            reg_tl = 0x01,           // master Total Level (bits5:0 attenuation)
+            reg_tl = 0x01,           // master Total Level (bits5:0 gain)
             reg_ch_pan_level = 0x08, // $08..$0D: bit7=L, bit6=R, bits4:0 = level
             reg_ch_start_lo = 0x10,  // $10..$15: start address low byte
             reg_ch_start_hi = 0x18,  // $18..$1D: start address high byte
@@ -72,6 +72,23 @@ namespace mnemos::chips::audio {
         // to reserved offsets are ignored, reads of them return open bus.
         [[nodiscard]] std::uint8_t read_reg(std::uint8_t index) const noexcept;
         void write_reg(std::uint8_t index, std::uint8_t value) noexcept;
+
+        struct channel_status final {
+            bool pan_l{};
+            bool pan_r{};
+            std::uint8_t level{};
+            std::uint32_t start_byte{};
+            std::uint32_t end_byte{};
+            bool active{};
+            std::uint32_t current_byte{};
+            bool high_nibble{};
+            std::int32_t accumulator{};
+            std::int32_t step_index{};
+            std::uint32_t end_events{};
+            std::uint32_t rom_underruns{};
+        };
+        [[nodiscard]] channel_status status(std::uint8_t channel_index) const noexcept;
+        [[nodiscard]] std::uint8_t active_channel_mask() const noexcept;
 
         // Host-set external sample ROM (the ADPCM nibble stream). The chip
         // borrows the span; the host owns the storage. Like RF5C68 wave RAM,
@@ -125,6 +142,8 @@ namespace mnemos::chips::audio {
             bool high_nibble{};         // which 4-bit nibble of cur byte is next
             std::int32_t accumulator{}; // 12-bit signed running PCM value
             std::int32_t step_index{};  // index into the ADPCM step-size table
+            std::uint32_t end_events{}; // times playback crossed END
+            std::uint32_t rom_underruns{}; // times playback ran past the attached ROM
         };
 
         // Surfaces each active channel's ROM region as a decoded PCM sample_view
@@ -154,7 +173,7 @@ namespace mnemos::chips::audio {
 
         std::array<std::uint8_t, reg_count> regs_{};
         std::array<channel, channel_count> channels_{};
-        std::uint8_t tl_{};       // 6-bit master Total Level (attenuation)
+        std::uint8_t tl_{};       // 6-bit master Total Level gain
         std::uint8_t key_mask_{}; // last $00 write
 
         std::span<const std::uint8_t> rom_{};
@@ -168,7 +187,7 @@ namespace mnemos::chips::audio {
         bool audio_capture_{};
         std::vector<std::int16_t> sample_queue_{};
 
-        std::array<register_descriptor, 9> register_view_{};
+        std::array<register_descriptor, 63> register_view_{};
         audio_source_impl audio_{*this};
         instrumentation::introspection_builder introspection_;
     };

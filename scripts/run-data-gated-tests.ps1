@@ -64,6 +64,29 @@
 #   MNEMOS_CPS2_SKIP_SETS comma/semicolon list of CPS2 sets to skip.
 #   MNEMOS_CPS2_START_AFTER resumes after one CPS2 set id or zip name.
 #   MNEMOS_MSX_BOOT_SHA256, MNEMOS_MSX2_BOOT_SHA256
+#   MNEMOS_TAITO_SET_DIR      broad Taito corpus root                -> Taito inventory + F2 smoke
+#   MNEMOS_TAITO_GNET_PACKAGE one G-NET CHD package zip              -> G-NET media decode
+#   MNEMOS_TAITO_GNET_BIOS    one G-NET/ZN BIOS ROM                  -> G-NET board/player smoke
+#   MNEMOS_TAITO_F2_ROM       one Taito F2 ROM zip                   -> Taito F2 corpus smoke
+#   MNEMOS_TAITO_F2_SET_DIR   dir with Taito F2 ROM zips             -> Taito F2 corpus smoke
+#   MNEMOS_TAITO_F2_GUNFRONT_SET
+#                             real gunfront/gunfrontj set/wrapper    -> taito_f2_adapter_test
+#   MNEMOS_TAITO_F2_DINOREX_SET
+#                             real dinorex.zip                       -> taito_f2_adapter_test
+#
+# Optional golden-hash pins (assert the rendered framebuffer once locked in):
+#   MNEMOS_SMS_BOOT_SHA256, MNEMOS_C64_BOOT_SHA256, MNEMOS_GENESIS_BOOT_SHA256
+#   MNEMOS_TAITO_REQUIRE_ALL_SUPPORTED=1 fails the broad Taito inventory if any
+#                             package is not runnable by a Mnemos Taito adapter
+#   MNEMOS_TAITO_F2_GOLDENS  JSON screenshot SHA-256 pins for Taito F2 corpus smoke
+#   MNEMOS_TAITO_F2_REQUIRE_GOLDENS=1 fails Taito F2 sets that have no golden pin
+#   MNEMOS_TAITO_F2_REQUIRE_MANIFEST_COVERAGE=1 fails if any checked-in F2
+#                             manifest set is absent from the local corpus smoke
+#   MNEMOS_TAITO_F2_AUDIO_PROBE=1 enables rendered WAV/audio JSON extraction
+#                             during the Taito F2 corpus smoke
+#   MNEMOS_TAITO_F2_AUDIO_FRAMES frame count for the F2 audio probe
+#   MNEMOS_TAITO_F2_REQUIRE_AUDIO_EVIDENCE=1 fails an F2 set when the audio
+#                             probe is absent, invalid, or silent
 #
 # This script dot-sources scripts/local-roms.ps1 if present so you can keep your
 # machine-specific paths there (that file is git-ignored). Nothing here copies a ROM
@@ -134,7 +157,18 @@ $vars = @(
     @{ Name = "MNEMOS_MSX2_CART2_SLOT";  Test = "msx2 boot smoke" },
     @{ Name = "MNEMOS_MSX2_RAM_SIZE";    Test = "msx2 boot smoke" },
     @{ Name = "MNEMOS_MSX2_ROM_DIR";     Test = "msx2 boot smoke" },
-    @{ Name = "MNEMOS_MSX_CASE_MANIFEST"; Test = "msx/msx2 boot smoke" }
+    @{ Name = "MNEMOS_MSX_CASE_MANIFEST"; Test = "msx/msx2 boot smoke" },
+    @{ Name = "MNEMOS_TAITO_SET_DIR";    Test = "Taito broad corpus inventory" },
+    @{ Name = "MNEMOS_TAITO_GNET_PACKAGE"; Test = "Taito G-NET CHD package decode/player smoke" },
+    @{ Name = "MNEMOS_TAITO_GNET_BIOS"; Test = "Taito G-NET board/player smoke" },
+    @{ Name = "MNEMOS_TAITO_F2_ROM";     Test = "Taito F2 corpus smoke" },
+    @{ Name = "MNEMOS_TAITO_F2_SET_DIR"; Test = "Taito F2 corpus smoke" },
+    @{ Name = "MNEMOS_TAITO_F2_GUNFRONT_SET"; Test = "taito_f2_adapter_test (real Gun Frontier)" },
+    @{ Name = "MNEMOS_TAITO_F2_DINOREX_SET"; Test = "taito_f2_adapter_test (real Dino Rex)" },
+    @{ Name = "MNEMOS_TAITO_F2_GOLDENS"; Test = "Taito F2 screenshot golden pins" },
+    @{ Name = "MNEMOS_TAITO_F2_REQUIRE_MANIFEST_COVERAGE"; Test = "Taito F2 manifest coverage enforcement" },
+    @{ Name = "MNEMOS_TAITO_F2_AUDIO_PROBE"; Test = "Taito F2 rendered audio probe" },
+    @{ Name = "MNEMOS_TAITO_F2_REQUIRE_AUDIO_EVIDENCE"; Test = "Taito F2 audio evidence enforcement" }
 )
 foreach ($v in $vars) {
     $value = [Environment]::GetEnvironmentVariable($v.Name)
@@ -267,6 +301,75 @@ if (Test-Path $cps2Runner) {
     & $cps2Runner @cps2Args
     if ($LASTEXITCODE -ne 0) {
         $runnerExit = $LASTEXITCODE
+    }
+}
+
+$taitoInventory = Join-Path $PSScriptRoot "taito/inventory-corpus.ps1"
+$taitoSetDir = [Environment]::GetEnvironmentVariable("MNEMOS_TAITO_SET_DIR")
+if ((Test-Path $taitoInventory) -and -not [string]::IsNullOrWhiteSpace($taitoSetDir)) {
+    Write-Host "`nRunning Taito corpus inventory ..." -ForegroundColor Cyan
+    $inventoryArgs = @{
+        RomDir = $taitoSetDir
+        Recurse = $true
+    }
+    $requireAllTaito = [Environment]::GetEnvironmentVariable("MNEMOS_TAITO_REQUIRE_ALL_SUPPORTED")
+    if (-not [string]::IsNullOrWhiteSpace($requireAllTaito) -and
+        $requireAllTaito -match '^(1|true|yes|on)$') {
+        $inventoryArgs.RequireAllSupported = $true
+    }
+    & $taitoInventory @inventoryArgs
+    $inventoryExit = $LASTEXITCODE
+    if ($inventoryExit -ne 0 -and $runnerExit -eq 0) {
+        $runnerExit = $inventoryExit
+    }
+}
+
+$gnetPackage = [Environment]::GetEnvironmentVariable("MNEMOS_TAITO_GNET_PACKAGE")
+if ([string]::IsNullOrWhiteSpace($gnetPackage) -and
+    -not [string]::IsNullOrWhiteSpace($taitoSetDir)) {
+    foreach ($candidate in @("chaoshea.zip", "gobyrc.zip", "raycris.zip", "sianniv.zip",
+            "spuzbobl.zip")) {
+        $candidatePath = Join-Path $taitoSetDir $candidate
+        if (Test-Path -LiteralPath $candidatePath -PathType Leaf) {
+            $gnetPackage = $candidatePath
+            break
+        }
+    }
+}
+if (-not [string]::IsNullOrWhiteSpace($gnetPackage) -and
+    (Test-Path -LiteralPath $gnetPackage -PathType Leaf)) {
+    Write-Host "`nRunning Taito G-NET media/system/adapter smoke ..." -ForegroundColor Cyan
+    $previousGnetPackage = [Environment]::GetEnvironmentVariable("MNEMOS_TAITO_GNET_PACKAGE")
+    [Environment]::SetEnvironmentVariable("MNEMOS_TAITO_GNET_PACKAGE", $gnetPackage, "Process")
+    ctest --test-dir $testDir --output-on-failure -R "taito_gnet_(media|system|adapter)|system_launch"
+    $gnetExit = $LASTEXITCODE
+    [Environment]::SetEnvironmentVariable(
+        "MNEMOS_TAITO_GNET_PACKAGE", $previousGnetPackage, "Process")
+    if ($gnetExit -ne 0 -and $runnerExit -eq 0) {
+        $runnerExit = $gnetExit
+    }
+}
+
+$taitoF2Runner = Join-Path $PSScriptRoot "taito-f2/run-corpus-smoke.ps1"
+if (Test-Path $taitoF2Runner) {
+    Write-Host "`nRunning Taito F2 corpus smoke ..." -ForegroundColor Cyan
+    $taitoF2Args = @{
+        BuildDir = $BuildDir
+    }
+    if (-not [string]::IsNullOrWhiteSpace($taitoSetDir)) {
+        $taitoF2Args.RomDir = $taitoSetDir
+        $taitoF2Args.Recurse = $true
+    }
+    $requireF2ManifestCoverage =
+        [Environment]::GetEnvironmentVariable("MNEMOS_TAITO_F2_REQUIRE_MANIFEST_COVERAGE")
+    if (-not [string]::IsNullOrWhiteSpace($requireF2ManifestCoverage) -and
+        $requireF2ManifestCoverage -match '^(1|true|yes|on)$') {
+        $taitoF2Args.RequireManifestCoverage = $true
+    }
+    & $taitoF2Runner @taitoF2Args
+    $taitoF2Exit = $LASTEXITCODE
+    if ($taitoF2Exit -ne 0 -and $runnerExit -eq 0) {
+        $runnerExit = $taitoF2Exit
     }
 }
 

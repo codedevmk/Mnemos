@@ -448,7 +448,27 @@ TEST_CASE("rom_set_toml parses the Taito F2 board selectors", "[rom_set_toml]") 
             "taito_f2_palette_format = \"rgbx_444\"\n"
             "taito_f2_sprite_active_area = \"y_word_bit0\"\n"
             "taito_f2_sprite_hide_pixels = 3\n"
-            "taito_f2_sprite_flip_hide_pixels = -3\n[[region]]\nname = \"maincpu\"\n"
+            "taito_f2_sprite_flip_hide_pixels = -3\n"
+            "taito_f2_input_profile = \"split_tmp82c265\"\n"
+            "taito_f2_text_gfx_source = \"program_1bpp\"\n"
+            "taito_f2_text_gfx_base = 0x80000\n"
+            "taito_f2_tc0100scn_bg_x_offset = 16\n"
+            "taito_f2_tc0100scn_text_x_offset = 23\n"
+            "taito_f2_tc0100scn_text_y_origin = -8\n"
+            "taito_f2_tc0100scn_positive_text_y_origin = 24\n"
+            "taito_f2_io_profile = \"tc0510nio\"\n"
+            "taito_f2_palette_profile = \"tc0110pcr_tc0070rgb\"\n"
+            "taito_f2_priority_profile = \"tc0360pri\"\n"
+            "taito_f2_sprite_chip_pair = \"tc0200obj_tc0210fbc\"\n"
+            "taito_f2_sound_comm_chip = \"tc0140syt\"\n"
+            "taito_f2_video_profile = \"tc0100scn\"\n"
+            "taito_f2_tc0480scp_profile = \"none\"\n"
+            "taito_f2_roz_x_offset = -16\n"
+            "taito_f2_roz_y_offset = 0\n"
+            "taito_f2_aux_profile = \"none\"\n"
+            "taito_f2_vblank_irq_level = 5\n"
+            "taito_f2_sprite_dma_irq_level = 6\n"
+            "[[region]]\nname = \"maincpu\"\n"
             "size = 0x100\n");
         REQUIRE(result.ok());
         REQUIRE(result.value->taito_f2_map.has_value());
@@ -460,6 +480,25 @@ TEST_CASE("rom_set_toml parses the Taito F2 board selectors", "[rom_set_toml]") 
         REQUIRE(result.value->taito_f2_sprite_active_area.has_value());
         REQUIRE(result.value->taito_f2_sprite_hide_pixels.has_value());
         REQUIRE(result.value->taito_f2_sprite_flip_hide_pixels.has_value());
+        REQUIRE(result.value->taito_f2_input_profile.has_value());
+        REQUIRE(result.value->taito_f2_text_gfx_source.has_value());
+        REQUIRE(result.value->taito_f2_text_gfx_base.has_value());
+        REQUIRE(result.value->taito_f2_tc0100scn_bg_x_offset.has_value());
+        REQUIRE(result.value->taito_f2_tc0100scn_text_x_offset.has_value());
+        REQUIRE(result.value->taito_f2_tc0100scn_text_y_origin.has_value());
+        REQUIRE(result.value->taito_f2_tc0100scn_positive_text_y_origin.has_value());
+        REQUIRE(result.value->taito_f2_io_profile.has_value());
+        REQUIRE(result.value->taito_f2_palette_profile.has_value());
+        REQUIRE(result.value->taito_f2_priority_profile.has_value());
+        REQUIRE(result.value->taito_f2_sprite_chip_pair.has_value());
+        REQUIRE(result.value->taito_f2_sound_comm_chip.has_value());
+        REQUIRE(result.value->taito_f2_video_profile.has_value());
+        REQUIRE(result.value->taito_f2_tc0480scp_profile.has_value());
+        REQUIRE(result.value->taito_f2_roz_x_offset.has_value());
+        REQUIRE(result.value->taito_f2_roz_y_offset.has_value());
+        REQUIRE(result.value->taito_f2_aux_profile.has_value());
+        REQUIRE(result.value->taito_f2_vblank_irq_level.has_value());
+        REQUIRE(result.value->taito_f2_sprite_dma_irq_level.has_value());
         CHECK(*result.value->taito_f2_map == "gunfront");
         CHECK(*result.value->taito_f2_sprite_policy == "banked");
         CHECK(*result.value->taito_f2_sprite_buffering == "partial_delayed");
@@ -469,6 +508,25 @@ TEST_CASE("rom_set_toml parses the Taito F2 board selectors", "[rom_set_toml]") 
         CHECK(*result.value->taito_f2_sprite_active_area == "y_word_bit0");
         CHECK(*result.value->taito_f2_sprite_hide_pixels == 3);
         CHECK(*result.value->taito_f2_sprite_flip_hide_pixels == -3);
+        CHECK(*result.value->taito_f2_input_profile == "split_tmp82c265");
+        CHECK(*result.value->taito_f2_text_gfx_source == "program_1bpp");
+        CHECK(*result.value->taito_f2_text_gfx_base == 0x80000U);
+        CHECK(*result.value->taito_f2_tc0100scn_bg_x_offset == 16);
+        CHECK(*result.value->taito_f2_tc0100scn_text_x_offset == 23);
+        CHECK(*result.value->taito_f2_tc0100scn_text_y_origin == -8);
+        CHECK(*result.value->taito_f2_tc0100scn_positive_text_y_origin == 24);
+        CHECK(*result.value->taito_f2_io_profile == "tc0510nio");
+        CHECK(*result.value->taito_f2_palette_profile == "tc0110pcr_tc0070rgb");
+        CHECK(*result.value->taito_f2_priority_profile == "tc0360pri");
+        CHECK(*result.value->taito_f2_sprite_chip_pair == "tc0200obj_tc0210fbc");
+        CHECK(*result.value->taito_f2_sound_comm_chip == "tc0140syt");
+        CHECK(*result.value->taito_f2_video_profile == "tc0100scn");
+        CHECK(*result.value->taito_f2_tc0480scp_profile == "none");
+        CHECK(*result.value->taito_f2_roz_x_offset == -16);
+        CHECK(*result.value->taito_f2_roz_y_offset == 0);
+        CHECK(*result.value->taito_f2_aux_profile == "none");
+        CHECK(*result.value->taito_f2_vblank_irq_level == 5U);
+        CHECK(*result.value->taito_f2_sprite_dma_irq_level == 6U);
     }
     SECTION("absent leaves them unset") {
         const auto result = parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = "
@@ -484,6 +542,34 @@ TEST_CASE("rom_set_toml parses the Taito F2 board selectors", "[rom_set_toml]") 
         CHECK_FALSE(result.value->taito_f2_sprite_active_area.has_value());
         CHECK_FALSE(result.value->taito_f2_sprite_hide_pixels.has_value());
         CHECK_FALSE(result.value->taito_f2_sprite_flip_hide_pixels.has_value());
+        CHECK_FALSE(result.value->taito_f2_input_profile.has_value());
+        CHECK_FALSE(result.value->taito_f2_text_gfx_source.has_value());
+        CHECK_FALSE(result.value->taito_f2_text_gfx_base.has_value());
+        CHECK_FALSE(result.value->taito_f2_tc0100scn_bg_x_offset.has_value());
+        CHECK_FALSE(result.value->taito_f2_tc0100scn_text_x_offset.has_value());
+        CHECK_FALSE(result.value->taito_f2_tc0100scn_text_y_origin.has_value());
+        CHECK_FALSE(result.value->taito_f2_tc0100scn_positive_text_y_origin.has_value());
+        CHECK_FALSE(result.value->taito_f2_io_profile.has_value());
+        CHECK_FALSE(result.value->taito_f2_palette_profile.has_value());
+        CHECK_FALSE(result.value->taito_f2_priority_profile.has_value());
+        CHECK_FALSE(result.value->taito_f2_sprite_chip_pair.has_value());
+        CHECK_FALSE(result.value->taito_f2_sound_comm_chip.has_value());
+        CHECK_FALSE(result.value->taito_f2_video_profile.has_value());
+        CHECK_FALSE(result.value->taito_f2_tc0480scp_profile.has_value());
+        CHECK_FALSE(result.value->taito_f2_roz_x_offset.has_value());
+        CHECK_FALSE(result.value->taito_f2_roz_y_offset.has_value());
+        CHECK_FALSE(result.value->taito_f2_aux_profile.has_value());
+        CHECK_FALSE(result.value->taito_f2_vblank_irq_level.has_value());
+        CHECK_FALSE(result.value->taito_f2_sprite_dma_irq_level.has_value());
+    }
+    SECTION("compound RGBx palette format is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"growl\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_palette_format = \"rrrr_gggg_bbbb_rgbx\"\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_palette_format.has_value());
+        CHECK(*result.value->taito_f2_palette_format == "rrrr_gggg_bbbb_rgbx");
     }
     SECTION("liquid kids map is accepted") {
         const auto result = parse_rom_set_decl(
@@ -673,6 +759,60 @@ TEST_CASE("rom_set_toml parses the Taito F2 board selectors", "[rom_set_toml]") 
             "taito_f2_sprite_hide_pixels = 17\n[[region]]\nname = \"maincpu\"\nsize = "
             "0x100\n");
         CHECK_FALSE(bad_hide.ok());
+
+        const auto bad_text_origin = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_tc0100scn_positive_text_y_origin = 257\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(bad_text_origin.ok());
+
+        const auto bad_input_profile = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_input_profile = \"unknown\"\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(bad_input_profile.ok());
+
+        const auto bad_text_gfx_source = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_text_gfx_source = \"unknown\"\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(bad_text_gfx_source.ok());
+
+        const auto bad_text_gfx_base = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_text_gfx_base = 0x1000000\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(bad_text_gfx_base.ok());
+
+        const auto bad_text_x_offset = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_tc0100scn_text_x_offset = -257\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(bad_text_x_offset.ok());
+
+        const auto bad_io_profile = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_io_profile = \"unknown\"\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(bad_io_profile.ok());
+
+        const auto bad_tc0480scp_profile = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_tc0480scp_profile = \"unknown\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(bad_tc0480scp_profile.ok());
+
+        const auto bad_roz_offset = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_roz_x_offset = 257\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(bad_roz_offset.ok());
+
+        const auto bad_irq_level = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_vblank_irq_level = 8\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(bad_irq_level.ok());
     }
 }
 

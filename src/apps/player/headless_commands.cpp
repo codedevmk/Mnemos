@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -44,6 +45,30 @@ namespace {
         return std::nullopt;
     }
 
+    [[nodiscard]] std::vector<std::string> parse_debug_probes(int argc, char* argv[]) {
+        std::vector<std::string> probes;
+        for (int i = 1; i + 1 < argc; ++i) {
+            if (std::string_view{argv[i]} == "--debug-probe") {
+                const std::string_view value{argv[i + 1]};
+                if (!value.empty() && !value.starts_with("--")) {
+                    probes.emplace_back(value);
+                    ++i;
+                }
+            }
+        }
+        return probes;
+    }
+
+    void run_debug_probes(mnemos::frontend_sdk::player_system& sys,
+                          const std::vector<std::string>& probes) noexcept {
+        for (const std::string& probe : probes) {
+            if (!sys.run_debug_probe(probe)) {
+                std::fprintf(stderr, "[mnemos_player] unsupported debug probe: %s\n",
+                             probe.c_str());
+            }
+        }
+    }
+
     void apply_disk_swaps(mnemos::frontend_sdk::player_system& sys,
                           const std::vector<std::uint64_t>& frames, std::uint64_t frame) {
         if (sys.media_count() <= 1U) {
@@ -67,6 +92,87 @@ namespace {
 #endif
         return trace_env != nullptr && trace_env[0] != '\0' && trace_env[0] != '0';
     }
+
+    [[nodiscard]] std::uint64_t headless_progress_interval() noexcept {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+        const char* progress_env = std::getenv("MNEMOS_HEADLESS_PROGRESS");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+        if (progress_env == nullptr || progress_env[0] == '\0' || progress_env[0] == '0') {
+            return 0U;
+        }
+        return std::strtoull(progress_env, nullptr, 10);
+    }
+
+    void log_headless_progress(const char* label, std::uint64_t frame, std::uint64_t total,
+                               std::uint64_t interval) noexcept {
+        if (interval == 0U || frame == 0U) {
+            return;
+        }
+        if (frame != 1U && frame != total && (frame % interval) != 0U) {
+            return;
+        }
+        std::fprintf(stderr, "[mnemos_player] %s progress: %llu/%llu frames\n", label,
+                     static_cast<unsigned long long>(frame),
+                     static_cast<unsigned long long>(total));
+        std::fflush(stderr);
+    }
+
+    class headless_breadcrumb_session final {
+      public:
+        headless_breadcrumb_session(const char* label, std::uint64_t total) noexcept
+            : label_(label), total_(total), file_(open_file()) {
+            mark("start", 0U);
+        }
+
+        headless_breadcrumb_session(const headless_breadcrumb_session&) = delete;
+        headless_breadcrumb_session& operator=(const headless_breadcrumb_session&) = delete;
+
+        ~headless_breadcrumb_session() {
+            mark("end", last_frame_);
+            if (file_ != nullptr) {
+                std::fclose(file_);
+            }
+        }
+
+        void mark(const char* phase, std::uint64_t frame) noexcept {
+            last_frame_ = frame;
+            if (file_ == nullptr) {
+                return;
+            }
+            std::fprintf(file_, "%s,%llu,%llu,%s\n", label_,
+                         static_cast<unsigned long long>(frame),
+                         static_cast<unsigned long long>(total_), phase);
+            std::fflush(file_);
+        }
+
+      private:
+        [[nodiscard]] static std::FILE* open_file() noexcept {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+            const char* path = std::getenv("MNEMOS_HEADLESS_BREADCRUMB");
+            std::FILE* file = (path != nullptr && path[0] != '\0') ? std::fopen(path, "wb") : nullptr;
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            if (path != nullptr && path[0] != '\0' && file == nullptr) {
+                std::fprintf(stderr, "[mnemos_player] could not open breadcrumb file: %s\n", path);
+                std::fflush(stderr);
+            }
+            return file;
+        }
+
+        const char* label_{};
+        std::uint64_t total_{};
+        std::uint64_t last_frame_{};
+        std::FILE* file_{};
+    };
 
     void apply_press_events(mnemos::frontend_sdk::player_system& sys,
                             const std::vector<mnemos::apps::player::adapters::press_event>& events,
@@ -202,19 +308,30 @@ namespace mnemos::apps::player {
             }
             const auto press_events = parse_press_events(argc, argv);
             const auto swap_frames = parse_swap_frames(argc, argv);
+            const std::uint64_t progress_interval = headless_progress_interval();
+            headless_breadcrumb_session breadcrumb("save-state", requests.save_state->frames);
             for (std::uint64_t i = 0; i < requests.save_state->frames; ++i) {
+                const std::uint64_t frame = i + 1U;
+                breadcrumb.mark("before_input", frame);
                 if (!press_events.empty()) {
-                    system->apply_input(0, input_for_frame(press_events, i + 1U));
+                    system->apply_input(0, input_for_frame(press_events, frame));
                 }
-                apply_disk_swaps(*system, swap_frames, i + 1U);
+                apply_disk_swaps(*system, swap_frames, frame);
+                breadcrumb.mark("before_step", frame);
                 system->step_one_frame();
+                breadcrumb.mark("after_step", frame);
+                log_headless_progress("save-state", frame, requests.save_state->frames,
+                                      progress_interval);
             }
+            breadcrumb.mark("before_write_state", requests.save_state->frames);
             const std::vector<std::uint8_t> state = system->save_state();
             if (state.empty() || !save_save_state_file(requests.save_state->path, state)) {
+                breadcrumb.mark("write_state_failed", requests.save_state->frames);
                 std::fprintf(stderr, "[mnemos_player] could not write save state: %s\n",
                              requests.save_state->path.c_str());
                 return 1;
             }
+            breadcrumb.mark("after_write_state", requests.save_state->frames);
             std::fprintf(stderr, "[mnemos_player] wrote save state: %s (%zu bytes after %llu "
                                  "frames)\n",
                          requests.save_state->path.c_str(), state.size(),
@@ -266,6 +383,9 @@ namespace mnemos::apps::player {
             const auto press_events = parse_press_events(argc, argv);
             const auto swap_frames = parse_swap_frames(argc, argv);
             const auto run_cycles = parse_run_cycles_arg(argc, argv);
+            const auto debug_probes = parse_debug_probes(argc, argv);
+            const std::uint64_t progress_interval = headless_progress_interval();
+            headless_breadcrumb_session breadcrumb("screenshot", requests.screenshot->frames);
             if (run_cycles.has_value()) {
                 if (!swap_frames.empty()) {
                     std::fprintf(stderr,
@@ -285,20 +405,31 @@ namespace mnemos::apps::player {
                                  "[mnemos_player] CPS2 --run-cycles made no forward progress\n");
                     return 1;
                 }
+                breadcrumb.mark("after_run_cycles", requests.screenshot->frames);
             } else {
                 for (std::uint64_t i = 0; i < requests.screenshot->frames; ++i) {
-                    trace_frame = i + 1U;
-                    apply_press_events(*system, press_events, i + 1U);
-                    apply_disk_swaps(*system, swap_frames, i + 1U);
+                    const std::uint64_t frame = i + 1U;
+                    trace_frame = frame;
+                    breadcrumb.mark("before_input", frame);
+                    apply_press_events(*system, press_events, frame);
+                    apply_disk_swaps(*system, swap_frames, frame);
+                    breadcrumb.mark("before_step", frame);
                     system->step_one_frame();
+                    breadcrumb.mark("after_step", frame);
+                    log_headless_progress("screenshot", frame, requests.screenshot->frames,
+                                          progress_interval);
                 }
             }
 
+            breadcrumb.mark("before_dump", requests.screenshot->frames);
+            run_debug_probes(*system, debug_probes);
             if (!debug::dump_screenshot_artifacts(*system, requests.screenshot->path)) {
+                breadcrumb.mark("dump_failed", requests.screenshot->frames);
                 std::fprintf(stderr, "could not write screenshot: %s\n",
                              requests.screenshot->path.c_str());
                 return 1;
             }
+            breadcrumb.mark("after_dump", requests.screenshot->frames);
             const auto fb = system->current_frame();
             std::fprintf(stderr, "[mnemos_player] wrote %s (%ux%u after %llu frames)\n",
                          requests.screenshot->path.c_str(), fb.width, fb.height,

@@ -5,8 +5,50 @@
 
 #include <algorithm>
 #include <memory>
+#include <string_view>
 
 namespace mnemos::chips::video {
+
+    namespace {
+        std::uint16_t read_u16_le(std::span<const std::uint8_t> bytes,
+                                  std::size_t offset) noexcept {
+            return static_cast<std::uint16_t>(
+                static_cast<std::uint16_t>(bytes[offset + 0U]) |
+                static_cast<std::uint16_t>(bytes[offset + 1U] << 8U));
+        }
+
+        void write_u16_le(std::span<std::uint8_t> bytes, std::size_t offset,
+                          std::uint16_t value) noexcept {
+            bytes[offset + 0U] = static_cast<std::uint8_t>(value);
+            bytes[offset + 1U] = static_cast<std::uint8_t>(value >> 8U);
+        }
+
+        void write_i16_le(std::span<std::uint8_t> bytes, std::size_t offset,
+                          int value) noexcept {
+            write_u16_le(bytes, offset, static_cast<std::uint16_t>(
+                                            static_cast<std::int16_t>(value)));
+        }
+
+        void write_u32_le(std::span<std::uint8_t> bytes, std::size_t offset,
+                          std::uint32_t value) noexcept {
+            bytes[offset + 0U] = static_cast<std::uint8_t>(value);
+            bytes[offset + 1U] = static_cast<std::uint8_t>(value >> 8U);
+            bytes[offset + 2U] = static_cast<std::uint8_t>(value >> 16U);
+            bytes[offset + 3U] = static_cast<std::uint8_t>(value >> 24U);
+        }
+    } // namespace
+
+    taito_f2_video::taito_f2_video() {
+        memory_views_[0] = &decoded_sprite_objects_view_;
+        memory_views_[1] = &sprite_control_state_view_;
+        memory_views_[2] = &sprite_buffer_state_view_;
+        memory_views_[3] = &priority_decisions_view_;
+        introspection_.with_memory_views(
+            std::span<instrumentation::memory_view* const>{memory_views_.data(),
+                                                            memory_views_.size()})
+            .with_registers([this] { return register_snapshot(); });
+        reset(reset_kind::power_on);
+    }
 
     chip_metadata taito_f2_video::metadata() const noexcept {
         return {
@@ -43,6 +85,15 @@ namespace mnemos::chips::video {
             const std::uint32_t r = expand5((entry >> 10U) & 0x001FU);
             const std::uint32_t g = expand5((entry >> 5U) & 0x001FU);
             const std::uint32_t b = expand5(entry & 0x001FU);
+            return (r << 16U) | (g << 8U) | b;
+        }
+        case palette_format::rrrr_gggg_bbbb_rgbx: {
+            const std::uint32_t r =
+                expand5(((entry >> 11U) & 0x001EU) | ((entry >> 3U) & 0x0001U));
+            const std::uint32_t g =
+                expand5(((entry >> 7U) & 0x001EU) | ((entry >> 2U) & 0x0001U));
+            const std::uint32_t b =
+                expand5(((entry >> 3U) & 0x001EU) | ((entry >> 1U) & 0x0001U));
             return (r << 16U) | (g << 8U) | b;
         }
         case palette_format::xbgr_555:
@@ -170,20 +221,30 @@ namespace mnemos::chips::video {
         layer1_base_ = bg1_tilemap_base;
         text_base_ = text_tilemap_base;
         text_gfx_base_ = text_gfx_base;
+        text_gfx_source_ = text_gfx_source::tc0100scn_ram_2bpp;
         layer_control_ = 0U;
         layer_control_secondary_ = 0U;
         display_enabled_ = true;
         palette_format_ = palette_format::xbgr_555;
         tilemap_variant_ = tilemap_variant::tc0100scn;
+        tc0100scn_bg_x_offset_ = 0;
+        tc0100scn_text_x_offset_ = 0;
+        tc0100scn_text_y_origin_ = tc0100scn_default_text_y_origin;
+        tc0100scn_positive_text_y_origin_ = tc0100scn_positive_text_y_origin;
         sprite_buffer_.fill(0U);
         sprite_delay_buffer_.fill(0U);
+        last_render_sprite_buffer_.fill(0U);
+        clear_decoded_sprite_object_records();
+        clear_priority_decision_records();
         sprite_buffer_valid_ = false;
         for (std::size_t i = 0U; i < sprite_banks_.size(); ++i) {
             sprite_banks_[i] = static_cast<std::uint16_t>(0x400U * i);
+            sprite_banks_pending_[i] = sprite_banks_[i];
         }
         sprite_mode_ = sprite_mode::standard;
         sprite_active_area_source_ = sprite_active_area_source::mode_default;
         sprite_buffer_policy_ = sprite_buffer_policy::immediate;
+        sprite_palette_bank_base_ = 128U;
         hide_pixels_ = 0;
         flip_hide_pixels_ = 0;
         sprite_active_area_ = 0U;
@@ -216,6 +277,9 @@ namespace mnemos::chips::video {
         std::fill(pixel_priority_.begin(), pixel_priority_.end(), std::uint8_t{0U});
         std::fill(pixel_sprite_priority_.begin(), pixel_sprite_priority_.end(),
                   std::uint8_t{0U});
+        clear_priority_decision_records();
+        update_sprite_control_state();
+        write_sprite_buffer_state({}, false, false, false);
     }
 
     void taito_f2_video::tick(std::uint64_t cycles) {
@@ -283,12 +347,37 @@ namespace mnemos::chips::video {
         return state;
     }
 
+    taito_f2_video::priority_source
+    taito_f2_video::tc0100scn_bg_source(int layer) noexcept {
+        return layer == 0 ? priority_source::tc0100scn_bg0
+                          : priority_source::tc0100scn_bg1;
+    }
+
+    taito_f2_video::priority_source
+    taito_f2_video::tc0100scn_secondary_bg_source(int layer) noexcept {
+        return layer == 0 ? priority_source::tc0100scn_secondary_bg0
+                          : priority_source::tc0100scn_secondary_bg1;
+    }
+
+    taito_f2_video::priority_source
+    taito_f2_video::tc0480scp_bg_source(std::uint8_t layer) noexcept {
+        return static_cast<priority_source>(
+            static_cast<std::uint8_t>(priority_source::tc0480scp_bg0) +
+            static_cast<std::uint8_t>(layer & 0x03U));
+    }
+
+    std::uint16_t taito_f2_video::priority_source_mask(priority_source source) noexcept {
+        return static_cast<std::uint16_t>(
+            1U << static_cast<std::uint8_t>(source));
+    }
+
     void taito_f2_video::render_frame() noexcept {
         std::fill(pixels_.begin(), pixels_.end(), 0U);
         std::fill(pixel_palette_index_.begin(), pixel_palette_index_.end(), std::uint16_t{0U});
         std::fill(pixel_priority_.begin(), pixel_priority_.end(), std::uint8_t{0U});
         std::fill(pixel_sprite_priority_.begin(), pixel_sprite_priority_.end(),
                   std::uint8_t{0U});
+        clear_priority_decision_records();
         if (!display_enabled_) {
             return;
         }
@@ -308,8 +397,11 @@ namespace mnemos::chips::video {
         const int top = bottom ^ 1;
         const frame_priority_state priorities = priority_state();
 
-        draw_background_layer(bottom, true, priorities.layer[static_cast<std::size_t>(bottom)]);
-        draw_background_layer(top, false, priorities.layer[static_cast<std::size_t>(top)]);
+        const bool has_roz = !roz_ram_.empty() && !roz_gfx_.empty();
+        draw_background_layer(bottom, true, priorities.layer[static_cast<std::size_t>(bottom)],
+                              has_roz);
+        draw_background_layer(top, false, priorities.layer[static_cast<std::size_t>(top)],
+                              has_roz);
         draw_roz_layer(priorities.roz);
         draw_text_layer(priorities.text);
         draw_sprites(priorities);
@@ -321,10 +413,12 @@ namespace mnemos::chips::video {
     }
 
     void taito_f2_video::draw_background_layer(int layer, bool opaque,
-                                               std::uint8_t priority) noexcept {
+                                               std::uint8_t priority,
+                                               bool priority_gated) noexcept {
         draw_background_layer_from(tile_ram_, tile_gfx_, layer, opaque, priority,
                                    layer_control_, scroll0_x_, scroll0_y_, scroll1_x_,
-                                   scroll1_y_, layer0_base_, layer1_base_);
+                                   scroll1_y_, layer0_base_, layer1_base_, priority_gated,
+                                   tc0100scn_bg_source(layer));
     }
 
     void taito_f2_video::draw_background_layer_from(
@@ -332,7 +426,8 @@ namespace mnemos::chips::video {
         bool opaque, std::uint8_t priority, std::uint16_t control,
         std::uint16_t scroll0_x, std::uint16_t scroll0_y, std::uint16_t scroll1_x,
         std::uint16_t scroll1_y, std::uint32_t layer0_base,
-        std::uint32_t layer1_base) noexcept {
+        std::uint32_t layer1_base, bool priority_gated,
+        priority_source source) noexcept {
         if (!layer_enabled(control, layer) || ram.empty() || gfx.empty()) {
             return;
         }
@@ -349,7 +444,8 @@ namespace mnemos::chips::video {
                     static_cast<std::int16_t>(read16(ram, rowscroll_base + row_scroll_index));
             for (std::uint32_t px = 0; px < visible_width; ++px) {
                 const std::uint32_t world_x = static_cast<std::uint32_t>(
-                                                  static_cast<int>(px) + scroll_x + row_scroll) &
+                                                  static_cast<int>(px) + scroll_x + row_scroll -
+                                                  tc0100scn_bg_x_offset_) &
                                               0x01FFU;
                 std::uint32_t world_y = static_cast<std::uint32_t>(
                                             static_cast<int>(py) + scroll_y) &
@@ -385,10 +481,16 @@ namespace mnemos::chips::video {
                 const std::uint16_t bank = static_cast<std::uint16_t>(attr & 0x00FFU);
                 const std::size_t pixel_index =
                     static_cast<std::size_t>(py) * visible_width + px;
+                if (priority_gated && priority < pixel_priority_[pixel_index]) {
+                    record_priority_reject(pixel_index, source, priority,
+                                           priority_flag_layer_rejected_by_priority);
+                    continue;
+                }
                 const std::uint16_t color_index = palette_index(bank, pen);
                 pixels_[pixel_index] = palette_index_rgb(color_index);
                 pixel_palette_index_[pixel_index] = color_index;
                 pixel_priority_[pixel_index] = priority;
+                record_priority_write(pixel_index, source, priority, color_index);
             }
         }
     }
@@ -460,6 +562,11 @@ namespace mnemos::chips::video {
                         pixels_[pixel_index] = palette_index_rgb(color_index);
                         pixel_palette_index_[pixel_index] = color_index;
                         pixel_priority_[pixel_index] = priority;
+                        record_priority_write(pixel_index, priority_source::roz, priority,
+                                              color_index);
+                    } else {
+                        record_priority_reject(pixel_index, priority_source::roz, priority,
+                                               priority_flag_layer_rejected_by_priority);
                     }
                 }
                 source_x += step_xx;
@@ -474,6 +581,15 @@ namespace mnemos::chips::video {
         if (x < 0 || x >= 8 || y < 0 || y >= 8) {
             return transparent_pen;
         }
+        if (text_gfx_source_ == text_gfx_source::program_1bpp) {
+            const std::uint32_t offset =
+                gfx_base + code * 8U + static_cast<std::uint32_t>(y);
+            if (static_cast<std::size_t>(offset) >= text_gfx_.size()) {
+                return transparent_pen;
+            }
+            const std::uint8_t mask = static_cast<std::uint8_t>(0x80U >> x);
+            return (text_gfx_[offset] & mask) != 0U ? 1U : transparent_pen;
+        }
         const std::uint32_t offset =
             gfx_base + code * text_char_bytes + static_cast<std::uint32_t>(y) * 2U;
         if (static_cast<std::size_t>(offset) + 1U >= ram.size()) {
@@ -487,30 +603,35 @@ namespace mnemos::chips::video {
 
     void taito_f2_video::draw_text_layer(std::uint8_t priority) noexcept {
         draw_text_layer_from(tile_ram_, priority, layer_control_, scroll2_x_, scroll2_y_,
-                             text_base_, text_gfx_base_);
+                             text_base_, text_gfx_base_,
+                             priority_source::tc0100scn_text);
     }
 
     void taito_f2_video::draw_text_layer_from(std::span<const std::uint8_t> ram,
                                               std::uint8_t priority,
                                               std::uint16_t control,
-                                              std::uint16_t scroll_x_word,
-                                              std::uint16_t scroll_y_word,
-                                              std::uint32_t tilemap_base,
-                                              std::uint32_t gfx_base) noexcept {
+                                               std::uint16_t scroll_x_word,
+                                               std::uint16_t scroll_y_word,
+                                               std::uint32_t tilemap_base,
+                                               std::uint32_t gfx_base,
+                                               priority_source source) noexcept {
         if (!layer_enabled(control, 2) || ram.empty()) {
             return;
         }
         const int scroll_x = static_cast<std::int16_t>(scroll_x_word);
         const int scroll_y = static_cast<std::int16_t>(scroll_y_word);
+        const int y_origin = scroll_y > 0 ? tc0100scn_positive_text_y_origin_
+                                          : tc0100scn_text_y_origin_;
         for (std::uint32_t py = 0; py < visible_height; ++py) {
             const std::uint32_t world_y = static_cast<std::uint32_t>(
-                                              static_cast<int>(py) + scroll_y) &
-                                          0x01FFU;
+                                              static_cast<int>(py) - scroll_y + y_origin) &
+                                          text_y_mask;
             const std::uint32_t row = world_y / tile_size;
             const int ty = static_cast<int>(world_y & 7U);
             for (std::uint32_t px = 0; px < visible_width; ++px) {
                 const std::uint32_t world_x = static_cast<std::uint32_t>(
-                                                  static_cast<int>(px) + scroll_x) &
+                                                  static_cast<int>(px) + scroll_x -
+                                                  tc0100scn_text_x_offset_) &
                                               0x01FFU;
                 const std::uint32_t col = world_x / tile_size;
                 const int tx = static_cast<int>(world_x & 7U);
@@ -532,6 +653,7 @@ namespace mnemos::chips::video {
                 pixels_[pixel_index] = palette_index_rgb(color_index);
                 pixel_palette_index_[pixel_index] = color_index;
                 pixel_priority_[pixel_index] = priority;
+                record_priority_write(pixel_index, source, priority, color_index);
             }
         }
     }
@@ -567,24 +689,28 @@ namespace mnemos::chips::video {
             if (chip == 0U) {
                 if (layer == 2) {
                     draw_text_layer_from(tile_ram_, priority, layer_control_, scroll2_x_,
-                                         scroll2_y_, text_base_, text_gfx_base_);
+                                         scroll2_y_, text_base_, text_gfx_base_,
+                                         priority_source::tc0100scn_text);
                 } else {
                     draw_background_layer_from(tile_ram_, tile_gfx_, layer, opaque, priority,
                                                layer_control_, scroll0_x_, scroll0_y_,
                                                scroll1_x_, scroll1_y_, layer0_base_,
-                                               layer1_base_);
+                                               layer1_base_, false,
+                                               tc0100scn_bg_source(layer));
                 }
             } else {
                 if (layer == 2) {
                     draw_text_layer_from(tile_ram_secondary_, priority,
                                          layer_control_secondary_, scroll2_secondary_x_,
-                                         scroll2_secondary_y_, text_base_, text_gfx_base_);
+                                         scroll2_secondary_y_, text_base_, text_gfx_base_,
+                                         priority_source::tc0100scn_secondary_text);
                 } else {
                     draw_background_layer_from(tile_ram_secondary_, tile_gfx_secondary_, layer,
                                                opaque, priority, layer_control_secondary_,
                                                scroll0_secondary_x_, scroll0_secondary_y_,
                                                scroll1_secondary_x_, scroll1_secondary_y_,
-                                               layer0_base_, layer1_base_);
+                                               layer0_base_, layer1_base_, false,
+                                               tc0100scn_secondary_bg_source(layer));
                 }
             }
             wrote_layer = true;
@@ -790,6 +916,8 @@ namespace mnemos::chips::video {
                 const std::size_t pixel_index =
                     static_cast<std::size_t>(py) * visible_width + px;
                 if (priority < pixel_priority_[pixel_index]) {
+                    record_priority_reject(pixel_index, tc0480scp_bg_source(layer), priority,
+                                           priority_flag_layer_rejected_by_priority);
                     continue;
                 }
                 const std::uint16_t bank = static_cast<std::uint16_t>(
@@ -798,6 +926,8 @@ namespace mnemos::chips::video {
                 pixels_[pixel_index] = palette_index_rgb(color_index);
                 pixel_palette_index_[pixel_index] = color_index;
                 pixel_priority_[pixel_index] = priority;
+                record_priority_write(pixel_index, tc0480scp_bg_source(layer), priority,
+                                      color_index);
             }
         }
     }
@@ -844,6 +974,9 @@ namespace mnemos::chips::video {
                 const std::size_t pixel_index =
                     static_cast<std::size_t>(py) * visible_width + px;
                 if (priority < pixel_priority_[pixel_index]) {
+                    record_priority_reject(pixel_index, priority_source::tc0480scp_text,
+                                           priority,
+                                           priority_flag_layer_rejected_by_priority);
                     continue;
                 }
                 const std::uint16_t bank = static_cast<std::uint16_t>(
@@ -852,6 +985,8 @@ namespace mnemos::chips::video {
                 pixels_[pixel_index] = palette_index_rgb(color_index);
                 pixel_palette_index_[pixel_index] = color_index;
                 pixel_priority_[pixel_index] = priority;
+                record_priority_write(pixel_index, priority_source::tc0480scp_text,
+                                      priority, color_index);
             }
         }
     }
@@ -895,29 +1030,48 @@ namespace mnemos::chips::video {
         static constexpr std::array<std::uint8_t, 6U> qzchikyu_words{0U, 1U, 4U,
                                                                     5U, 6U, 7U};
 
+        std::span<const std::uint8_t> overlay_words{};
+        bool delayed_source_used = false;
+        bool current_copy_to_latched = false;
+        bool current_copy_to_delay = false;
+
+        sprite_banks_ = sprite_banks_pending_;
         switch (sprite_buffer_policy_) {
         case sprite_buffer_policy::partial_delayed:
             sprite_buffer_ = sprite_delay_buffer_;
             overlay_current_sprite_words(partial_words);
             copy_current_sprite_ram(sprite_delay_buffer_);
+            overlay_words = partial_words;
+            delayed_source_used = true;
+            current_copy_to_delay = true;
             break;
         case sprite_buffer_policy::partial_delayed_thundfox:
             sprite_buffer_ = sprite_delay_buffer_;
             overlay_current_sprite_words(thundfox_words);
             copy_current_sprite_ram(sprite_delay_buffer_);
+            overlay_words = thundfox_words;
+            delayed_source_used = true;
+            current_copy_to_delay = true;
             break;
         case sprite_buffer_policy::partial_delayed_qzchikyu:
             sprite_buffer_ = sprite_delay_buffer_;
             overlay_current_sprite_words(qzchikyu_words);
             copy_current_sprite_ram(sprite_delay_buffer_);
+            overlay_words = qzchikyu_words;
+            delayed_source_used = true;
+            current_copy_to_delay = true;
             break;
         case sprite_buffer_policy::full_delayed:
         case sprite_buffer_policy::immediate:
             copy_current_sprite_ram(sprite_buffer_);
             copy_current_sprite_ram(sprite_delay_buffer_);
+            current_copy_to_latched = true;
+            current_copy_to_delay = true;
             break;
         }
         sprite_buffer_valid_ = true;
+        write_sprite_buffer_state(overlay_words, delayed_source_used,
+                                  current_copy_to_latched, current_copy_to_delay);
         update_sprite_control_state();
     }
 
@@ -930,11 +1084,11 @@ namespace mnemos::chips::video {
         if (offset < 4U) {
             const std::uint32_t pair = (offset & 1U) << 1U;
             const std::uint16_t base = static_cast<std::uint16_t>(value << 11U);
-            sprite_banks_[pair] = base;
-            sprite_banks_[pair + 1U] = static_cast<std::uint16_t>(base + 0x400U);
+            sprite_banks_pending_[pair] = base;
+            sprite_banks_pending_[pair + 1U] = static_cast<std::uint16_t>(base + 0x400U);
             return;
         }
-        sprite_banks_[offset] = static_cast<std::uint16_t>(value << 10U);
+        sprite_banks_pending_[offset] = static_cast<std::uint16_t>(value << 10U);
     }
 
     void taito_f2_video::write_priority_register(std::uint32_t offset,
@@ -983,12 +1137,14 @@ namespace mnemos::chips::video {
     }
 
     void taito_f2_video::draw_sprites(const frame_priority_state& priorities) noexcept {
+        clear_decoded_sprite_object_records();
         if (sprite_gfx_.empty()) {
             return;
         }
         if (!sprite_buffer_valid_) {
             latch_sprites();
         }
+        last_render_sprite_buffer_ = sprite_buffer_;
 
         struct sprite_sequence_state final {
             bool big_sprite{};
@@ -1008,9 +1164,12 @@ namespace mnemos::chips::video {
             std::uint16_t color{};
         };
 
+        std::array<sprite_draw_command, sprite_area_bytes / sprite_entry_bytes> draw_list{};
+        std::size_t draw_count = 0U;
         sprite_sequence_state seq{};
-        std::uint32_t active_area = sprite_active_area_;
-        bool disabled = sprites_disabled_;
+        std::uint32_t active_area = normalized_sprite_active_area(sprite_active_area_);
+        const bool reset_disable = resets_sprite_disable_each_list();
+        bool disabled = reset_disable ? false : sprites_disabled_;
         bool flip_screen = sprites_flip_screen_;
         int master_scroll_x = sprite_master_scroll_x_;
         int master_scroll_y = sprite_master_scroll_y_;
@@ -1039,11 +1198,26 @@ namespace mnemos::chips::video {
             if (x_mode == 0xA000U) {
                 master_scroll_x = sign_extend_12(x_word);
                 master_scroll_y = sign_extend_12(y_word);
+                seq.big_sprite = false;
+                seq.last_continuation_tile = false;
+                continue;
             } else if (x_mode == 0x5000U) {
                 extra_scroll_x = sign_extend_12(x_word);
                 extra_scroll_y = sign_extend_12(y_word);
+                seq.big_sprite = false;
+                seq.last_continuation_tile = false;
+                continue;
             }
             if (disabled) {
+                continue;
+            }
+
+            if (code_word == 0U && zoom_word == 0U && x_word == 0U && y_word == 0U &&
+                attr == 0U && ctrl == 0U) {
+                seq.big_sprite = false;
+                seq.last_continuation_tile = false;
+                seq.x_no = 0;
+                seq.y_no = 0;
                 continue;
             }
 
@@ -1102,6 +1276,7 @@ namespace mnemos::chips::video {
 
             std::uint32_t width = 16U;
             std::uint32_t height = 16U;
+            const bool source_big_sprite = seq.big_sprite;
             if (seq.big_sprite) {
                 const std::uint32_t zoom_x = seq.zoom_x_latch;
                 const std::uint32_t zoom_y = seq.zoom_y_latch;
@@ -1149,7 +1324,7 @@ namespace mnemos::chips::video {
                 const std::uint32_t bank = (code & 0x1C00U) >> 10U;
                 code = sprite_banks_[bank] + (code & 0x03FFU);
             }
-            if (code == 0U || width == 0U || height == 0U) {
+            if (width == 0U || height == 0U) {
                 continue;
             }
 
@@ -1158,7 +1333,8 @@ namespace mnemos::chips::video {
             const std::uint8_t sprite_priority = priorities.sprite[priority_group];
             const bool flip_x = (sprite_cont & 0x01U) != 0U;
             const bool flip_y = (sprite_cont & 0x02U) != 0U;
-            const std::uint16_t palette_bank = static_cast<std::uint16_t>(128U + seq.color);
+            const std::uint16_t palette_bank =
+                static_cast<std::uint16_t>(sprite_palette_bank_base_ + seq.color);
             int sx = sign_extend_12(static_cast<std::uint16_t>(seq.x + seq.scroll_x));
             int sy = sign_extend_12(static_cast<std::uint16_t>(seq.y + seq.scroll_y));
             bool draw_flip_x = flip_x;
@@ -1169,9 +1345,156 @@ namespace mnemos::chips::video {
                 draw_flip_x = !draw_flip_x;
                 draw_flip_y = !draw_flip_y;
             }
-            draw_sprite_cell(code, sx, sy, width, height, draw_flip_x, draw_flip_y,
-                             palette_bank, sprite_priority, priorities.sprite_blend_mode);
+            if (draw_count < draw_list.size()) {
+                draw_list[draw_count++] = {.code = code,
+                                           .sx = sx,
+                                           .sy = sy,
+                                           .width = width,
+                                           .height = height,
+                                           .flip_x = draw_flip_x,
+                                           .flip_y = draw_flip_y,
+                                           .source_big_sprite = source_big_sprite,
+                                           .source_flip_screen = flip_screen,
+                                           .palette_bank = palette_bank,
+                                           .source_offset = static_cast<std::uint16_t>(entry),
+                                           .code_word = code_word,
+                                           .zoom_word = zoom_word,
+                                           .x_word = x_word,
+                                           .y_word = y_word,
+                                           .attr_word = attr,
+                                           .ctrl_word = ctrl,
+                                           .active_area = static_cast<std::uint16_t>(active_area),
+                                           .scroll_x = seq.scroll_x,
+                                           .scroll_y = seq.scroll_y,
+                                           .priority_group = priority_group,
+                                           .sprite_priority = sprite_priority};
+            }
         }
+
+        for (std::size_t i = draw_count; i > 0U; --i) {
+            const sprite_draw_command& sprite = draw_list[i - 1U];
+            draw_sprite_cell(sprite.code, sprite.sx, sprite.sy, sprite.width, sprite.height,
+                             sprite.flip_x, sprite.flip_y, sprite.palette_bank,
+                             sprite.sprite_priority, priorities.sprite_blend_mode);
+            append_decoded_sprite_object(sprite, priorities.sprite_blend_mode);
+        }
+    }
+
+    void taito_f2_video::clear_decoded_sprite_object_records() noexcept {
+        decoded_sprite_object_bytes_used_ = 0U;
+    }
+
+    void taito_f2_video::append_decoded_sprite_object(
+        const sprite_draw_command& command, std::uint8_t sprite_blend_mode) noexcept {
+        if (decoded_sprite_object_bytes_used_ + decoded_sprite_object_record_bytes >
+            decoded_sprite_object_bytes_.size()) {
+            return;
+        }
+
+        std::span<std::uint8_t> record{
+            decoded_sprite_object_bytes_.data() + decoded_sprite_object_bytes_used_,
+            decoded_sprite_object_record_bytes};
+        std::fill(record.begin(), record.end(), std::uint8_t{0U});
+        write_u16_le(record, 0U, command.source_offset);
+        write_u16_le(record, 2U, command.code_word);
+        write_u16_le(record, 4U, command.zoom_word);
+        write_u16_le(record, 6U, command.x_word);
+        write_u16_le(record, 8U, command.y_word);
+        write_u16_le(record, 10U, command.attr_word);
+        write_u16_le(record, 12U, command.ctrl_word);
+        write_u16_le(record, 14U, command.palette_bank);
+        write_u32_le(record, 16U, command.code);
+        write_i16_le(record, 20U, command.sx);
+        write_i16_le(record, 22U, command.sy);
+        write_u16_le(record, 24U, static_cast<std::uint16_t>(command.width));
+        write_u16_le(record, 26U, static_cast<std::uint16_t>(command.height));
+        write_i16_le(record, 28U, command.scroll_x);
+        write_i16_le(record, 30U, command.scroll_y);
+        record[32] = command.priority_group;
+        record[33] = command.sprite_priority;
+        record[34] = static_cast<std::uint8_t>((command.flip_x ? 0x01U : 0U) |
+                                               (command.flip_y ? 0x02U : 0U) |
+                                               (command.source_big_sprite ? 0x04U : 0U) |
+                                               (command.source_flip_screen ? 0x08U : 0U));
+        record[35] = sprite_blend_mode;
+        write_u16_le(record, 36U, command.active_area);
+
+        decoded_sprite_object_bytes_used_ += decoded_sprite_object_record_bytes;
+    }
+
+    void taito_f2_video::clear_priority_decision_records() noexcept {
+        std::fill(priority_decision_bytes_.begin(), priority_decision_bytes_.end(),
+                  std::uint8_t{0U});
+    }
+
+    void taito_f2_video::record_priority_attempt(std::size_t pixel_index,
+                                                 priority_source source) noexcept {
+        if (pixel_index >= pixel_count) {
+            return;
+        }
+        const std::size_t offset = pixel_index * priority_decision_record_bytes;
+        std::span<std::uint8_t> record{priority_decision_bytes_.data() + offset,
+                                       priority_decision_record_bytes};
+        const std::uint16_t attempted =
+            static_cast<std::uint16_t>(read_u16_le(record, 4U) | priority_source_mask(source));
+        write_u16_le(record, 4U, attempted);
+    }
+
+    void taito_f2_video::record_priority_reject(std::size_t pixel_index,
+                                                priority_source source,
+                                                std::uint8_t priority,
+                                                std::uint8_t flag) noexcept {
+        if (pixel_index >= pixel_count) {
+            return;
+        }
+        record_priority_attempt(pixel_index, source);
+        const std::size_t offset = pixel_index * priority_decision_record_bytes;
+        std::span<std::uint8_t> record{priority_decision_bytes_.data() + offset,
+                                       priority_decision_record_bytes};
+        const std::uint16_t rejected =
+            static_cast<std::uint16_t>(read_u16_le(record, 6U) | priority_source_mask(source));
+        write_u16_le(record, 6U, rejected);
+        record[3] = static_cast<std::uint8_t>(record[3] | flag);
+        record[10] = static_cast<std::uint8_t>(source);
+        record[11] = priority;
+    }
+
+    void taito_f2_video::record_priority_write(std::size_t pixel_index,
+                                               priority_source source,
+                                               std::uint8_t priority,
+                                               std::uint16_t palette_index) noexcept {
+        if (pixel_index >= pixel_count) {
+            return;
+        }
+        record_priority_attempt(pixel_index, source);
+        const std::size_t offset = pixel_index * priority_decision_record_bytes;
+        std::span<std::uint8_t> record{priority_decision_bytes_.data() + offset,
+                                       priority_decision_record_bytes};
+        record[0] = static_cast<std::uint8_t>(source);
+        record[1] = priority;
+        write_u16_le(record, 8U, palette_index);
+    }
+
+    void taito_f2_video::record_sprite_attempt(std::size_t pixel_index,
+                                               std::uint8_t sprite_priority) noexcept {
+        if (pixel_index >= pixel_count) {
+            return;
+        }
+        record_priority_attempt(pixel_index, priority_source::sprite);
+        const std::size_t offset = pixel_index * priority_decision_record_bytes;
+        std::span<std::uint8_t> record{priority_decision_bytes_.data() + offset,
+                                       priority_decision_record_bytes};
+        record[2] = sprite_priority;
+    }
+
+    void taito_f2_video::record_sprite_occupied(std::size_t pixel_index) noexcept {
+        if (pixel_index >= pixel_count) {
+            return;
+        }
+        const std::size_t offset = pixel_index * priority_decision_record_bytes;
+        std::span<std::uint8_t> record{priority_decision_bytes_.data() + offset,
+                                       priority_decision_record_bytes};
+        record[3] = static_cast<std::uint8_t>(record[3] | priority_flag_sprite_occupied);
     }
 
     int taito_f2_video::sign_extend_12(std::uint16_t value) noexcept {
@@ -1217,48 +1540,204 @@ namespace mnemos::chips::video {
         return fallback;
     }
 
+    std::uint32_t
+    taito_f2_video::normalized_sprite_active_area(std::uint32_t active_area) const noexcept {
+        if (active_area == sprite_active_area_stride &&
+            read16(sprite_buffer_, sprite_active_area_stride + 6U) == 0U &&
+            read16(sprite_buffer_, sprite_active_area_stride + 10U) == 0U) {
+            return 0U;
+        }
+        return active_area;
+    }
+
+    bool taito_f2_video::resets_sprite_disable_each_list() const noexcept {
+        return sprite_mode_ == sprite_mode::banked &&
+               resolved_sprite_active_area_source() == sprite_active_area_source::none;
+    }
+
     int taito_f2_video::sprite_x_offset(bool flip_screen) const noexcept {
         return flip_screen ? -flip_hide_pixels_ : hide_pixels_;
     }
 
     void taito_f2_video::update_sprite_control_state() noexcept {
-        std::uint32_t active_area = sprite_active_area_;
-        bool disabled = sprites_disabled_;
+        sprite_control_scan_result result{};
+        std::uint32_t active_area = normalized_sprite_active_area(sprite_active_area_);
+        const bool reset_disable = resets_sprite_disable_each_list();
+        bool disabled = reset_disable ? false : sprites_disabled_;
         bool flip_screen = sprites_flip_screen_;
         int master_scroll_x = sprite_master_scroll_x_;
         int master_scroll_y = sprite_master_scroll_y_;
 
-        if (active_area == sprite_active_area_stride &&
-            read16(sprite_buffer_, sprite_active_area_stride + 6U) == 0U &&
-            read16(sprite_buffer_, sprite_active_area_stride + 10U) == 0U) {
-            active_area = 0U;
+        if (sprite_buffer_valid_) {
+            for (std::uint32_t off = 0U; off < sprite_area_bytes; off += sprite_entry_bytes) {
+                const std::uint32_t entry = active_area + off;
+                if (static_cast<std::size_t>(entry) + sprite_entry_bytes >
+                    sprite_buffer_.size()) {
+                    break;
+                }
+                const std::uint16_t code_word = read16(sprite_buffer_, entry + 0U);
+                const std::uint16_t zoom_word = read16(sprite_buffer_, entry + 2U);
+                const std::uint16_t x_word = read16(sprite_buffer_, entry + 4U);
+                const std::uint16_t y_word = read16(sprite_buffer_, entry + 6U);
+                const std::uint16_t attr = read16(sprite_buffer_, entry + 8U);
+                const std::uint16_t ctrl = read16(sprite_buffer_, entry + 10U);
+                if ((y_word & 0x8000U) != 0U) {
+                    ++result.control_marker_count;
+                    result.last_control_y_word = y_word;
+                    result.last_control_word = ctrl;
+                    disabled = (ctrl & 0x1000U) != 0U;
+                    flip_screen = (ctrl & 0x2000U) != 0U;
+                    if (disabled) {
+                        ++result.disable_marker_count;
+                    }
+                    if (flip_screen) {
+                        ++result.flip_marker_count;
+                    }
+                    const std::uint32_t next_active_area =
+                        sprite_active_area_from_marker(y_word, ctrl, active_area);
+                    if (next_active_area != active_area) {
+                        ++result.active_area_switch_count;
+                    }
+                    active_area = next_active_area;
+                    continue;
+                }
+                const std::uint16_t x_mode = x_word & 0xF000U;
+                if (x_mode == 0xA000U) {
+                    ++result.master_scroll_marker_count;
+                    result.last_master_x_word = x_word;
+                    result.last_master_y_word = y_word;
+                    master_scroll_x = sign_extend_12(x_word);
+                    master_scroll_y = sign_extend_12(y_word);
+                    continue;
+                }
+                if (x_mode == 0x5000U) {
+                    ++result.extra_scroll_marker_count;
+                    result.last_extra_x_word = x_word;
+                    result.last_extra_y_word = y_word;
+                    continue;
+                }
+                if (code_word == 0U && zoom_word == 0U && x_word == 0U &&
+                    y_word == 0U && attr == 0U && ctrl == 0U) {
+                    ++result.blank_record_count;
+                }
+            }
         }
 
-        for (std::uint32_t off = 0U; off < sprite_area_bytes; off += sprite_entry_bytes) {
-            const std::uint32_t entry = active_area + off;
-            if (static_cast<std::size_t>(entry) + sprite_entry_bytes > sprite_buffer_.size()) {
-                break;
-            }
-            const std::uint16_t x_word = read16(sprite_buffer_, entry + 4U);
-            const std::uint16_t y_word = read16(sprite_buffer_, entry + 6U);
-            const std::uint16_t ctrl = read16(sprite_buffer_, entry + 10U);
-            if ((y_word & 0x8000U) != 0U) {
-                disabled = (ctrl & 0x1000U) != 0U;
-                flip_screen = (ctrl & 0x2000U) != 0U;
-                active_area = sprite_active_area_from_marker(y_word, ctrl, active_area);
-                continue;
-            }
-            if ((x_word & 0xF000U) == 0xA000U) {
-                master_scroll_x = sign_extend_12(x_word);
-                master_scroll_y = sign_extend_12(y_word);
-            }
-        }
-
-        sprite_active_area_ = active_area;
-        sprites_disabled_ = disabled;
+        sprite_active_area_ = normalized_sprite_active_area(active_area);
+        sprites_disabled_ = reset_disable ? false : disabled;
         sprites_flip_screen_ = flip_screen;
         sprite_master_scroll_x_ = master_scroll_x;
         sprite_master_scroll_y_ = master_scroll_y;
+
+        result.active_area = sprite_active_area_;
+        result.disabled = sprites_disabled_;
+        result.flip_screen = sprites_flip_screen_;
+        result.master_scroll_x = sprite_master_scroll_x_;
+        result.master_scroll_y = sprite_master_scroll_y_;
+        write_sprite_control_state(result);
+    }
+
+    void taito_f2_video::write_sprite_control_state(
+        const sprite_control_scan_result& result) noexcept {
+        sprite_control_state_.fill(0U);
+        sprite_control_state_[0] = 1U;
+        sprite_control_state_[1] = static_cast<std::uint8_t>(sprite_mode_);
+        sprite_control_state_[2] =
+            static_cast<std::uint8_t>(resolved_sprite_active_area_source());
+        sprite_control_state_[3] = static_cast<std::uint8_t>(sprite_buffer_policy_);
+        write_u32_le(sprite_control_state_, 4U, result.active_area);
+        sprite_control_state_[8] = result.disabled ? 1U : 0U;
+        sprite_control_state_[9] = result.flip_screen ? 1U : 0U;
+        sprite_control_state_[10] = sprite_buffer_valid_ ? 1U : 0U;
+        sprite_control_state_[11] = resets_sprite_disable_each_list() ? 1U : 0U;
+        write_i16_le(sprite_control_state_, 12U, result.master_scroll_x);
+        write_i16_le(sprite_control_state_, 14U, result.master_scroll_y);
+        write_u32_le(sprite_control_state_, 16U, result.control_marker_count);
+        write_u32_le(sprite_control_state_, 20U, result.disable_marker_count);
+        write_u32_le(sprite_control_state_, 24U, result.flip_marker_count);
+        write_u32_le(sprite_control_state_, 28U, result.active_area_switch_count);
+        write_u32_le(sprite_control_state_, 32U, result.master_scroll_marker_count);
+        write_u32_le(sprite_control_state_, 36U, result.extra_scroll_marker_count);
+        write_u32_le(sprite_control_state_, 40U, result.blank_record_count);
+        write_u16_le(sprite_control_state_, 44U, result.last_control_y_word);
+        write_u16_le(sprite_control_state_, 46U, result.last_control_word);
+        write_u16_le(sprite_control_state_, 48U, result.last_master_x_word);
+        write_u16_le(sprite_control_state_, 50U, result.last_master_y_word);
+        write_u16_le(sprite_control_state_, 52U, result.last_extra_x_word);
+        write_u16_le(sprite_control_state_, 54U, result.last_extra_y_word);
+        write_i16_le(sprite_control_state_, 56U, hide_pixels_);
+        write_i16_le(sprite_control_state_, 58U, flip_hide_pixels_);
+        write_u16_le(sprite_control_state_, 60U, sprite_palette_bank_base_);
+        sprite_control_state_[62] = static_cast<std::uint8_t>(tilemap_variant_);
+        sprite_control_state_[63] = static_cast<std::uint8_t>(palette_format_);
+    }
+
+    std::uint16_t taito_f2_video::sprite_buffer_word_mask(
+        std::span<const std::uint8_t> word_offsets) noexcept {
+        std::uint16_t mask = 0U;
+        for (const std::uint8_t word_offset : word_offsets) {
+            if (word_offset < 16U) {
+                mask = static_cast<std::uint16_t>(
+                    mask | static_cast<std::uint16_t>(1U << word_offset));
+            }
+        }
+        return mask;
+    }
+
+    void taito_f2_video::write_sprite_buffer_state(
+        std::span<const std::uint8_t> overlay_word_offsets,
+        bool delayed_source_used,
+        bool current_copy_to_latched,
+        bool current_copy_to_delay) noexcept {
+        sprite_buffer_state_.fill(0U);
+        sprite_buffer_state_[0] = 1U;
+        sprite_buffer_state_[1] = static_cast<std::uint8_t>(sprite_buffer_policy_);
+        sprite_buffer_state_[2] = sprite_buffer_valid_ ? 1U : 0U;
+        sprite_buffer_state_[3] = sprite_ram_.empty() ? 0U : 1U;
+        write_u16_le(sprite_buffer_state_, 4U,
+                     sprite_buffer_word_mask(overlay_word_offsets));
+        write_u16_le(sprite_buffer_state_, 6U,
+                     static_cast<std::uint16_t>(overlay_word_offsets.size()));
+        write_u16_le(sprite_buffer_state_, 8U,
+                     static_cast<std::uint16_t>(sprite_entry_bytes / 2U));
+        sprite_buffer_state_[10] = delayed_source_used ? 1U : 0U;
+        sprite_buffer_state_[11] = current_copy_to_latched ? 1U : 0U;
+        sprite_buffer_state_[12] = current_copy_to_delay ? 1U : 0U;
+        sprite_buffer_state_[13] = !overlay_word_offsets.empty() ? 1U : 0U;
+
+        const std::uint32_t source_bytes = static_cast<std::uint32_t>(
+            std::min<std::size_t>(sprite_buffer_bytes, sprite_ram_.size()));
+        const std::uint32_t overlay_entry_count =
+            !overlay_word_offsets.empty()
+                ? static_cast<std::uint32_t>(sprite_buffer_bytes / sprite_entry_bytes)
+                : 0U;
+        const std::uint32_t overlay_word_total =
+            overlay_entry_count * static_cast<std::uint32_t>(overlay_word_offsets.size());
+        const std::uint32_t overlay_bytes = overlay_word_total * 2U;
+        write_u32_le(sprite_buffer_state_, 16U, source_bytes);
+        write_u32_le(sprite_buffer_state_, 20U,
+                     sprite_buffer_valid_ ? static_cast<std::uint32_t>(sprite_buffer_.size())
+                                          : 0U);
+        write_u32_le(sprite_buffer_state_, 24U,
+                     sprite_buffer_valid_ ? static_cast<std::uint32_t>(sprite_delay_buffer_.size())
+                                          : 0U);
+        write_u32_le(sprite_buffer_state_, 28U, overlay_entry_count);
+        write_u32_le(sprite_buffer_state_, 32U, overlay_word_total);
+        write_u32_le(sprite_buffer_state_, 36U,
+                     current_copy_to_latched ? source_bytes : overlay_bytes);
+        write_u32_le(sprite_buffer_state_, 40U,
+                     current_copy_to_delay ? source_bytes : 0U);
+        write_u32_le(sprite_buffer_state_, 44U,
+                     delayed_source_used ? static_cast<std::uint32_t>(sprite_buffer_.size())
+                                         : 0U);
+
+        std::fill(sprite_buffer_state_.begin() + 48, sprite_buffer_state_.begin() + 56,
+                  std::uint8_t{0xFFU});
+        const std::size_t stored_offsets =
+            std::min<std::size_t>(overlay_word_offsets.size(), 8U);
+        for (std::size_t i = 0U; i < stored_offsets; ++i) {
+            sprite_buffer_state_[48U + i] = overlay_word_offsets[i];
+        }
     }
 
     void taito_f2_video::draw_sprite_cell(std::uint32_t code, int sx, int sy,
@@ -1267,7 +1746,6 @@ namespace mnemos::chips::video {
                                           std::uint16_t palette_bank,
                                           std::uint8_t sprite_priority,
                                           std::uint8_t sprite_blend_mode) noexcept {
-        const std::uint8_t sprite_rank = static_cast<std::uint8_t>(sprite_priority + 1U);
         for (std::uint32_t ty = 0; ty < height; ++ty) {
             const int py = sy + static_cast<int>(ty);
             if (py < 0 || py >= static_cast<int>(visible_height)) {
@@ -1298,7 +1776,10 @@ namespace mnemos::chips::video {
                 }
                 const std::size_t pixel_index =
                     static_cast<std::size_t>(py) * visible_width + static_cast<std::size_t>(px);
-                if (pixel_sprite_priority_[pixel_index] > sprite_rank) {
+                record_sprite_attempt(pixel_index, sprite_priority);
+                if (pixel_sprite_priority_[pixel_index] != 0U) {
+                    record_priority_reject(pixel_index, priority_source::sprite, sprite_priority,
+                                           priority_flag_sprite_rejected_by_occupancy);
                     continue;
                 }
                 const std::uint8_t tile_priority = pixel_priority_[pixel_index];
@@ -1334,12 +1815,18 @@ namespace mnemos::chips::video {
                     should_write = true;
                 }
 
-                if (!should_write) {
-                    continue;
+                pixel_sprite_priority_[pixel_index] = 1U;
+                record_sprite_occupied(pixel_index);
+                if (should_write) {
+                    pixels_[pixel_index] = palette_index_rgb(output_index);
+                    pixel_palette_index_[pixel_index] = output_index;
+                    record_priority_write(pixel_index, priority_source::sprite,
+                                          sprite_priority, output_index);
+                } else {
+                    record_priority_reject(pixel_index, priority_source::sprite,
+                                           sprite_priority,
+                                           priority_flag_sprite_rejected_by_priority);
                 }
-                pixels_[pixel_index] = palette_index_rgb(output_index);
-                pixel_palette_index_[pixel_index] = output_index;
-                pixel_sprite_priority_[pixel_index] = sprite_rank;
             }
         }
     }
@@ -1364,11 +1851,16 @@ namespace mnemos::chips::video {
         writer.u32(layer1_base_);
         writer.u32(text_base_);
         writer.u32(text_gfx_base_);
+        writer.u8(static_cast<std::uint8_t>(text_gfx_source_));
         writer.u16(layer_control_);
         writer.u16(layer_control_secondary_);
         writer.boolean(display_enabled_);
         writer.u8(static_cast<std::uint8_t>(palette_format_));
         writer.u8(static_cast<std::uint8_t>(tilemap_variant_));
+        writer.u32(static_cast<std::uint32_t>(tc0100scn_bg_x_offset_));
+        writer.u32(static_cast<std::uint32_t>(tc0100scn_text_x_offset_));
+        writer.u32(static_cast<std::uint32_t>(tc0100scn_text_y_origin_));
+        writer.u32(static_cast<std::uint32_t>(tc0100scn_positive_text_y_origin_));
         writer.boolean(sprite_buffer_valid_);
         writer.bytes(sprite_buffer_);
         writer.bytes(sprite_delay_buffer_);
@@ -1405,6 +1897,7 @@ namespace mnemos::chips::video {
         writer.u8(static_cast<std::uint8_t>(sprite_mode_));
         writer.u8(static_cast<std::uint8_t>(sprite_active_area_source_));
         writer.u8(static_cast<std::uint8_t>(sprite_buffer_policy_));
+        writer.u16(sprite_palette_bank_base_);
         writer.u32(static_cast<std::uint32_t>(hide_pixels_));
         writer.u32(static_cast<std::uint32_t>(flip_hide_pixels_));
         writer.u32(sprite_active_area_);
@@ -1434,17 +1927,23 @@ namespace mnemos::chips::video {
         layer1_base_ = reader.u32();
         text_base_ = reader.u32();
         text_gfx_base_ = reader.u32();
+        text_gfx_source_ = static_cast<text_gfx_source>(reader.u8());
         layer_control_ = reader.u16();
         layer_control_secondary_ = reader.u16();
         display_enabled_ = reader.boolean();
         palette_format_ = static_cast<palette_format>(reader.u8());
         tilemap_variant_ = static_cast<tilemap_variant>(reader.u8());
+        tc0100scn_bg_x_offset_ = static_cast<int>(reader.u32());
+        tc0100scn_text_x_offset_ = static_cast<int>(reader.u32());
+        tc0100scn_text_y_origin_ = static_cast<int>(reader.u32());
+        tc0100scn_positive_text_y_origin_ = static_cast<int>(reader.u32());
         sprite_buffer_valid_ = reader.boolean();
         reader.bytes(sprite_buffer_);
         reader.bytes(sprite_delay_buffer_);
         for (std::uint16_t& bank : sprite_banks_) {
             bank = reader.u16();
         }
+        sprite_banks_pending_ = sprite_banks_;
         for (std::uint16_t& priority : priority_regs_) {
             priority = reader.u16();
         }
@@ -1475,6 +1974,7 @@ namespace mnemos::chips::video {
         sprite_mode_ = static_cast<sprite_mode>(reader.u8());
         sprite_active_area_source_ = static_cast<sprite_active_area_source>(reader.u8());
         sprite_buffer_policy_ = static_cast<sprite_buffer_policy>(reader.u8());
+        sprite_palette_bank_base_ = reader.u16();
         hide_pixels_ = static_cast<int>(reader.u32());
         flip_hide_pixels_ = static_cast<int>(reader.u32());
         sprite_active_area_ = reader.u32();
@@ -1482,6 +1982,8 @@ namespace mnemos::chips::video {
         sprites_flip_screen_ = reader.boolean();
         sprite_master_scroll_x_ = static_cast<int>(reader.u32());
         sprite_master_scroll_y_ = static_cast<int>(reader.u32());
+        update_sprite_control_state();
+        write_sprite_buffer_state({}, false, false, false);
     }
 
     instrumentation::ichip_introspection& taito_f2_video::introspection() noexcept {
@@ -1513,15 +2015,68 @@ namespace mnemos::chips::video {
         register_view_[17] = {"PRI5", priority_regs_[5], 16U, fmt::unsigned_integer};
         register_view_[18] = {"PRI6", priority_regs_[6], 16U, fmt::unsigned_integer};
         register_view_[19] = {"PRI7", priority_regs_[7], 16U, fmt::unsigned_integer};
+        register_view_[20] = {"PRI0", priority_regs_[0], 16U, fmt::unsigned_integer};
+        register_view_[21] = {"SPRBLND", priority_regs_[0] & 0x00C0U, 8U,
+                              fmt::unsigned_integer};
+        static constexpr std::array<std::string_view, sprite_bank_count> bank_names{
+            "SPRBANK0", "SPRBANK1", "SPRBANK2", "SPRBANK3",
+            "SPRBANK4", "SPRBANK5", "SPRBANK6", "SPRBANK7"};
+        for (std::size_t i = 0U; i < sprite_banks_.size(); ++i) {
+            register_view_[22U + i] = {bank_names[i], sprite_banks_[i], 16U,
+                                       fmt::unsigned_integer};
+        }
         const std::uint8_t roz_selector =
             static_cast<std::uint8_t>((priority_regs_[1] & 0x00C0U) >> 6U);
         const std::uint8_t roz_priority = static_cast<std::uint8_t>(
             (priority_regs_[8U + roz_selector / 2U] >> (4U * (roz_selector & 1U))) &
             0x000FU);
-        register_view_[20] = {"PRI1", priority_regs_[1], 16U, fmt::unsigned_integer};
-        register_view_[21] = {"ROZPRI", roz_priority, 4U, fmt::unsigned_integer};
-        register_view_[22] = {"ROZCTL2", roz_control_regs_[2], 16U, fmt::signed_integer};
-        register_view_[23] = {"ROZCTL7", roz_control_regs_[7], 16U, fmt::signed_integer};
+        register_view_[30] = {"PRI1", priority_regs_[1], 16U, fmt::unsigned_integer};
+        register_view_[31] = {"ROZPRI", roz_priority, 4U, fmt::unsigned_integer};
+        register_view_[32] = {"ROZCTL2", roz_control_regs_[2], 16U, fmt::signed_integer};
+        register_view_[33] = {"ROZCTL7", roz_control_regs_[7], 16U, fmt::signed_integer};
+        register_view_[34] = {"TMVAR", static_cast<std::uint8_t>(tilemap_variant_), 8U,
+                              fmt::unsigned_integer};
+        register_view_[35] = {"PALFMT", static_cast<std::uint8_t>(palette_format_), 8U,
+                              fmt::unsigned_integer};
+        register_view_[36] = {"SPRMODE", static_cast<std::uint8_t>(sprite_mode_), 8U,
+                              fmt::unsigned_integer};
+        register_view_[37] = {"SPRACTS", static_cast<std::uint8_t>(sprite_active_area_source_),
+                              8U, fmt::unsigned_integer};
+        register_view_[38] = {"SPRBUF", static_cast<std::uint8_t>(sprite_buffer_policy_), 8U,
+                              fmt::unsigned_integer};
+        register_view_[39] = {"SCNBGOX", static_cast<std::uint16_t>(tc0100scn_bg_x_offset_),
+                              16U, fmt::signed_integer};
+        register_view_[40] = {"SCNTXOX", static_cast<std::uint16_t>(tc0100scn_text_x_offset_),
+                              16U, fmt::signed_integer};
+        register_view_[41] = {"SCNTYOD", static_cast<std::uint16_t>(tc0100scn_text_y_origin_),
+                              16U, fmt::signed_integer};
+        register_view_[42] = {"SCNTYOP",
+                              static_cast<std::uint16_t>(tc0100scn_positive_text_y_origin_),
+                              16U, fmt::signed_integer};
+        register_view_[43] = {"T48BGXO", static_cast<std::uint16_t>(tc0480scp_bg_x_offset_),
+                              16U, fmt::signed_integer};
+        register_view_[44] = {"T48BGYO", static_cast<std::uint16_t>(tc0480scp_bg_y_offset_),
+                              16U, fmt::signed_integer};
+        register_view_[45] = {"T48TXOX", static_cast<std::uint16_t>(tc0480scp_text_x_offset_),
+                              16U, fmt::signed_integer};
+        register_view_[46] = {"T48TXOY", static_cast<std::uint16_t>(tc0480scp_text_y_offset_),
+                              16U, fmt::signed_integer};
+        register_view_[47] = {"T48FLXO", static_cast<std::uint16_t>(tc0480scp_flip_x_offset_),
+                              16U, fmt::signed_integer};
+        register_view_[48] = {"T48FLYO", static_cast<std::uint16_t>(tc0480scp_flip_y_offset_),
+                              16U, fmt::signed_integer};
+        register_view_[49] = {"ROZVAR", static_cast<std::uint8_t>(roz_variant_), 8U,
+                              fmt::unsigned_integer};
+        register_view_[50] = {"ROZXOFF", static_cast<std::uint16_t>(roz_x_offset_), 16U,
+                              fmt::signed_integer};
+        register_view_[51] = {"ROZYOFF", static_cast<std::uint16_t>(roz_y_offset_), 16U,
+                              fmt::signed_integer};
+        register_view_[52] = {"SPRHIDE", static_cast<std::uint16_t>(hide_pixels_), 16U,
+                              fmt::signed_integer};
+        register_view_[53] = {"SPRFHIDE", static_cast<std::uint16_t>(flip_hide_pixels_), 16U,
+                              fmt::signed_integer};
+        register_view_[54] = {"TXGSRC", static_cast<std::uint8_t>(text_gfx_source_), 8U,
+                              fmt::unsigned_integer};
         return register_view_;
     }
 

@@ -30,6 +30,9 @@ namespace mnemos::apps::player::adapters {
         if (id == "taito_f2") {
             return system_family::taito_f2;
         }
+        if (id == "taito_gnet" || id == "gnet") {
+            return system_family::taito_gnet;
+        }
         if (id == "cps1") {
             return system_family::capcom_cps1;
         }
@@ -70,6 +73,8 @@ namespace mnemos::apps::player::adapters {
             return "irem_m72";
         case system_family::taito_f2:
             return "taito_f2";
+        case system_family::taito_gnet:
+            return "taito_gnet";
         case system_family::capcom_cps1:
             return "cps1";
         case system_family::capcom_cps2:
@@ -106,6 +111,8 @@ namespace mnemos::apps::player::adapters {
             return "Irem M72";
         case system_family::taito_f2:
             return "Taito F2";
+        case system_family::taito_gnet:
+            return "Taito G-NET";
         case system_family::capcom_cps1:
             return "CPS1";
         case system_family::capcom_cps2:
@@ -127,8 +134,8 @@ namespace mnemos::apps::player::adapters {
     }
 
     const char* family_names() noexcept {
-        return "genesis, sms, gg, c64, segacd, sega32x, irem_m72, taito_f2, cps1, cps2, spectrum, "
-               "nes, msx, msx2, amiga500";
+        return "genesis, sms, gg, c64, segacd, sega32x, irem_m72, taito_f2, taito_gnet, cps1, "
+               "cps2, spectrum, nes, msx, msx2, amiga500";
     }
 
 } // namespace mnemos::apps::player::adapters

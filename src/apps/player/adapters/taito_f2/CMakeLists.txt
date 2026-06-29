@@ -15,6 +15,8 @@ target_link_libraries(
     mnemos_apps_player_taito_f2_adapter
     PUBLIC
         mnemos::frontend_sdk
+        mnemos::compression
+        mnemos::io
         mnemos::manifests::taito_f2
         mnemos::peripheral::common
         mnemos::runtime
@@ -27,6 +29,8 @@ mnemos_declare_tier(
     TIER 8
     DEPENDS
         mnemos_frontend_sdk
+        mnemos_compression
+        mnemos_io
         mnemos_manifests_taito_f2
         mnemos_peripheral_common
         mnemos_runtime

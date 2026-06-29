@@ -2,6 +2,7 @@
 
 #include "introspection_views.hpp"
 #include "player_system.hpp"
+#include "save_state.hpp"
 #include "scheduler_factory.hpp"
 #include "taito_f2_system.hpp"
 
@@ -11,11 +12,16 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace mnemos::apps::player::adapters::taito_f2 {
 
     void force_link() noexcept;
+
+    class taito_f2_adapter;
+
+    [[nodiscard]] runtime::save_target build_save_target(taito_f2_adapter& adapter);
 
     class taito_f2_adapter final : public frontend_sdk::player_system {
       public:
@@ -55,11 +61,16 @@ namespace mnemos::apps::player::adapters::taito_f2 {
         memory_views() const noexcept override {
             return system_mem_view_;
         }
+        bool run_debug_probe(std::string_view id) noexcept override;
+        [[nodiscard]] std::vector<std::uint8_t> save_state() override;
+        [[nodiscard]] runtime::load_result load_state(std::span<const std::uint8_t> data) override;
 
         [[nodiscard]] std::uint64_t frames_stepped() const noexcept { return frames_stepped_; }
         [[nodiscard]] manifests::taito_f2::taito_f2_system& machine() noexcept { return *sys_; }
 
       private:
+        friend runtime::save_target build_save_target(taito_f2_adapter& adapter);
+
         void refresh_inputs() noexcept;
         void publish_memory_views();
 
@@ -67,9 +78,12 @@ namespace mnemos::apps::player::adapters::taito_f2 {
         frontend_sdk::media_capability_info media_{};
         std::unique_ptr<manifests::taito_f2::taito_f2_system> sys_;
         std::vector<chips::ichip*> chip_view_{};
-        std::array<std::unique_ptr<instrumentation::span_memory_view>, 7> memory_view_storage_{};
-        std::array<instrumentation::memory_view*, 7> system_mem_view_{};
-        std::array<frontend_sdk::controller_state, 2> ports_{};
+        static constexpr std::size_t memory_view_count = 25U;
+        std::array<std::unique_ptr<instrumentation::span_memory_view>, memory_view_count>
+            memory_view_storage_{};
+        std::array<instrumentation::memory_view*, memory_view_count> system_mem_view_{};
+        std::array<frontend_sdk::controller_state, 4> ports_{};
+        std::uint8_t player_count_{2U};
         std::uint64_t frames_stepped_{};
         std::vector<frontend_sdk::spec_field> spec_{};
         std::vector<std::int16_t> audio_buf_{};

@@ -26,6 +26,9 @@ expected end state. None of these corpora are committed.
 | Public per-instruction **SH4** single-step corpus (one JSON file per encoding, four-instruction frame, initial/final register + memory) — used as a _functional_ cross-check for the shared SH-2/SH-4 integer ISA | `mnemos_chips_cpu_sh2_conformance_test` | `MNEMOS_SH2_TESTS_DIR` |
 | **ZEXALL-SMS** — Z80 instruction exerciser as a Sega Master System ROM (renders to the SMS VDP / SDSC console) | _SMS-native; no committed harness yet_ | _n/a_ |
 | Capcom CPS2 authentic ROM/key zip corpus (copyrighted game data; never committed) | `scripts/cps2/run-corpus-smoke.ps1` | `MNEMOS_CPS2_ROM`, `MNEMOS_CPS2_SET_DIR`, `MNEMOS_CPS2_EXTRA_ROMS` |
+| Taito arcade local corpus inventory (copyrighted ROM/CHD/package data; never committed; reports which packages are runnable by Mnemos today) | `scripts/taito/inventory-corpus.ps1` | `MNEMOS_TAITO_SET_DIR`, `MNEMOS_TAITO_REQUIRE_ALL_SUPPORTED` |
+| Taito G-NET BIOS + CHD package smoke (copyrighted BIOS/package data; never committed; verifies reset-visible board/player assembly when supplied) | `mnemos_manifests_taito_gnet_system_test`, `mnemos_apps_player_taito_gnet_adapter_test` | `MNEMOS_TAITO_GNET_BIOS`, `MNEMOS_TAITO_GNET_PACKAGE` |
+| Taito F2 authentic ROM zip corpus (copyrighted game data; never committed; plain set zips or one-level title-wrapper zips) | `scripts/taito-f2/run-corpus-smoke.ps1` | `MNEMOS_TAITO_F2_ROM`, `MNEMOS_TAITO_F2_SET_DIR`, `MNEMOS_TAITO_F2_EXTRA_ROMS`, `MNEMOS_TAITO_F2_GOLDENS`, `MNEMOS_TAITO_F2_REQUIRE_GOLDENS` |
 
 These corpora are the de-facto standard for verifying 8-/16-bit CPU cores; we
 acknowledge their authors' work in producing and maintaining them.
@@ -107,6 +110,32 @@ multiple independent open-source implementations.
   names, byte counts, load offsets, and CRCs are catalog facts required to load
   user-provided sets; Mnemos records them in its own manifests and does not import
   MAME driver macros, implementation code, comments, or table structure.
+- **Taito arcade corpus board labels** — the local corpus inventory uses public
+  catalogue/driver labels only to route user-provided packages into Mnemos
+  workstreams (Taito F2, G-NET/ZN-2, Type Zero, Type X/Type X2, non-Taito Irem M92,
+  and Namco System 246 titles). These labels are advisory gap-analysis metadata;
+  no ROM/CHD contents, driver code, tables, or comments are imported.
+- **Taito G-NET CHD package loading** — `src/manifests/taito_gnet/` inspects ZIP
+  entries and decodes bounded CHD v5 flash-card block-device images from
+  user-provided packages to identify and load flash-card media geometry. It is
+  clean-room container handling based on public ZIP/CHD layouts; it does not
+  import emulator source, driver tables, ROM/CHD contents, or implementation
+  comments.
+- **Taito G-NET board shell** — the first `taito_gnet_system` slice maps a
+  caller-provided BIOS ROM to the R3000A reset region, provides main RAM, and
+  carries mounted package-loaded flash-card images behind the first FC-board
+  flash-bank/control-register, PCMCIA data-aperture, minimal RF5C296-style
+  index/data IO proxy model, scratchpad RAM, memory/cache control latches,
+  COP2/GTE register-transfer and command-latch state, a GPU register/VRAM latch
+  shell, BIOS-facing interrupt/root-timer latches with first-pass target/overflow IRQ delivery, and limited DMA execution
+  for the GPU command and OTC channels. The player adapter only
+  wires this native shell to `--system taito_gnet`
+  with a placeholder framebuffer and explicit capability metadata; no third-party
+  emulator source, board driver code, or ROM data is imported.
+- **Sony R3000A / MIPS I behaviour** — the `sony.r3000a` CPU core is a
+  Mnemos-native implementation of the public MIPS I/R3000A programming model
+  needed by PlayStation-derived arcade boards. Emulator source, opcode tables,
+  and implementation comments from third-party projects are not imported.
 
 ## Cartridge / mapper protocol notes
 

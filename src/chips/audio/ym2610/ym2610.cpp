@@ -64,6 +64,34 @@ namespace mnemos::chips::audio {
             return t;
         }();
 
+        constexpr std::array<std::array<const char*, 10>, adpcm_a::channel_count>
+            kAdpcmARegisterNames{{
+                {"ADPCMA_CH0_PAN", "ADPCMA_CH0_LEVEL", "ADPCMA_CH0_START",
+                 "ADPCMA_CH0_END", "ADPCMA_CH0_ADDR", "ADPCMA_CH0_ACTIVE",
+                 "ADPCMA_CH0_ACC", "ADPCMA_CH0_STEP", "ADPCMA_CH0_END_EVENTS",
+                 "ADPCMA_CH0_ROM_UNDERRUNS"},
+                {"ADPCMA_CH1_PAN", "ADPCMA_CH1_LEVEL", "ADPCMA_CH1_START",
+                 "ADPCMA_CH1_END", "ADPCMA_CH1_ADDR", "ADPCMA_CH1_ACTIVE",
+                 "ADPCMA_CH1_ACC", "ADPCMA_CH1_STEP", "ADPCMA_CH1_END_EVENTS",
+                 "ADPCMA_CH1_ROM_UNDERRUNS"},
+                {"ADPCMA_CH2_PAN", "ADPCMA_CH2_LEVEL", "ADPCMA_CH2_START",
+                 "ADPCMA_CH2_END", "ADPCMA_CH2_ADDR", "ADPCMA_CH2_ACTIVE",
+                 "ADPCMA_CH2_ACC", "ADPCMA_CH2_STEP", "ADPCMA_CH2_END_EVENTS",
+                 "ADPCMA_CH2_ROM_UNDERRUNS"},
+                {"ADPCMA_CH3_PAN", "ADPCMA_CH3_LEVEL", "ADPCMA_CH3_START",
+                 "ADPCMA_CH3_END", "ADPCMA_CH3_ADDR", "ADPCMA_CH3_ACTIVE",
+                 "ADPCMA_CH3_ACC", "ADPCMA_CH3_STEP", "ADPCMA_CH3_END_EVENTS",
+                 "ADPCMA_CH3_ROM_UNDERRUNS"},
+                {"ADPCMA_CH4_PAN", "ADPCMA_CH4_LEVEL", "ADPCMA_CH4_START",
+                 "ADPCMA_CH4_END", "ADPCMA_CH4_ADDR", "ADPCMA_CH4_ACTIVE",
+                 "ADPCMA_CH4_ACC", "ADPCMA_CH4_STEP", "ADPCMA_CH4_END_EVENTS",
+                 "ADPCMA_CH4_ROM_UNDERRUNS"},
+                {"ADPCMA_CH5_PAN", "ADPCMA_CH5_LEVEL", "ADPCMA_CH5_START",
+                 "ADPCMA_CH5_END", "ADPCMA_CH5_ADDR", "ADPCMA_CH5_ACTIVE",
+                 "ADPCMA_CH5_ACC", "ADPCMA_CH5_STEP", "ADPCMA_CH5_END_EVENTS",
+                 "ADPCMA_CH5_ROM_UNDERRUNS"},
+            }};
+
         // How often a rate's pattern advances: rates below 48 are slowed by a
         // power-of-two shift of the EG counter.
         [[nodiscard]] std::uint8_t eg_inc_for(std::uint8_t rate, std::uint32_t eg_cnt) noexcept {
@@ -120,10 +148,16 @@ namespace mnemos::chips::audio {
         timer_prescale_ = 0U;
         timer_b_sub_ = 0U;
         busy_remaining_ = 0U;
+        const bool was_asserted = irq_line_;
+        irq_line_ = false;
+        if (was_asserted && irq_) {
+            irq_(false);
+        }
 
         last_left_ = 0;
         last_right_ = 0;
         prescaler_ = 0;
+        adpcm_a_prescaler_ = 0;
         sample_queue_.clear();
     }
 
@@ -132,6 +166,7 @@ namespace mnemos::chips::audio {
     void ym2610::write_data_a(std::uint8_t value) noexcept {
         const std::uint8_t reg = bank_a_addr_;
         busy_remaining_ = 32U;
+        note_write(reg, value);
 
         if (reg < 0x10U) {
             // SSG $00..$0F.
@@ -150,11 +185,13 @@ namespace mnemos::chips::audio {
     void ym2610::write_data_b(std::uint8_t value) noexcept {
         const std::uint8_t reg = bank_b_addr_;
         busy_remaining_ = 32U;
+        note_write(static_cast<std::uint16_t>(0x100U | reg), value);
 
-        if (reg >= 0x10U && reg < 0x30U) {
-            // ADPCM-A registers occupy bank-B $10..$3D on silicon; forward the
-            // $00..$2D ADPCM-A range by subtracting 0x10 from the bus address.
-            adpcm_a_.write_reg(static_cast<std::uint8_t>(reg - 0x10U), value);
+        if (reg < adpcm_a::reg_count) {
+            // ADPCM-A occupies bank-B $00..$2D. Forward the CPU-facing offset
+            // directly so key-on at $00 and per-channel address registers match
+            // the YM2610 bus map.
+            adpcm_a_.write_reg(reg, value);
             return;
         }
         // FM channels 3/4 (bank B).
@@ -186,10 +223,10 @@ namespace mnemos::chips::audio {
         }
 
         // Per-channel register pair: bank 0 -> channels 0/1, bank 1 -> channels
-        // 2/3. The low 2 bits select the channel within the pair (value 3 is
-        // unused on this part).
+        // 2/3. This four-channel OPNB model only decodes selectors 0/1 inside
+        // each pair; higher selectors are open/reserved on this part.
         const std::uint8_t sel = reg & 0x03U;
-        if (sel == 0x03U) {
+        if (sel >= 0x02U) {
             return;
         }
         const std::size_t ch_index = static_cast<std::size_t>(bank * 2 + sel);
@@ -253,11 +290,11 @@ namespace mnemos::chips::audio {
     }
 
     void ym2610::fm_key_on_off(std::uint8_t value) noexcept {
-        // $28: bits 1:0 select the FM channel (0/1 = bank-A ch 1/2, 2/3 =
-        // bank-B ch 3/4; bit2 distinguishes the bank pair), bits 7:4 are the
-        // per-slot key flags (S1, S2, S3, S4).
+        // $28: bits 1:0 select the FM channel within the active pair (0/1);
+        // bit2 selects the second pair (channels 3/4). Selectors 2/3 are not
+        // valid on this four-channel OPNB model.
         const std::uint8_t sel = value & 0x03U;
-        if (sel == 0x03U) {
+        if (sel >= 0x02U) {
             return;
         }
         const std::size_t ch_index =
@@ -298,6 +335,7 @@ namespace mnemos::chips::audio {
         if ((value & 0x20U) != 0U) {
             timer_b_flag_ = false;
         }
+        update_irq();
     }
 
     std::uint16_t ym2610::timer_a_load() const noexcept {
@@ -320,8 +358,13 @@ namespace mnemos::chips::audio {
     }
 
     void ym2610::update_irq() noexcept {
-        // No external IRQ line is wired on this part's Mnemos surface; the status
-        // flags are read-pollable. Kept as a hook for the conformance pass.
+        const bool asserted = (timer_a_flag_ && irq_enable_a_) || (timer_b_flag_ && irq_enable_b_);
+        if (asserted != irq_line_) {
+            irq_line_ = asserted;
+            if (irq_) {
+                irq_(asserted);
+            }
+        }
     }
 
     void ym2610::step_timer_a() noexcept {
@@ -547,7 +590,11 @@ namespace mnemos::chips::audio {
         // its stereo pair. The sub-chips already mix to int16 (a quarter-scale
         // headroom keeps the four-way sum inside int16).
         ssg_.step();
-        adpcm_a_.step();
+        if (adpcm_a_prescaler_ == 0) {
+            adpcm_a_.step();
+        }
+        adpcm_a_prescaler_ =
+            (adpcm_a_prescaler_ + 1) % adpcm_a_sample_divider;
         adpcm_b_.step();
         left += ssg_.last_left() + adpcm_a_.last_left() + adpcm_b_.last_left();
         right += ssg_.last_right() + adpcm_a_.last_right() + adpcm_b_.last_right();
@@ -570,10 +617,10 @@ namespace mnemos::chips::audio {
             if (busy_remaining_ != 0U) {
                 --busy_remaining_;
             }
-            // Timer cadence: Timer A counts once per 16 prescaled steps, Timer B
-            // once per 16*16 (a coarse OPN-family cadence; exact divider lands in
-            // the conformance pass).
-            if (++timer_prescale_ >= 16U) {
+            // Timer cadence follows the native OPNB sample step in this model;
+            // running it from the old 16-clock placeholder over-interrupted the
+            // Taito F2 sound CPU before its command-polling loop could run.
+            if (++timer_prescale_ >= default_clock_divider) {
                 timer_prescale_ = 0U;
                 step_timer_a();
                 if (++timer_b_sub_ >= 16U) {
@@ -644,11 +691,13 @@ namespace mnemos::chips::audio {
         writer.boolean(timer_b_flag_);
         writer.boolean(irq_enable_a_);
         writer.boolean(irq_enable_b_);
+        writer.boolean(irq_line_);
         writer.u32(timer_prescale_);
         writer.u32(timer_b_sub_);
         writer.u32(busy_remaining_);
         writer.u32(static_cast<std::uint32_t>(clock_divider_));
         writer.u32(static_cast<std::uint32_t>(prescaler_));
+        writer.u32(static_cast<std::uint32_t>(adpcm_a_prescaler_));
         writer.u16(static_cast<std::uint16_t>(last_left_));
         writer.u16(static_cast<std::uint16_t>(last_right_));
 
@@ -704,11 +753,14 @@ namespace mnemos::chips::audio {
         timer_b_flag_ = reader.boolean();
         irq_enable_a_ = reader.boolean();
         irq_enable_b_ = reader.boolean();
+        irq_line_ = reader.boolean();
         timer_prescale_ = reader.u32();
         timer_b_sub_ = reader.u32();
         busy_remaining_ = reader.u32();
         clock_divider_ = static_cast<int>(reader.u32());
         prescaler_ = static_cast<int>(reader.u32());
+        adpcm_a_prescaler_ =
+            static_cast<int>(reader.u32()) % adpcm_a_sample_divider;
         last_left_ = static_cast<std::int16_t>(reader.u16());
         last_right_ = static_cast<std::int16_t>(reader.u16());
 
@@ -738,13 +790,82 @@ namespace mnemos::chips::audio {
 
     std::span<const register_descriptor> ym2610::register_snapshot() noexcept {
         using fmt = register_value_format;
-        register_view_[0] = {"BANK_A_ADDR", bank_a_addr_, 8U, fmt::unsigned_integer};
-        register_view_[1] = {"BANK_B_ADDR", bank_b_addr_, 8U, fmt::unsigned_integer};
-        register_view_[2] = {"STATUS", read_status(), 8U, fmt::flags};
-        register_view_[3] = {"CLKA", timer_a_load(), 10U, fmt::unsigned_integer};
-        register_view_[4] = {"CLKB", fm_regs_[0x26], 8U, fmt::unsigned_integer};
-        register_view_[5] = {"EG_CNT", eg_counter_, 32U, fmt::unsigned_integer};
-        return register_view_;
+        std::size_t out = 0U;
+        register_view_[out++] = {"BANK_A_ADDR", bank_a_addr_, 8U, fmt::unsigned_integer};
+        register_view_[out++] = {"BANK_B_ADDR", bank_b_addr_, 8U, fmt::unsigned_integer};
+        register_view_[out++] = {"STATUS", read_status(), 8U, fmt::flags};
+        register_view_[out++] = {"CLKA", timer_a_load(), 10U, fmt::unsigned_integer};
+        register_view_[out++] = {"CLKB", fm_regs_[0x26], 8U, fmt::unsigned_integer};
+        register_view_[out++] = {"TIMER_CTRL", fm_regs_[0x27], 8U, fmt::flags};
+        register_view_[out++] = {"TIMERA_CNT", timer_a_counter_, 10U, fmt::unsigned_integer};
+        register_view_[out++] = {"TIMERB_CNT", timer_b_counter_, 8U, fmt::unsigned_integer};
+        register_view_[out++] = {"TIMERA_RUN", timer_a_running_ ? 1U : 0U, 1U, fmt::flags};
+        register_view_[out++] = {"TIMERB_RUN", timer_b_running_ ? 1U : 0U, 1U, fmt::flags};
+        register_view_[out++] = {"TIMERA_FLAG", timer_a_flag_ ? 1U : 0U, 1U, fmt::flags};
+        register_view_[out++] = {"TIMERB_FLAG", timer_b_flag_ ? 1U : 0U, 1U, fmt::flags};
+        register_view_[out++] = {"TIMERA_IRQ_EN", irq_enable_a_ ? 1U : 0U, 1U, fmt::flags};
+        register_view_[out++] = {"TIMERB_IRQ_EN", irq_enable_b_ ? 1U : 0U, 1U, fmt::flags};
+        register_view_[out++] = {"IRQ", irq_line_ ? 1U : 0U, 1U, fmt::flags};
+        register_view_[out++] = {"TIMER_PRE", timer_prescale_, 32U, fmt::unsigned_integer};
+        register_view_[out++] = {"TIMERB_SUB", timer_b_sub_, 8U, fmt::unsigned_integer};
+        register_view_[out++] = {"EG_CNT", eg_counter_, 32U, fmt::unsigned_integer};
+        register_view_[out++] = {"FM_KEY", fm_regs_[0x28], 8U, fmt::flags};
+        register_view_[out++] = {"SSG_MIXER", ssg_.read_reg(0x07U), 8U, fmt::flags};
+        register_view_[out++] = {"SSG_A_LEVEL", ssg_.read_reg(0x08U), 8U,
+                                 fmt::unsigned_integer};
+        register_view_[out++] = {"ADPCMA_KEY", adpcm_a_.read_reg(adpcm_a::reg_key), 8U,
+                                 fmt::flags};
+        register_view_[out++] = {"ADPCMA_TL", adpcm_a_.read_reg(adpcm_a::reg_tl), 8U,
+                                 fmt::unsigned_integer};
+        register_view_[out++] = {"ADPCMA_ACTIVE", adpcm_a_.active_channel_mask(), 6U,
+                                 fmt::flags};
+        register_view_[out++] = {"ADPCMB_CTRL", adpcm_b_.read_reg(adpcm_b::reg_ctrl), 8U,
+                                 fmt::flags};
+        const auto adpcmb_regs = adpcm_b_.register_snapshot();
+        const auto add_adpcmb_register = [&](const char* out_name, const char* in_name) {
+            for (const auto& reg : adpcmb_regs) {
+                if (reg.name == in_name) {
+                    register_view_[out++] = {
+                        out_name, reg.value, reg.bit_width, reg.format};
+                    return;
+                }
+            }
+            register_view_[out++] = {out_name, 0U, 0U, fmt::unsigned_integer};
+        };
+        add_adpcmb_register("ADPCMB_STATUS", "STATUS");
+        add_adpcmb_register("ADPCMB_TL", "TL");
+        add_adpcmb_register("ADPCMB_START", "START");
+        add_adpcmb_register("ADPCMB_END", "END");
+        add_adpcmb_register("ADPCMB_LIMIT", "LIMIT");
+        add_adpcmb_register("ADPCMB_DELTA_N", "DELTA_N");
+        add_adpcmb_register("ADPCMB_CURSOR", "CURSOR");
+        add_adpcmb_register("ADPCMB_ACC", "ACC");
+        add_adpcmb_register("ADPCMB_ACTIVE", "ACTIVE");
+        add_adpcmb_register("ADPCMB_REPEAT", "REPEAT");
+        add_adpcmb_register("ADPCMB_PHASE", "PHASE");
+        add_adpcmb_register("ADPCMB_END_EVENTS", "END_EVENTS");
+        add_adpcmb_register("ADPCMB_LOOP_EVENTS", "LOOP_EVENTS");
+        add_adpcmb_register("ADPCMB_ROM_UNDERRUNS", "ROM_UNDERRUNS");
+        for (std::uint8_t i = 0; i < adpcm_a::channel_count; ++i) {
+            const auto st = adpcm_a_.status(i);
+            const auto& names = kAdpcmARegisterNames[i];
+            const std::uint8_t pan = static_cast<std::uint8_t>(
+                (st.pan_l ? 0x80U : 0U) | (st.pan_r ? 0x40U : 0U));
+            register_view_[out++] = {names[0], pan, 8U, fmt::flags};
+            register_view_[out++] = {names[1], st.level, 5U, fmt::unsigned_integer};
+            register_view_[out++] = {names[2], st.start_byte, 24U, fmt::unsigned_integer};
+            register_view_[out++] = {names[3], st.end_byte, 24U, fmt::unsigned_integer};
+            register_view_[out++] = {names[4], st.current_byte, 24U, fmt::unsigned_integer};
+            register_view_[out++] = {names[5], st.active ? 1U : 0U, 1U, fmt::flags};
+            register_view_[out++] = {
+                names[6], static_cast<std::uint64_t>(st.accumulator & 0xFFFFU), 16U,
+                fmt::signed_integer};
+            register_view_[out++] = {names[7], static_cast<std::uint64_t>(st.step_index), 8U,
+                                     fmt::unsigned_integer};
+            register_view_[out++] = {names[8], st.end_events, 32U, fmt::unsigned_integer};
+            register_view_[out++] = {names[9], st.rom_underruns, 32U, fmt::unsigned_integer};
+        }
+        return {register_view_.data(), out};
     }
 
     namespace {

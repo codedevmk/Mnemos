@@ -12,6 +12,7 @@
 #include <array>
 #include <cstdint>
 #include <span>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -38,11 +39,11 @@ namespace {
         return rom;
     }
 
-    // Configure channel 0: full individual level, both pans on, master TL = 0
+    // Configure channel 0: full individual level, both pans on, master TL = $3F
     // (full volume), start_addr = 0x0001 (ROM byte 0x000100), end_addr = 0x0100
     // (block end 0x0100FF), then key it on via the $00 ON path.
     void configure_channel0(adpcm_a& chip) {
-        chip.write_reg(adpcm_a::reg_tl, 0x00);               // master full volume
+        chip.write_reg(adpcm_a::reg_tl, 0x3F);               // master full volume
         chip.write_reg(adpcm_a::reg_ch_pan_level + 0, 0xDF); // L=1,R=1, level=0x1F
         chip.write_reg(adpcm_a::reg_ch_start_lo + 0, 0x01);
         chip.write_reg(adpcm_a::reg_ch_start_hi + 0, 0x00); // start_addr = 0x0001 -> ROM 0x000100
@@ -57,6 +58,17 @@ namespace {
         96,    96,    256,   256,   480,   480,   768,   768,   1168,  1168, 1952,
         1952,  3744,  3744,  8000,  8000,  8672,  8672,  9280,  9280,  9824, 9824,
         10320, 10320, 10768, 10768, 11184, 11184, 11552, 11552, 11888, 11888};
+
+    std::uint64_t register_value(std::span<const mnemos::chips::register_descriptor> regs,
+                                 std::string_view name) {
+        for (const auto& reg : regs) {
+            if (reg.name == name) {
+                return reg.value;
+            }
+        }
+        FAIL("missing register " << name);
+        return 0U;
+    }
 
 } // namespace
 
@@ -131,6 +143,79 @@ TEST_CASE("adpcm_a key-off (DUMP) silences a channel", "[adpcm_a][audio]") {
     chip.step();
     REQUIRE(chip.last_left() == 0);
     REQUIRE(chip.last_right() == 0);
+}
+
+TEST_CASE("adpcm_a exposes every channel runtime state for diagnostics",
+          "[adpcm_a][audio][introspection]") {
+    adpcm_a chip;
+    const std::vector<std::uint8_t> rom = make_rom();
+    chip.set_sample_rom(rom);
+    chip.write_reg(adpcm_a::reg_tl, 0x3F);
+    chip.write_reg(adpcm_a::reg_ch_pan_level + 5, 0xDF);
+    chip.write_reg(adpcm_a::reg_ch_start_lo + 5, 0x01);
+    chip.write_reg(adpcm_a::reg_ch_start_hi + 5, 0x00);
+    chip.write_reg(adpcm_a::reg_ch_end_lo + 5, 0x00);
+    chip.write_reg(adpcm_a::reg_ch_end_hi + 5, 0x01);
+    chip.write_reg(adpcm_a::reg_key, 0x20);
+
+    chip.step();
+    const auto ch5 = chip.status(5);
+    const auto regs = chip.register_snapshot();
+
+    REQUIRE(chip.active_channel_mask() == 0x20U);
+    REQUIRE(ch5.active);
+    REQUIRE(ch5.current_byte == 0x000100U);
+    REQUIRE(register_value(regs, "ACTIVE") == 0x20U);
+    REQUIRE(register_value(regs, "CH5_START") == 0x000100U);
+    REQUIRE(register_value(regs, "CH5_END") == 0x0100FFU);
+    REQUIRE(register_value(regs, "CH5_ACTIVE") == 1U);
+    REQUIRE(register_value(regs, "CH0_ACTIVE") == 0U);
+    REQUIRE(register_value(regs, "CH5_END_EVENTS") == 0U);
+    REQUIRE(register_value(regs, "CH5_ROM_UNDERRUNS") == 0U);
+}
+
+TEST_CASE("adpcm_a records END and ROM underrun diagnostics",
+          "[adpcm_a][audio][introspection]") {
+    SECTION("END transition") {
+        adpcm_a chip;
+        std::vector<std::uint8_t> rom(0x100U, 0x12U);
+        chip.set_sample_rom(rom);
+        chip.write_reg(adpcm_a::reg_tl, 0x3F);
+        chip.write_reg(adpcm_a::reg_ch_pan_level + 0, 0xDF);
+        chip.write_reg(adpcm_a::reg_ch_start_lo + 0, 0x00);
+        chip.write_reg(adpcm_a::reg_ch_start_hi + 0, 0x00);
+        chip.write_reg(adpcm_a::reg_ch_end_lo + 0, 0x00);
+        chip.write_reg(adpcm_a::reg_ch_end_hi + 0, 0x00);
+        chip.write_reg(adpcm_a::reg_key, 0x01);
+
+        std::array<std::int16_t, 1040> buf{};
+        chip.generate(buf);
+        const auto regs = chip.register_snapshot();
+
+        REQUIRE(register_value(regs, "CH0_ACTIVE") == 0U);
+        REQUIRE(register_value(regs, "CH0_END_EVENTS") == 1U);
+        REQUIRE(register_value(regs, "CH0_ROM_UNDERRUNS") == 0U);
+    }
+
+    SECTION("attached ROM underrun") {
+        adpcm_a chip;
+        std::vector<std::uint8_t> rom(0x100U, 0x12U);
+        chip.set_sample_rom(rom);
+        chip.write_reg(adpcm_a::reg_tl, 0x3F);
+        chip.write_reg(adpcm_a::reg_ch_pan_level + 0, 0xDF);
+        chip.write_reg(adpcm_a::reg_ch_start_lo + 0, 0x01);
+        chip.write_reg(adpcm_a::reg_ch_start_hi + 0, 0x00);
+        chip.write_reg(adpcm_a::reg_ch_end_lo + 0, 0x01);
+        chip.write_reg(adpcm_a::reg_ch_end_hi + 0, 0x00);
+        chip.write_reg(adpcm_a::reg_key, 0x01);
+
+        chip.step();
+        const auto regs = chip.register_snapshot();
+
+        REQUIRE(register_value(regs, "CH0_ACTIVE") == 0U);
+        REQUIRE(register_value(regs, "CH0_END_EVENTS") == 0U);
+        REQUIRE(register_value(regs, "CH0_ROM_UNDERRUNS") == 1U);
+    }
 }
 
 TEST_CASE("adpcm_a save_state/load_state round-trips bit-identically", "[adpcm_a][audio]") {

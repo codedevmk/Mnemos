@@ -7,7 +7,7 @@ mnemos_fetch_sdl3()
 # isolation. Cross-system primitives (video_region, market) live in
 # `chips/shared/region.hpp`; system-specific cart-header parsers live in each
 # manifest. Currently wired: Genesis, SMS, C64, Sega CD, 32X, M72, Taito F2,
-# CPS1, CPS2, Spectrum, NES, MSX, MSX2, Amiga 500.
+# Taito G-NET, CPS1, CPS2, Spectrum, NES, MSX, MSX2, Amiga 500.
 add_subdirectory(adapters/common)
 add_subdirectory(adapters/genesis)
 add_subdirectory(adapters/sms)
@@ -16,6 +16,7 @@ add_subdirectory(adapters/segacd)
 add_subdirectory(adapters/sega32x)
 add_subdirectory(adapters/irem_m72)
 add_subdirectory(adapters/taito_f2)
+add_subdirectory(adapters/taito_gnet)
 add_subdirectory(adapters/capcom_cps1)
 add_subdirectory(adapters/capcom_cps2)
 add_subdirectory(adapters/spectrum)
@@ -59,6 +60,7 @@ target_link_libraries(
         mnemos::apps::player::sega32x_adapter
         mnemos::apps::player::irem_m72_adapter
         mnemos::apps::player::taito_f2_adapter
+        mnemos::apps::player::taito_gnet_adapter
         mnemos::apps::player::capcom_cps1_adapter
         mnemos::apps::player::capcom_cps2_adapter
         mnemos::apps::player::spectrum_adapter
@@ -129,6 +131,7 @@ if(BUILD_TESTING)
             mnemos::apps::player::sega32x_adapter
             mnemos::apps::player::irem_m72_adapter
             mnemos::apps::player::taito_f2_adapter
+            mnemos::apps::player::taito_gnet_adapter
             mnemos::apps::player::capcom_cps1_adapter
             mnemos::apps::player::capcom_cps2_adapter
             mnemos::apps::player::msx_adapter

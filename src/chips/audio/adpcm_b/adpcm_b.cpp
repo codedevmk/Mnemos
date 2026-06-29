@@ -110,17 +110,27 @@ namespace mnemos::chips::audio {
     }
 
     void adpcm_b::key_on() noexcept {
-        nibble_cursor_ = static_cast<std::uint32_t>(start_addr_) * 2U;
+        nibble_cursor_ = (static_cast<std::uint32_t>(start_addr_) << 8U) * 2U;
         accumulator_ = 0;
         step_ = step_init;
         phase_ = 0U;
+        end_events_ = 0U;
+        loop_events_ = 0U;
+        rom_underruns_ = 0U;
         status_ = status_busy;
         active_ = true;
     }
 
     std::uint8_t adpcm_b::next_nibble() noexcept {
-        const std::uint32_t byte_addr = (nibble_cursor_ >> 1U) & (sample_rom_size - 1U);
-        const std::uint8_t b = sample_rom_[byte_addr];
+        const std::uint32_t byte_addr = nibble_cursor_ >> 1U;
+        if (byte_addr >= rom_.size()) {
+            active_ = false;
+            ++rom_underruns_;
+            status_ = static_cast<std::uint8_t>((status_ | status_eos) &
+                                                static_cast<std::uint8_t>(~status_busy));
+            return 0U;
+        }
+        const std::uint8_t b = rom_[byte_addr];
         // High nibble is consumed first within each byte (even cursor = high).
         const std::uint8_t n = ((nibble_cursor_ & 1U) == 0U)
                                    ? static_cast<std::uint8_t>((b >> 4U) & 0x0FU)
@@ -131,12 +141,18 @@ namespace mnemos::chips::audio {
 
     void adpcm_b::advance_nibble() noexcept {
         // Stop / loop at END: the address compared is byte-granular (START..END
-        // inclusive of the END byte's two nibbles).
-        const std::uint32_t end_nibble = (static_cast<std::uint32_t>(end_addr_) + 1U) * 2U;
+        // inclusive of the END byte's two nibbles). The registers hold the high
+        // 16 bits of a 24-bit byte address, so END includes its full 256-byte
+        // block.
+        const std::uint32_t end_byte =
+            (static_cast<std::uint32_t>(end_addr_) << 8U) | 0xFFU;
+        const std::uint32_t end_nibble = (end_byte + 1U) * 2U;
         if (nibble_cursor_ >= end_nibble) {
+            ++end_events_;
             status_ |= status_eos;
             if (repeat_) {
-                nibble_cursor_ = static_cast<std::uint32_t>(start_addr_) * 2U;
+                ++loop_events_;
+                nibble_cursor_ = (static_cast<std::uint32_t>(start_addr_) << 8U) * 2U;
                 accumulator_ = 0;
                 step_ = step_init;
             } else {
@@ -244,14 +260,13 @@ namespace mnemos::chips::audio {
         accumulator_ = 0;
         step_ = step_init;
         phase_ = 0U;
+        end_events_ = 0U;
+        loop_events_ = 0U;
+        rom_underruns_ = 0U;
         last_left_ = 0;
         last_right_ = 0;
         prescaler_ = 0;
-        // The external sample ROM survives a hard/soft reset on real hardware;
-        // only a cold power-on clears it.
-        if (kind == reset_kind::power_on) {
-            sample_rom_.fill(0U);
-        }
+        (void)kind;
         sample_queue_.clear();
     }
 
@@ -273,7 +288,9 @@ namespace mnemos::chips::audio {
         writer.u32(static_cast<std::uint32_t>(accumulator_));
         writer.u32(static_cast<std::uint32_t>(step_));
         writer.u32(phase_);
-        writer.bytes(sample_rom_);
+        writer.u32(end_events_);
+        writer.u32(loop_events_);
+        writer.u32(rom_underruns_);
         writer.u32(static_cast<std::uint32_t>(clock_divider_));
         writer.u32(static_cast<std::uint32_t>(prescaler_));
         writer.u16(static_cast<std::uint16_t>(last_left_));
@@ -298,7 +315,9 @@ namespace mnemos::chips::audio {
         accumulator_ = static_cast<std::int32_t>(reader.u32());
         step_ = static_cast<std::int32_t>(reader.u32());
         phase_ = reader.u32();
-        reader.bytes(sample_rom_);
+        end_events_ = reader.u32();
+        loop_events_ = reader.u32();
+        rom_underruns_ = reader.u32();
         clock_divider_ = static_cast<int>(reader.u32());
         prescaler_ = static_cast<int>(reader.u32());
         last_left_ = static_cast<std::int16_t>(reader.u16());
@@ -329,13 +348,17 @@ namespace mnemos::chips::audio {
             return samples_;
         }
 
-        const auto& rom = owner_->sample_rom_;
+        const auto rom = owner_->rom_;
         std::int32_t acc = 0;
         std::int32_t step = step_min;
-        std::uint32_t cursor = static_cast<std::uint32_t>(start) * 2U;
-        const std::uint32_t end_nibble = (static_cast<std::uint32_t>(end) + 1U) * 2U;
+        std::uint32_t cursor = (static_cast<std::uint32_t>(start) << 8U) * 2U;
+        const std::uint32_t end_byte = (static_cast<std::uint32_t>(end) << 8U) | 0xFFU;
+        const std::uint32_t end_nibble = (end_byte + 1U) * 2U;
         while (cursor < end_nibble) {
-            const std::uint32_t byte_addr = (cursor >> 1U) & (adpcm_b::sample_rom_size - 1U);
+            const std::uint32_t byte_addr = cursor >> 1U;
+            if (byte_addr >= rom.size()) {
+                break;
+            }
             const std::uint8_t b = rom[byte_addr];
             const std::uint8_t nibble = ((cursor & 1U) == 0U)
                                             ? static_cast<std::uint8_t>((b >> 4U) & 0x0FU)
@@ -368,7 +391,7 @@ namespace mnemos::chips::audio {
                                          .sample_rate = native_rate,
                                          .channels = 1,
                                          .loop_start = loop,
-                                         .source_addr = start});
+                                         .source_addr = static_cast<std::uint32_t>(start) << 8U});
         return samples_;
     }
 
@@ -385,6 +408,12 @@ namespace mnemos::chips::audio {
         register_view_[8] = {"ACC",
                              static_cast<std::uint64_t>(static_cast<std::uint16_t>(accumulator_)),
                              16U, fmt::signed_integer};
+        register_view_[9] = {"ACTIVE", active_ ? 1U : 0U, 1U, fmt::flags};
+        register_view_[10] = {"REPEAT", repeat_ ? 1U : 0U, 1U, fmt::flags};
+        register_view_[11] = {"PHASE", phase_, 32U, fmt::unsigned_integer};
+        register_view_[12] = {"END_EVENTS", end_events_, 32U, fmt::unsigned_integer};
+        register_view_[13] = {"LOOP_EVENTS", loop_events_, 32U, fmt::unsigned_integer};
+        register_view_[14] = {"ROM_UNDERRUNS", rom_underruns_, 32U, fmt::unsigned_integer};
         return register_view_;
     }
 

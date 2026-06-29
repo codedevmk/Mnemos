@@ -1,7 +1,7 @@
 // SDL3 windowed player. Boots the player_system adapter named by --system
-// (genesis / sms / gg / c64 / segacd / sega32x / irem_m72 / taito_f2 / cps1 /
-// cps2 / spectrum / nes / msx / amiga500) with the --rom media (zip archives are
-// extracted transparently), presents its framebuffer at integer scale, streams
+// (genesis / sms / gg / c64 / segacd / sega32x / irem_m72 / taito_f2 /
+// taito_gnet / cps1 / cps2 / spectrum / nes / msx / amiga500) with the --rom
+// media (zip archives are extracted transparently), presents its framebuffer at integer scale, streams
 // audio, and routes keyboard + gamepad input. ESC quits. Optional devices
 // include --fm for MSX-MUSIC/FM-PAC or SMS YM2413, --rtc for MSX RP-5C01
 // clock/CMOS, and --msx2 for MSX2/V9938 video hardware.
@@ -26,6 +26,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <csignal>
+#include <exception>
 #include <fstream>
 #include <limits>
 #include <optional>
@@ -33,6 +35,16 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#if defined(_MSC_VER) && !defined(NDEBUG)
+#include <crtdbg.h>
+#endif
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#endif
 
 namespace {
 
@@ -128,6 +140,89 @@ namespace {
 #endif
         return value != nullptr && value[0] != '\0' && value[0] != '0';
     }
+
+#if defined(_MSC_VER) && !defined(NDEBUG)
+    void route_debug_crt_reports_to_stderr() noexcept {
+        _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
+        _CrtSetReportFile(_CRT_WARN, _CRTDBG_FILE_STDERR);
+        _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+        _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+        _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+        _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+    }
+#else
+    void route_debug_crt_reports_to_stderr() noexcept {}
+#endif
+
+    [[noreturn]] void log_terminate() noexcept {
+        std::fprintf(stderr, "[mnemos_player] std::terminate reached\n");
+        std::fflush(stderr);
+        std::abort();
+    }
+
+    void log_fatal_signal(int signal) noexcept {
+        std::fprintf(stderr, "[mnemos_player] fatal signal: %d\n", signal);
+        std::fflush(stderr);
+        std::_Exit(128 + signal);
+    }
+
+#if defined(_MSC_VER)
+    void log_invalid_parameter(const wchar_t*, const wchar_t*, const wchar_t*, unsigned int line,
+                               std::uintptr_t) noexcept {
+        std::fprintf(stderr, "[mnemos_player] invalid CRT parameter: line=%u\n", line);
+        std::fflush(stderr);
+        std::abort();
+    }
+
+    void log_purecall() noexcept {
+        std::fprintf(stderr, "[mnemos_player] pure virtual call reached\n");
+        std::fflush(stderr);
+        std::abort();
+    }
+#endif
+
+#if defined(_WIN32)
+    LONG WINAPI log_unhandled_exception(EXCEPTION_POINTERS* exception) noexcept {
+        const DWORD code = exception != nullptr && exception->ExceptionRecord != nullptr
+                               ? exception->ExceptionRecord->ExceptionCode
+                               : 0U;
+        void* address = exception != nullptr && exception->ExceptionRecord != nullptr
+                            ? exception->ExceptionRecord->ExceptionAddress
+                            : nullptr;
+        std::fprintf(stderr, "[mnemos_player] unhandled SEH exception: code=0x%08lX address=%p\n",
+                     static_cast<unsigned long>(code), address);
+        std::fflush(stderr);
+        return EXCEPTION_EXECUTE_HANDLER;
+    }
+
+    void install_debug_fatal_handlers() noexcept {
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+        SetUnhandledExceptionFilter(log_unhandled_exception);
+#if defined(_MSC_VER)
+        _set_invalid_parameter_handler(log_invalid_parameter);
+        _set_purecall_handler(log_purecall);
+#endif
+        std::set_terminate(log_terminate);
+        std::signal(SIGABRT, log_fatal_signal);
+        std::signal(SIGFPE, log_fatal_signal);
+        std::signal(SIGILL, log_fatal_signal);
+        std::signal(SIGSEGV, log_fatal_signal);
+        std::signal(SIGTERM, log_fatal_signal);
+    }
+#else
+    void install_debug_fatal_handlers() noexcept {
+#if defined(_MSC_VER)
+        _set_invalid_parameter_handler(log_invalid_parameter);
+        _set_purecall_handler(log_purecall);
+#endif
+        std::set_terminate(log_terminate);
+        std::signal(SIGABRT, log_fatal_signal);
+        std::signal(SIGFPE, log_fatal_signal);
+        std::signal(SIGILL, log_fatal_signal);
+        std::signal(SIGSEGV, log_fatal_signal);
+        std::signal(SIGTERM, log_fatal_signal);
+    }
+#endif
 
     dst_rect integer_letterbox(int window_w, int window_h, int src_w, int src_h) {
         if (src_w <= 0 || src_h <= 0 || window_w <= 0 || window_h <= 0) {
@@ -319,6 +414,9 @@ namespace {
 } // namespace
 
 int main(int argc, char* argv[]) {
+    route_debug_crt_reports_to_stderr();
+    install_debug_fatal_handlers();
+
     using mnemos::apps::player::adapters::parse_animation_record_args;
     using mnemos::apps::player::adapters::parse_capabilities_arg;
     using mnemos::apps::player::adapters::parse_dip_arg;

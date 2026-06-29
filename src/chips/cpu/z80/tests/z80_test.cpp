@@ -321,6 +321,8 @@ TEST_CASE("z80 services an NMI") {
     m.cpu.step_instruction();
     CHECK(m.cpu.cpu_registers().pc == 0x0066U);
     CHECK(m.cpu.cpu_registers().sp == 0xFFFDU); // return address pushed
+    CHECK(m.cpu.nmi_accept_count() == 1U);
+    CHECK(m.cpu.irq_accept_count() == 0U);
 }
 
 TEST_CASE("z80 RETN and RETI restore IFF1 from IFF2") {
@@ -408,6 +410,8 @@ TEST_CASE("z80 services a mode-1 maskable interrupt after EI delay") {
     CHECK(m.cpu.cpu_registers().pc == 0x0002U);
     m.cpu.step_instruction(); // now the IRQ vectors to $0038
     CHECK(m.cpu.cpu_registers().pc == 0x0038U);
+    CHECK(m.cpu.irq_accept_count() == 1U);
+    CHECK(m.cpu.nmi_accept_count() == 0U);
 }
 
 TEST_CASE("z80 delays a maskable interrupt already asserted before EI") {
@@ -479,10 +483,12 @@ TEST_CASE("z80 register_view returns the live register snapshot") {
     auto* regs = m.cpu.introspection().registers();
     REQUIRE(regs != nullptr);
     auto descriptors = regs->registers();
-    REQUIRE(descriptors.size() == 16U);
+    REQUIRE(descriptors.size() == 25U);
     // Find PC and AF in the descriptors; values must match the live state.
     bool saw_pc = false;
     bool saw_af = false;
+    bool saw_nmiacc = false;
+    bool saw_irqacc = false;
     for (const auto& d : descriptors) {
         if (d.name == "PC") {
             saw_pc = true;
@@ -492,9 +498,19 @@ TEST_CASE("z80 register_view returns the live register snapshot") {
             saw_af = true;
             CHECK(d.value == 0x1234U);
         }
+        if (d.name == "NMIACC") {
+            saw_nmiacc = true;
+            CHECK(d.value == 0U);
+        }
+        if (d.name == "IRQACC") {
+            saw_irqacc = true;
+            CHECK(d.value == 0U);
+        }
     }
     CHECK(saw_pc);
     CHECK(saw_af);
+    CHECK(saw_nmiacc);
+    CHECK(saw_irqacc);
 }
 
 TEST_CASE("z80 IM 0 executes the jammed RST opcode from the vector callback") {

@@ -9,7 +9,9 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <span>
+#include <utility>
 #include <vector>
 
 namespace mnemos::chips::audio {
@@ -36,8 +38,8 @@ namespace mnemos::chips::audio {
     //   $30..$B6  FM channels 1+2 operator + frequency + algorithm registers
     //
     // Bank-B register layout:
-    //   $10..$1D  ADPCM-A      (delegated to the adpcm_a sub-chip; bus offset
-    //                           $10 maps the block's local $00..$2D)
+    //   $00..$2D  ADPCM-A      (delegated to the adpcm_a sub-chip; bus offset
+    //                           is the block's local $00..$2D)
     //   $30..$B6  FM channels 3+4 operator + frequency + algorithm registers
     //
     // This is a Mnemos iaudio_synth in the rf5c68 idiom: tick() advances chip
@@ -60,14 +62,20 @@ namespace mnemos::chips::audio {
         // sample per 24 internal cycles); the divider here is the input-clock
         // count per native sample step.
         static constexpr int default_clock_divider = 144;
+        static constexpr int adpcm_a_sample_divider = 3;
 
         // Status register bits (timer flags + busy).
         static constexpr std::uint8_t status_timer_a = 0x01U;
         static constexpr std::uint8_t status_timer_b = 0x02U;
         static constexpr std::uint8_t status_busy = 0x80U;
 
+        using irq_fn = std::function<void(bool asserted)>;
+
         ym2610() {
-            introspection_.with_registers([this] { return register_snapshot(); });
+            introspection_.with_registers([this] { return register_snapshot(); })
+                .with_reg_writes([this](instrumentation::reg_write_trace::callback cb) {
+                    reg_write_callback_ = std::move(cb);
+                });
             reset(reset_kind::power_on);
         }
 
@@ -86,6 +94,11 @@ namespace mnemos::chips::audio {
         void write_address_b(std::uint8_t address) noexcept { bank_b_addr_ = address; }
         void write_data_b(std::uint8_t value) noexcept;
         [[nodiscard]] std::uint8_t read_status() const noexcept;
+
+        // IRQ line transitions ((timer A flag & enable) | (timer B flag &
+        // enable)); fired only when the level changes.
+        void set_irq(irq_fn handler) noexcept { irq_ = std::move(handler); }
+        [[nodiscard]] bool irq_asserted() const noexcept { return irq_line_; }
 
         // Sub-chip access for the integrator (sample-ROM loading, introspection).
         [[nodiscard]] ssg& ssg_block() noexcept { return ssg_; }
@@ -160,6 +173,11 @@ namespace mnemos::chips::audio {
         // the channel-pair the operator/frequency registers address.
         void write_fm(int bank, std::uint8_t reg, std::uint8_t value) noexcept;
         void fm_key_on_off(std::uint8_t value) noexcept;
+        void note_write(std::uint16_t port, std::uint8_t value) {
+            if (reg_write_callback_) {
+                reg_write_callback_({.port = port, .value = value});
+            }
+        }
         void write_timer_control(std::uint8_t value) noexcept;
         void update_irq() noexcept;
         void step_timer_a() noexcept;
@@ -198,6 +216,7 @@ namespace mnemos::chips::audio {
         bool timer_b_flag_{};
         bool irq_enable_a_{};
         bool irq_enable_b_{};
+        bool irq_line_{};
         std::uint32_t timer_prescale_{}; // input clocks toward the next timer step
         std::uint32_t timer_b_sub_{};
         std::uint32_t busy_remaining_{};
@@ -207,11 +226,14 @@ namespace mnemos::chips::audio {
 
         int clock_divider_{default_clock_divider};
         int prescaler_{};
+        int adpcm_a_prescaler_{};
         bool audio_capture_{};
         std::vector<std::int16_t> sample_queue_{};
 
-        std::array<register_descriptor, 6> register_view_{};
+        std::array<register_descriptor, 99> register_view_{};
         instrumentation::introspection_builder introspection_;
+        instrumentation::reg_write_trace::callback reg_write_callback_{};
+        irq_fn irq_{};
     };
 
 } // namespace mnemos::chips::audio
