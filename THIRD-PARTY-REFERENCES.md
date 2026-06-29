@@ -220,6 +220,14 @@ multiple independent open-source implementations.
   uses that metadata for a manifest-only contract gate; it is not an executable
   route or visual/audio parity proof. No MAME driver code or ROM bytes are
   copied into Mnemos.
+- **Irem M82 ROM-set metadata** — declarative game manifests under
+  `src/manifests/irem_m82/games/` use public MAME Irem driver metadata for dump
+  filenames, parent/clone relationships, region sizes, program reload offsets,
+  CRC-32s, orientation, and PROM/PLD metadata for Air Duel, Major Title,
+  R-Type II, and Daiku no Gensan M82 sets. Mnemos uses that metadata for
+  CRC-clean local corpus loading and a first-pass M82 player route; it is still
+  not visual/audio parity proof. No MAME driver code or ROM bytes are copied
+  into Mnemos.
 - **Irem M84 ROM-set metadata** — declarative game manifests under
   `src/manifests/irem_m84/games/` use public MAME Irem driver metadata for dump
   filenames, parent/clone relationships, region sizes, program reload offsets,

@@ -82,12 +82,18 @@ namespace {
         REQUIRE(maincpu.size == mnemos::manifests::irem_m82::main_rom_size);
         const rom_set_file* reload_lo = find_file_at(maincpu, 0xC0000U);
         const rom_set_file* reload_hi = find_file_at(maincpu, 0xC0001U);
+        std::uint32_t expected_size = 0x20000U;
+        if (reload_lo == nullptr || reload_hi == nullptr) {
+            reload_lo = find_file_at(maincpu, 0xE0000U);
+            reload_hi = find_file_at(maincpu, 0xE0001U);
+            expected_size = 0x10000U;
+        }
         REQUIRE(reload_lo != nullptr);
         REQUIRE(reload_hi != nullptr);
         CHECK(reload_lo->stride == 2U);
         CHECK(reload_hi->stride == 2U);
-        CHECK(reload_lo->size == 0x20000U);
-        CHECK(reload_hi->size == 0x20000U);
+        CHECK(reload_lo->size == expected_size);
+        CHECK(reload_hi->size == expected_size);
         CHECK(reload_lo->crc32.has_value());
         CHECK(reload_hi->crc32.has_value());
     }
@@ -221,7 +227,8 @@ namespace {
             if (!known.contains(set_id)) {
                 return std::nullopt;
             }
-            return identified_m82_source{.set_id = set_id, .rank = 2U};
+            return identified_m82_source{.set_id = set_id,
+                                         .rank = set_id == "dkgensanm82" ? 0U : 2U};
         }
         if (!std::filesystem::is_regular_file(path, ec) ||
             !ends_with_zip(path.filename().string())) {
@@ -461,7 +468,7 @@ TEST_CASE("m82 checked-in game manifests parse and cover local M82 corpus", "[m8
     }
 
     const std::set<std::string, std::less<>> expected_names{
-        "airduel", "airduelu", "majtitle", "majtitlej",
+        "airduel", "airduelu", "dkgensanm82", "majtitle", "majtitlej",
         "rtype2",  "rtype2j",  "rtype2jc",  "rtype2m82b"};
     std::set<std::string, std::less<>> names;
     for (const auto& [set_name, raw_decl] : declarations) {
@@ -524,9 +531,10 @@ TEST_CASE("m82 checked-in game manifests parse and cover local M82 corpus", "[m8
 TEST_CASE("m82 embedded game manifests mirror the checked-in roster", "[m82][romset]") {
     using mnemos::manifests::irem_m82::embedded::game_manifests;
 
-    CHECK(game_manifests.size() == 8U);
+    CHECK(game_manifests.size() == 9U);
     CHECK_FALSE(mnemos::manifests::irem_m82::game_manifest_toml("airduel").empty());
     CHECK_FALSE(mnemos::manifests::irem_m82::game_manifest_toml("airduelu").empty());
+    CHECK_FALSE(mnemos::manifests::irem_m82::game_manifest_toml("dkgensanm82").empty());
     CHECK_FALSE(mnemos::manifests::irem_m82::game_manifest_toml("majtitle").empty());
     CHECK_FALSE(mnemos::manifests::irem_m82::game_manifest_toml("majtitlej").empty());
     CHECK_FALSE(mnemos::manifests::irem_m82::game_manifest_toml("rtype2").empty());
@@ -891,7 +899,15 @@ TEST_CASE("m82 local artifacts load CRC-clean through embedded manifests", "[m82
         const auto* maincpu = image.region("maincpu");
         REQUIRE(maincpu != nullptr);
         REQUIRE(maincpu->size() == m82::main_rom_size);
-        CHECK(std::equal(maincpu->begin() + 0x40000, maincpu->begin() + 0x80000,
-                         maincpu->begin() + 0xC0000));
+        const auto* maincpu_decl = find_region(effective_decl, "maincpu");
+        REQUIRE(maincpu_decl != nullptr);
+        const bool reloads_at_c0000 = find_file_at(*maincpu_decl, 0xC0000U) != nullptr &&
+                                      find_file_at(*maincpu_decl, 0xC0001U) != nullptr;
+        const std::size_t source_start = reloads_at_c0000 ? 0x40000U : 0x60000U;
+        const std::size_t reload_bytes = reloads_at_c0000 ? 0x40000U : 0x20000U;
+        const std::size_t reload_start = reloads_at_c0000 ? 0xC0000U : 0xE0000U;
+        CHECK(std::equal(maincpu->begin() + source_start,
+                         maincpu->begin() + source_start + reload_bytes,
+                         maincpu->begin() + reload_start));
     }
 }

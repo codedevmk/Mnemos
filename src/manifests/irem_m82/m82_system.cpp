@@ -144,7 +144,7 @@ namespace mnemos::manifests::irem_m82 {
         }
         if (set_name == "airduel" || set_name == "airduelu" || set_name == "rtype2" ||
             set_name == "rtype2j" || set_name == "rtype2jc" || set_name == "majtitle" ||
-            set_name == "majtitlej") {
+            set_name == "majtitlej" || set_name == "dkgensanm82") {
             return {.dip_default = 0xFFFFU, .bootleg_layout = false};
         }
         return {};

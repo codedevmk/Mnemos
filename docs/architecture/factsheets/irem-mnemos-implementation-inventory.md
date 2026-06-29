@@ -14,28 +14,32 @@ Current Mnemos coverage sources:
 scripts\irem\inventory-corpus.ps1 -Root D:\emu\irem -Recurse -Out build\scratch\irem-implementation-inventory-corpus.json
 ```
 
-That scan found 437 local corpus items across 25 top-level buckets. Direct files
+That scan found 438 local corpus items across 25 top-level buckets. Direct files
 under `D:\emu\irem` are zero; the remaining files live under board/system
 buckets such as `M72`, `M92`, `M119`, `M62`, `M58`, and `travrusa`, plus
 quarantine or classification buckets such as `for-delete` and `non-irem`. The
 lowercase `travrusa` bucket is intentional: Mnemos currently treats Traverse
 USA / Zippy Race as its own first-pass family profile because the factsheet does
-not yet map it to a numbered M-board. Of those 437 items, 312 currently match a
-checked-in Mnemos Irem manifest, 169 are readable through the current ZIP,
-single-inner wrapper ZIP, or unpacked-folder media routes, 167 have an
+not yet map it to a numbered M-board. Of those 438 items, 315 currently match a
+checked-in Mnemos Irem manifest, 171 are readable through the current ZIP,
+single-inner wrapper ZIP, or unpacked-folder media routes, 169 have an
 executable player-supported route, two are tracked contract-only routes, and
-143 are metadata-only tracked matches. The count includes `scumimon` after it
+144 are metadata-only tracked matches. The count includes `scumimon` after it
 was moved from `D:\emu\irem\M92` to `D:\emu\irem\M119`. M78 now has a
 manifest-only `bj92` contract: `bj92.zip` is the contract-only route, and
 `bj92.7z` remains metadata-only until converted or unpacked. M57 now has a first-pass New Tropical Angel
 player route; `newtangl.zip` is supported while `newtangl.7z` remains
 metadata-only until converted or unpacked. M63 also has a first-pass Wily Tower
 player route; `wilytowr.zip` is supported while the two local `.7z` Wily Tower archives
-remain metadata-only until converted or unpacked. The only tracked
-contract-only local item is `D:\emu\irem\M119\scumimon.zip`; ignored
+remain metadata-only until converted or unpacked. M82 now includes
+`dkgensanm82`: the local split ZIP is metadata-only, the standalone `.7z` was
+unpacked to `D:\emu\irem\M82\dkgensanm82`, and the unpacked folder plus `.7z`
+count as the two loadable tracked routes. The two tracked contract-only local
+items are `D:\emu\irem\M78\bj92.zip` and
+`D:\emu\irem\M119\scumimon.zip`; ignored
 buckets may still show filename-level manifest matches, but they contribute zero
 tracked, loadable, supported, contract-only, or metadata-only support counts.
-Another 142 tracked manifest matches remain metadata-only until converted,
+Another 144 tracked manifest matches remain metadata-only until converted,
 unpacked, supplied with required supplemental media, or classified as non-ROM
 artwork/layout proof.
 Board-local `name-collisions` folders are skipped by both inventory and
@@ -106,7 +110,7 @@ proof.
 | M77 | none | 0% | None | None | None | Board research before implementation |
 | M78 | `irem_m78` manifest-only | 3% | `bj92` | None; ZIP loads CRC-clean as a contract-only data gate, but no player route exists | None | Implement the dual-Z80 board profile, I/O/comms, video registers, YM2151/DAC/M72-audio path, no-dump sample ROM handling, and player adapter |
 | M81 | `irem_m81` | 56% | `dbreed`, `hharry`, `xmultipl` | all 3 local sets; sound-Z80-clocked DAC event proof | None | Video priority, raster timing, DIP proof, palette-bank decode, visual/audio parity |
-| M82 | `irem_m82` | 68% | `airduel`, `airduelu`, `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 8 checked-in local sets; local Air Duel M82 parent/US clone wrappers; sound-Z80-clocked DAC event proof | None | Board classification audit, Major Title/Air Duel priority/parity proof, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
+| M82 | `irem_m82` | 69% | `airduel`, `airduelu`, `dkgensanm82`, `majtitle`, `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b` | all 9 checked-in local sets; local Air Duel M82 parent/US clone wrappers; Daiku no Gensan M82 unpacked standalone route; sound-Z80-clocked DAC event proof | None | Board classification audit, Major Title/Air Duel/Daiku no Gensan priority/parity proof, palette-bank decode, raster phase, DIP proof, priority parity, audio parity |
 | M84 | `irem_m84` wrapper | 48% | `cosmccop`, `dkgensan`, `dkgensana`, `gallop`, `hharryb`, `hharryu`, `kengo`, `kengoj`, `ltswords` | all 9 checked-in M84 sets; Daiku no Gensan and Ken-Go split-clone parent fallback; V30/V35 CPU profile proof; Gallop/Cosmic Cop DIP default `0xf9bf` | None | Replace M81-compatible assumptions, M84 memory/I/O, Hammerin' Harry/Cosmic Cop/Ken-Go priority/raster, board-authentic DIP proof, `ltswords`/Ken-Go PROM/PLD artifacts |
 | M85 | `irem_m85` wrapper | 22% | `poundfor`, `poundforj` | local parent and Japan split-clone ZIPs load CRC-clean through `--system irem_m85` / `m85`; nonblank screenshot and save-state proof | None | Replace M81-compatible assumptions, prove M85 memory/I/O/video/audio/input/DIP behavior, visual/audio parity |
 | M90 / M97 / M99 | `irem_m90` first-pass | 36% | `atompunk`, `bbmanw`, `bbmanwj`, `bbmanwja`, `gussun`, `hasamu`, `newapunk`, `quizf1`, `riskchal` | all 9 local M90 ZIPs under `D:\emu\irem\M90`; split-clone parent fallback for Atomic Punk/Bomber Man World/Gussun; service/test input proof; parsed DIP metadata support; sound-Z80-clocked DAC event proof; resident GA25 graphics/sample media validation where dumped | None | Authentic GA25 video, V35 on-die peripherals and banked program mapping, board-authentic DIP tables/runtime proof, visual/audio parity |
@@ -720,14 +724,19 @@ visual and audio parity proof.
 
 - **Techsheet games:** Major Title, plus M82 builds of Air Duel and Daiku no
   Gensan.
-- **Mnemos games:** `airduel`, `airduelu`, `majtitle`, `majtitlej`, `rtype2`,
-  `rtype2j`, `rtype2jc`, `rtype2m82b`.
-- **Smoke playable:** all eight checked-in local M82 sets load through `--system
+- **Mnemos games:** `airduel`, `airduelu`, `dkgensanm82`, `majtitle`,
+  `majtitlej`, `rtype2`, `rtype2j`, `rtype2jc`, `rtype2m82b`.
+- **Smoke playable:** all nine checked-in local M82 sets load through `--system
   irem_m82` with clone-parent fallback where needed and nonblank player smoke.
   Air Duel uses `D:\emu\irem\M72\Air-Duel_Arcade_EN (1).zip` for the M82 parent
   and `D:\emu\irem\M72\Air-Duel_Arcade_EN (2).zip` for the US split clone,
   while the duplicate mixed `D:\emu\irem\M72\airduel.zip` remains loadable by
   explicit `--system irem_m82`.
+  Daiku no Gensan M82 uses the unpacked standalone route at
+  `D:\emu\irem\M82\dkgensanm82`, because the local `dkgensanm82.zip` is a split
+  subset missing the shared sprite/tile/PAL dumps that are present in
+  `dkgensanm82.7z`; direct `mnemos_player --system irem_m82` smoke wrote a
+  384x256 nonblank PPM after 180 frames and a save state for that unpacked set.
   Major Title uses the local `D:\emu\irem\Major-Title_Arcade_EN.zip` parent
   wrapper and `D:\emu\irem\Major-Title_Arcade_JA.zip` Japan split wrapper.
   Its dedicated `backgrounds` ROM region is now loaded and consumed by the rear
@@ -740,9 +749,10 @@ visual and audio parity proof.
   current Mnemos implementation routes the local R-Type II sets through
   `irem_m82`. Keep this as an explicit board-evidence audit item rather than
   treating either label as final.
-- **Remaining:** prove board classification, Major Title/Air Duel background
-  priority/parity against reference evidence, palette-bank rendering/decode,
-  exact raster phase, DIP behavior, visual-priority parity, and audio parity.
+- **Remaining:** prove board classification, Major Title/Air Duel/Daiku no
+  Gensan background and sprite priority/parity against reference evidence,
+  palette-bank rendering/decode, exact raster phase, DIP behavior,
+  visual-priority parity, and audio parity.
 
 ### M84
 

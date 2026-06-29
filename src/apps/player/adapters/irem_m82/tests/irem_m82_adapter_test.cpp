@@ -158,7 +158,8 @@ namespace {
             if (!known.contains(set_id)) {
                 return std::nullopt;
             }
-            return identified_m82_source{.set_id = set_id, .rank = 2U};
+            return identified_m82_source{.set_id = set_id,
+                                         .rank = set_id == "dkgensanm82" ? 0U : 2U};
         }
         if (!std::filesystem::is_regular_file(path, ec) ||
             !ends_with_zip(path.filename().string())) {
