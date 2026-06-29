@@ -132,7 +132,7 @@ proof.
 | M92 | `irem_m92` | 68% first-pass | `bmaster`, `crossbld`, `dsoccr94j`, `geostorm`, `geostorma`, `gunforce`, `gunforcej`, `gunforceu`, `gunforc2`, `gunhohki`, `hook`, `hookj`, `inthunt`, `inthuntk`, `inthuntu`, `kaiteids`, `leaguemn`, `leaguemna`, `lethalth`, `majtitl2`, `majtitl2a`, `majtitl2b`, `majtitl2j`, `mysticri`, `mysticrib`, `nbbatman`, `nbbatmanu`, `psoldier`, `rtypeleo`, `rtypeleoj`, `ssoldier`, `thndblst`, `uccops`, `uccopsar`, `uccopsj`, `uccopsu` | all 36 data-gated first-pass sets; Blade Master Japan, Dream Soccer '94 Japan M92 hardware with explicit `dsoccr94.zip` supplemental media, Geostorm, Hook Japan, In the Hunt US/Japan/Korea, GunForce, League-Man, Lethal Thunder/Thunder Blaster, Major Title 2, Mystic Riders, Ninja Baseball Bat Man, R-Type Leo, Superior/Perfect Soldiers, and Undercover Cops nonblank/save-state smokes; modeled V35 command/YM IRQ priority proof | None | Encrypted V35 sound CPU behavior/decryption, GA21/GA22 video/priority, exact M92 memory/I/O, protection, DIP/raster/audio/video parity |
 | M102 | `irem_m102` first-pass | 12% | `hclimber` | local `hclimber.zip` through the adapter; nonblank diagnostic frame, GA20 capture path, and save-state proof | None | Authentic D70008AC/Z80 timing, medal/mechanical I/O, artwork/mechanical model, DIP behavior, title video timing, and visual/audio parity |
 | M107 | `irem_m107` | 58% | `airass`, `dsoccr94`, `firebarr` | all 3 checked-in sets are data-gated; Air Assault and Dream Soccer '94 have direct nonblank/save-state smoke; Fire Barrel is CRC-clean and player-routable; shared Fire Barrel/Air Assault SW1/SW2 default `0xffbf` and SW3 `COINS_DSW3` default `0xebff`; Dream Soccer SW3 Player Power default keeps `COINS_DSW3=0xffff`; service/test plus command/YM IRQ priority proof | None | V33/V35-specific behavior, deeper M107 I/O proof, GA21/GA22 video, cycle-exact V35 IRQ latency/GA20 analog mix, raster/parity |
-| M119 | `irem_m119` first-pass | 12% | `scumimon` | local `scumimon.zip` through the adapter; explicit SH7708/SH-3, uPD94244-210, and YMZ280B chip surfaces; SH-executed local-register/MMIO proof; nonblank diagnostic frame, YMZ capture path, and save-state proof | None | Authentic SH-3 MMU/cache/timers/interrupts, uPD94244 raster/tile/sprite behavior, YMZ280B ADPCM/sample format, M119 board I/O/timing, DIP/mechanical behavior, and visual/audio parity |
+| M119 | `irem_m119` first-pass | 14% | `scumimon` | local `scumimon.zip` through the adapter; explicit SH7708/SH-3, uPD94244-210, and datasheet-shaped YMZ280B chip surfaces; SH-executed local-register/MMIO proof; YMZ280B 24-bit address, loop, PCM8/PCM16/ADPCM smoke tests; nonblank diagnostic frame, YMZ rendered-audio capture path, and save-state proof | None | Authentic SH-3 MMU/cache/timers/interrupts, uPD94244 raster/tile/sprite behavior, YMZ280B exact ADPCM edge cases, DSP/IRQ/bus timing, M119 board I/O/timing, DIP/mechanical behavior, and visual/audio parity |
 
 ## Correct Graphics And Music Certification
 
@@ -1048,12 +1048,15 @@ visual and audio parity proof.
   offsets, interleave, and CRC-32 values.
 - **Current implementation:** the SH7708 shell now exposes serializable local
   control registers through normal SH bus operations, and the M119 board maps
-  the first uPD94244 registers as big-endian 32-bit MMIO lanes plus YMZ280B
-  byte registers. The `scumimon` route has direct player smoke proof with a
-  nonblank 512x384 diagnostic PPM and rendered YMZ audio output.
+  the first uPD94244 registers as big-endian 32-bit MMIO lanes plus the
+  documented YMZ280B channel/utility byte-register map. The YMZ path covers
+  24-bit start/loop/end addresses, PCM8, MSB-first PCM16, ADPCM nibble decode,
+  loop playback, and enabled end-status latching. The `scumimon` route has
+  direct player smoke proof with a nonblank 512x384 diagnostic PPM and rendered
+  YMZ audio output.
 - **Remaining:** replace the SH-2-compatible SH-3 execution bridge with
   authentic SH7708 MMU/cache/timer/interrupt behavior, implement uPD94244
-  rendering, implement YMZ280B native sample decoding, prove board
+  rendering, prove YMZ280B exact ADPCM/DSP/IRQ/bus timing, prove board
   I/O/DIP/mechanical behavior, and add visual/audio parity before any Scumimon
   correctness claim.
 

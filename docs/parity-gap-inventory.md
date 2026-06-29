@@ -1191,7 +1191,10 @@ M119 hardware, not the V33/V35/GA20 video-game boards.
   audio capture, and save-state smoke coverage. SH-executed tests now prove
   SH7708 local register byte lanes through the CPU bus, big-endian 32-bit
   uPD94244 register MMIO, and SH-driven YMZ280B register writes rather than
-  host-only helper writes. This is executable first-pass support, not correct
+  host-only helper writes. YMZ280B tests now cover the documented channel
+  register map, 24-bit start/loop/end addresses, PCM8, MSB-first PCM16, ADPCM
+  nibble playback, loop handling, and enabled end-status latching. This is
+  executable first-pass support, not correct
   graphics/music parity · DONE · HIGH · L · beyond Emu ·
   Evidence: `src/chips/cpu/sh3/tests/sh3_test.cpp` +
   `src/chips/video/upd94244/tests/upd94244_test.cpp` +
@@ -1200,9 +1203,10 @@ M119 hardware, not the V33/V35/GA20 video-game boards.
   `src/apps/player/adapters/irem_m119/tests/irem_m119_adapter_test.cpp`
 - [ ] **I119-3** Authentic M119 silicon/parity — remaining work is real
   SH7708 MMU/cache/timer/interrupt behavior, uPD94244 raster/tile/sprite
-  behavior, YMZ280B ADPCM/sample format accuracy, M119 board I/O and timing,
-  DIP/mechanical behavior, and verified correct visual/audio parity against
-  hardware reference captures · MISSING · HIGH · L · beyond Emu · Evidence:
+  behavior, YMZ280B exact ADPCM edge cases, DSP/IRQ/bus-timing behavior, M119
+  board I/O and timing, DIP/mechanical behavior, and verified correct
+  visual/audio parity against hardware reference captures · MISSING · HIGH · L ·
+  beyond Emu · Evidence:
   the first-pass tests intentionally assert deterministic diagnostics and corpus
   loadability only.
 

@@ -164,8 +164,7 @@ namespace mnemos::manifests::irem_m119 {
             const auto reg = static_cast<std::uint8_t>(offset - mmio_ymz_base);
             ymz.write_register(reg, value);
             ++ymz_register_write_count;
-            if ((reg % chips::audio::ymz280b::channel_register_count) ==
-                    chips::audio::ymz280b::reg_control &&
+            if (chips::audio::ymz280b::is_channel_control_register(reg) &&
                 (value & chips::audio::ymz280b::control_key_on) != 0U) {
                 ++ymz_key_on_count;
             }
