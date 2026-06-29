@@ -1,5 +1,7 @@
 set(_irem_m15_game_manifest_files
+    "games/greenber.toml"
     "games/headoni.toml"
+    "games/spacbeam.toml"
 )
 set(MNEMOS_IREM_M15_GAME_MANIFEST_COUNT 0)
 set(MNEMOS_IREM_M15_EMBEDDED_CONSTANTS "")

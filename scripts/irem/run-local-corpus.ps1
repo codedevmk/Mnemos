@@ -92,6 +92,7 @@ $m72ArtifactPreflightExitCode = 0
 Write-Host "Wiring local Irem corpus from $rootPath" -ForegroundColor Cyan
 
 Set-EnvIfPathExists -Name "MNEMOS_M14_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M14")
+Set-EnvIfPathExists -Name "MNEMOS_M10_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M10")
 Set-EnvIfPathExists -Name "MNEMOS_M15_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M15")
 Set-EnvIfPathExists -Name "MNEMOS_M27_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M27")
 Set-EnvIfPathExists -Name "MNEMOS_M47_SET_DIR" -Path (Join-CorpusPath -Base $rootPath -Child "M47")

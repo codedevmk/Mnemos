@@ -52,6 +52,16 @@ namespace {
         return it == decl.regions.end() ? nullptr : &*it;
     }
 
+    [[nodiscard]] std::size_t expected_main_file_count(std::string_view set_name) noexcept {
+        if (set_name == "greenber") {
+            return 10U;
+        }
+        if (set_name == "headoni" || set_name == "spacbeam") {
+            return 7U;
+        }
+        return 0U;
+    }
+
     void require_region_contract(const rom_set_region& region) {
         CHECK(region.size > 0U);
         REQUIRE_FALSE(region.files.empty());
@@ -447,7 +457,7 @@ TEST_CASE("m15 checked-in game manifests parse and cover local candidate corpus"
         declarations.emplace(decl.name, std::move(*parsed.value));
     }
 
-    const std::set<std::string, std::less<>> expected_names{"headoni"};
+    const std::set<std::string, std::less<>> expected_names{"greenber", "headoni", "spacbeam"};
     std::set<std::string, std::less<>> names;
     for (const auto& [set_name, decl] : declarations) {
         INFO("set=" << set_name);
@@ -458,16 +468,16 @@ TEST_CASE("m15 checked-in game manifests parse and cover local candidate corpus"
         const rom_set_region* maincpu = find_region(decl, "maincpu");
         REQUIRE(maincpu != nullptr);
         CHECK(maincpu->size == m15::main_rom_size);
-        REQUIRE(maincpu->files.size() == 7U);
+        REQUIRE(maincpu->files.size() == expected_main_file_count(set_name));
         require_region_contract(*maincpu);
 
-        const std::array<std::size_t, 7U> expected_offsets{
-            0x1000U, 0x1400U, 0x1800U, 0x1C00U, 0xFC00U, 0x2000U, 0x2400U};
-        for (std::size_t i = 0U; i < maincpu->files.size(); ++i) {
+        const std::array<std::size_t, 10U> expected_offsets{
+            0x1000U, 0x1400U, 0x1800U, 0x1C00U, 0xFC00U,
+            0x2000U, 0x2400U, 0x2800U, 0x2C00U, 0x3000U};
+        for (std::size_t i = 0U; i < maincpu->files.size() && i < expected_offsets.size(); ++i) {
             CHECK(maincpu->files[i].offset == expected_offsets[i]);
         }
-        CHECK(maincpu->files[3].name == "e4.9d");
-        CHECK(maincpu->files[4].name == "e4.9d");
+        CHECK(maincpu->files[3].name == maincpu->files[4].name);
     }
 
     CHECK(names == expected_names);
@@ -475,13 +485,17 @@ TEST_CASE("m15 checked-in game manifests parse and cover local candidate corpus"
     CHECK(params.cpu_clock_hz == m15::cpu_clock_hz);
     CHECK(params.rom_layout == "m15_headon_6502");
     CHECK(params.dip_default == m15::headoni_dip_default);
+    CHECK(m15::board_params_for("greenber").rom_layout == "m15_headon_6502");
+    CHECK(m15::board_params_for("spacbeam").rom_layout == "m15_headon_6502");
 }
 
 TEST_CASE("m15 embedded game manifests mirror the checked-in roster", "[m15][romset]") {
     using mnemos::manifests::irem_m15::embedded::game_manifests;
 
-    CHECK(game_manifests.size() == 1U);
+    CHECK(game_manifests.size() == 3U);
+    CHECK_FALSE(mnemos::manifests::irem_m15::game_manifest_toml("greenber").empty());
     CHECK_FALSE(mnemos::manifests::irem_m15::game_manifest_toml("headoni").empty());
+    CHECK_FALSE(mnemos::manifests::irem_m15::game_manifest_toml("spacbeam").empty());
     CHECK(mnemos::manifests::irem_m15::game_manifest_toml("rtype").empty());
 }
 

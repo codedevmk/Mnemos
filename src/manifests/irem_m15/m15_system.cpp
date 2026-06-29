@@ -126,7 +126,7 @@ namespace mnemos::manifests::irem_m15 {
     } // namespace
 
     m15_board_params board_params_for(std::string_view set_name) noexcept {
-        if (set_name == "headoni") {
+        if (set_name == "greenber" || set_name == "headoni" || set_name == "spacbeam") {
             return {.cpu_clock_hz = cpu_clock_hz, .rom_layout = "m15_headon_6502",
                     .dip_default = headoni_dip_default};
         }

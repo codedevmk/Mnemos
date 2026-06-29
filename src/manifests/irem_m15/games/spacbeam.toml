@@ -1,0 +1,62 @@
+# Space Beam -- local Irem M15 corpus set.
+# Schema mnemos-romset/1; this is a ROM-contract manifest. The executable
+# first-pass board profile uses the M-15 MOS 6502 memory map.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "spacbeam"
+board       = "irem_m15"
+orientation = "vertical"
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name    = "m1b"
+aliases = ["spacbeam/m1b"]
+offset  = 0x1000
+size    = 0x0400
+crc32   = 0x5a1c3e0b
+
+[[region.file]]
+name    = "m2b"
+aliases = ["spacbeam/m2b"]
+offset  = 0x1400
+size    = 0x0400
+crc32   = 0xa02bd9d7
+
+[[region.file]]
+name    = "m3b"
+aliases = ["spacbeam/m3b"]
+offset  = 0x1800
+size    = 0x0400
+crc32   = 0x78040843
+
+[[region.file]]
+name    = "m4b"
+aliases = ["spacbeam/m4b"]
+offset  = 0x1c00
+size    = 0x0400
+crc32   = 0x74705a44
+
+[[region.file]]
+name    = "m4b"
+aliases = ["spacbeam/m4b"]
+offset  = 0xfc00
+size    = 0x0400
+crc32   = 0x74705a44
+
+[[region.file]]
+name    = "m5b"
+aliases = ["spacbeam/m5b"]
+offset  = 0x2000
+size    = 0x0400
+crc32   = 0xafdf1242
+
+[[region.file]]
+name    = "m6b"
+aliases = ["spacbeam/m6b"]
+offset  = 0x2400
+size    = 0x0400
+crc32   = 0x12afb0c2
