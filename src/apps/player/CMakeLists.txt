@@ -47,7 +47,7 @@ add_subdirectory(adapters/spectrum)
 add_subdirectory(adapters/nes)
 add_subdirectory(adapters/msx)
 add_subdirectory(adapters/msx2)
-add_subdirectory(adapters/amiga500)
+add_subdirectory(adapters/amiga)
 
 # Shared bitmap-font overlay helpers, kept in their own static lib so the
 # unit test can link against the same code the player binary uses.
@@ -114,7 +114,7 @@ target_link_libraries(
         mnemos::apps::player::nes_adapter
         mnemos::apps::player::msx_adapter
         mnemos::apps::player::msx2_adapter
-        mnemos::apps::player::amiga500_adapter
+        mnemos::apps::player::amiga_adapter
         mnemos::chips::storage::msx_cassette
         mnemos::chips::storage::wd1793
         mnemos::debug::dump
@@ -166,9 +166,9 @@ if(BUILD_TESTING)
         SOURCES tests/system_launch_test.cpp
         LIBRARIES
             mnemos::apps::player::core
-            mnemos::apps::player::amiga500_adapter
+            mnemos::apps::player::amiga_adapter
             mnemos::compression
-            mnemos::manifests::amiga500
+            mnemos::manifests::amiga
     )
     mnemos_add_test(
         mnemos_apps_player_capability_summary_test
@@ -210,6 +210,6 @@ if(BUILD_TESTING)
             mnemos::apps::player::capcom_cps2_adapter
             mnemos::apps::player::msx_adapter
             mnemos::apps::player::msx2_adapter
-            mnemos::apps::player::amiga500_adapter
+            mnemos::apps::player::amiga_adapter
     )
 endif()

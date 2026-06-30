@@ -1,4 +1,4 @@
-#include "amiga500_adapter.hpp"
+#include "amiga_adapter.hpp"
 #include "c64_adapter.hpp"
 #include "capability_discovery.hpp"
 #include "capcom_cps1_adapter.hpp"
@@ -46,7 +46,7 @@
 
 namespace {
 
-    namespace amiga500 = mnemos::apps::player::adapters::amiga500;
+    namespace amiga = mnemos::apps::player::adapters::amiga;
     namespace c64 = mnemos::apps::player::adapters::c64;
     namespace cps1 = mnemos::apps::player::adapters::capcom_cps1;
     namespace cps2 = mnemos::apps::player::adapters::capcom_cps2;
@@ -168,9 +168,9 @@ namespace {
 
     [[nodiscard]] std::vector<std::uint8_t> amiga500_kickstart() {
         std::vector<std::uint8_t> rom(
-            mnemos::manifests::amiga500::amiga500_system::kickstart_window_size, 0x00U);
+            mnemos::manifests::amiga::amiga_system::kickstart_window_size, 0x00U);
         poke32_be(rom, 0x00U, 0x0007F000U);
-        poke32_be(rom, 0x04U, mnemos::manifests::amiga500::amiga500_system::kickstart_base + 8U);
+        poke32_be(rom, 0x04U, mnemos::manifests::amiga::amiga_system::kickstart_base + 8U);
         poke16_be(rom, 0x08U, 0x46FCU);
         poke16_be(rom, 0x0AU, 0x2700U);
         poke16_be(rom, 0x0CU, 0x60FEU);
@@ -179,7 +179,7 @@ namespace {
 
     [[nodiscard]] std::vector<std::uint8_t> amiga500_adf() {
         return std::vector<std::uint8_t>(
-            mnemos::manifests::amiga500::amiga500_system::floppy_dd_size, 0x00U);
+            mnemos::manifests::amiga::amiga_system::floppy_dd_size, 0x00U);
     }
 
     [[nodiscard]] std::vector<std::uint8_t> cps1_program() {
@@ -654,7 +654,7 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
     }
 
     SECTION("Amiga 500") {
-        amiga500::amiga500_adapter adapter(amiga500_kickstart(), {}, "Tiny Kickstart");
+        amiga::amiga_adapter adapter(amiga500_kickstart(), {}, "Tiny Kickstart");
         const auto summary = summary_for(adapter);
         require_common_session_controls(summary, true);
         require_degraded_media(summary, "media.kickstart");
@@ -663,7 +663,7 @@ TEST_CASE("player capability summaries expose computer and arcade adapter contro
     SECTION("Amiga 500 disk") {
         std::vector<std::vector<std::uint8_t>> disks;
         disks.push_back(amiga500_adf());
-        amiga500::amiga500_adapter adapter(amiga500_kickstart(), {}, "Tiny ADF", std::move(disks));
+        amiga::amiga_adapter adapter(amiga500_kickstart(), {}, "Tiny ADF", std::move(disks));
         const auto summary = summary_for(adapter);
         require_common_session_controls(summary, true);
         require_degraded_media(summary, "media.disk_0");

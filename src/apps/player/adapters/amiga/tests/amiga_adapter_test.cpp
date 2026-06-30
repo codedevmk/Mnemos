@@ -1,4 +1,4 @@
-#include "amiga500_adapter.hpp"
+#include "amiga_adapter.hpp"
 
 #include "adapter_registry.hpp"
 
@@ -19,11 +19,11 @@
 
 namespace {
     namespace fs = std::filesystem;
-    using mnemos::apps::player::adapters::amiga500::amiga500_adapter;
-    using mnemos::manifests::amiga500::amiga500_config;
-    using mnemos::manifests::amiga500::amiga500_keyboard_layout;
-    using mnemos::manifests::amiga500::amiga500_model;
-    using mnemos::manifests::amiga500::amiga500_system;
+    using mnemos::apps::player::adapters::amiga::amiga_adapter;
+    using mnemos::manifests::amiga::amiga_config;
+    using mnemos::manifests::amiga::amiga_keyboard_layout;
+    using mnemos::manifests::amiga::amiga_model;
+    using mnemos::manifests::amiga::amiga_system;
     using agnus = mnemos::chips::video::agnus;
 
     [[nodiscard]] std::optional<std::string> get_env(const char* name) {
@@ -113,7 +113,7 @@ namespace {
     }
 
     [[nodiscard]] std::vector<std::uint8_t> tiny_kickstart() {
-        std::vector<std::uint8_t> rom(amiga500_system::kickstart_window_size, 0x00U);
+        std::vector<std::uint8_t> rom(amiga_system::kickstart_window_size, 0x00U);
         const auto w16 = [&](std::size_t off, std::uint16_t v) {
             rom[off] = static_cast<std::uint8_t>(v >> 8U);
             rom[off + 1U] = static_cast<std::uint8_t>(v);
@@ -125,7 +125,7 @@ namespace {
             rom[off + 3U] = static_cast<std::uint8_t>(v);
         };
         w32(0x0000U, 0x0007F000U);
-        w32(0x0004U, amiga500_system::kickstart_base + 0x0008U);
+        w32(0x0004U, amiga_system::kickstart_base + 0x0008U);
         w16(0x0008U, 0x46FCU);
         w16(0x000AU, 0x2700U);
         w16(0x000CU, 0x60FEU);
@@ -149,22 +149,22 @@ namespace {
     }
 
     [[nodiscard]] std::vector<std::uint8_t> tiny_adf(std::uint8_t fill) {
-        std::vector<std::uint8_t> adf(amiga500_system::floppy_dd_size, fill);
+        std::vector<std::uint8_t> adf(amiga_system::floppy_dd_size, fill);
         adf[0] = 0x44U;
         adf[1] = 0x89U;
         return adf;
     }
 
-    void write_chip_word(amiga500_system& sys, std::uint32_t address, std::uint16_t value) {
+    void write_chip_word(amiga_system& sys, std::uint32_t address, std::uint16_t value) {
         sys.bus.write8(address, static_cast<std::uint8_t>(value >> 8U));
         sys.bus.write8(address + 1U, static_cast<std::uint8_t>(value));
     }
 
-    void assign_first_zorro2_board(amiga500_system& sys, std::uint8_t base_page = 0x20U) {
+    void assign_first_zorro2_board(amiga_system& sys, std::uint8_t base_page = 0x20U) {
         REQUIRE(sys.zorro2_autoconfig_pending());
-        sys.bus.write8(amiga500_system::zorro2_autoconfig_base + 0x4AU,
+        sys.bus.write8(amiga_system::zorro2_autoconfig_base + 0x4AU,
                        static_cast<std::uint8_t>(base_page & 0x0FU));
-        sys.bus.write8(amiga500_system::zorro2_autoconfig_base + 0x48U, base_page);
+        sys.bus.write8(amiga_system::zorro2_autoconfig_base + 0x48U, base_page);
     }
 
     [[nodiscard]] bool joy_up(std::uint16_t joy) {
@@ -182,7 +182,7 @@ namespace {
         return static_cast<std::uint8_t>((inverted << 1U) | (inverted >> 7U));
     }
 
-    void acknowledge_keyboard(amiga500_system& sys) {
+    void acknowledge_keyboard(amiga_system& sys) {
         sys.cia_a.write(0x04U, 0x01U); // Timer A latch = 1 for a short SP pulse.
         sys.cia_a.write(0x05U, 0x00U);
         sys.cia_a.write(0x0EU, 0x41U); // CRA: START | SPMODE output.
@@ -192,7 +192,7 @@ namespace {
         sys.service_keyboard_queue();
     }
 
-    void expect_keyboard_edge(amiga500_adapter& adapter,
+    void expect_keyboard_edge(amiga_adapter& adapter,
                               mnemos::frontend_sdk::controller_state& keyboard, std::uint16_t usage,
                               std::uint8_t raw_key) {
         keyboard.set_key(usage, true);
@@ -208,25 +208,25 @@ namespace {
         acknowledge_keyboard(adapter.system());
     }
 
-    void select_df0(amiga500_system& sys) {
+    void select_df0(amiga_system& sys) {
         sys.cia_b.write(0x03U, 0xFFU);
         sys.cia_b.write(0x01U, 0x75U);
     }
 
-    void select_df1(amiga500_system& sys) {
+    void select_df1(amiga_system& sys) {
         sys.cia_b.write(0x03U, 0xFFU);
         sys.cia_b.write(0x01U, 0x6DU);
     }
 } // namespace
 
-TEST_CASE("amiga500 adapter constructs and steps frames", "[apps][player][amiga500]") {
-    amiga500_adapter adapter(tiny_kickstart());
+TEST_CASE("amiga adapter constructs and steps frames", "[apps][player][amiga500]") {
+    amiga_adapter adapter(tiny_kickstart());
 
     const auto fb0 = adapter.current_frame();
     CHECK(fb0.width == 320U);
     CHECK(fb0.height == 256U);
     REQUIRE(adapter.chips().size() == 7U);
-    CHECK(adapter.chips()[6]->metadata().part_number == "amiga500_board");
+    CHECK(adapter.chips()[6]->metadata().part_number == "amiga_board");
     REQUIRE(adapter.chips()[6]->introspection().registers() != nullptr);
     const auto board_regs = adapter.chips()[6]->introspection().registers()->registers();
     REQUIRE(board_regs.size() == 23U);
@@ -244,8 +244,8 @@ TEST_CASE("amiga500 adapter constructs and steps frames", "[apps][player][amiga5
     CHECK(adapter.current_frame().pixels != nullptr);
 }
 
-TEST_CASE("amiga500 adapter publishes session and media metadata", "[apps][player][amiga500]") {
-    amiga500_adapter adapter(tiny_kickstart(), {}, "Kickstart 1.3");
+TEST_CASE("amiga adapter publishes session and media metadata", "[apps][player][amiga500]") {
+    amiga_adapter adapter(tiny_kickstart(), {}, "Kickstart 1.3");
 
     const auto& session = adapter.session_capabilities();
     REQUIRE(session.input_ports.size() == 6U);
@@ -268,20 +268,20 @@ TEST_CASE("amiga500 adapter publishes session and media metadata", "[apps][playe
     CHECK(media.media[0].provider_id == "amiga500.kickstart");
 }
 
-TEST_CASE("amiga500 adapter configures Amiga 500+ metadata and chip RAM",
+TEST_CASE("amiga adapter configures Amiga 500+ metadata and chip RAM",
           "[apps][player][amiga500plus]") {
-    const amiga500_config config{.video_region = mnemos::video_region::pal,
-                                 .keyboard_layout = amiga500_keyboard_layout::us,
-                                 .model = amiga500_model::amiga500_plus};
+    const amiga_config config{.video_region = mnemos::video_region::pal,
+                                 .keyboard_layout = amiga_keyboard_layout::us,
+                                 .model = amiga_model::amiga500_plus};
     std::vector<std::vector<std::uint8_t>> disks;
     disks.push_back(tiny_adf(0x33U));
-    amiga500_adapter adapter(tiny_kickstart(), config, "Kickstart 2.0", std::move(disks));
+    amiga_adapter adapter(tiny_kickstart(), config, "Kickstart 2.0", std::move(disks));
     auto& sys = adapter.system();
 
-    REQUIRE(sys.chip_ram.size() == amiga500_system::chip_ram_size_1m);
-    REQUIRE(sys.paula.chipram().size() == amiga500_system::chip_ram_size_1m);
+    REQUIRE(sys.chip_ram.size() == amiga_system::chip_ram_size_1m);
+    REQUIRE(sys.paula.chipram().size() == amiga_system::chip_ram_size_1m);
     REQUIRE(adapter.memory_views().size() == 1U);
-    CHECK(adapter.memory_views()[0]->bytes().size() == amiga500_system::chip_ram_size_1m);
+    CHECK(adapter.memory_views()[0]->bytes().size() == amiga_system::chip_ram_size_1m);
 
     const auto& spec = adapter.system_spec();
     REQUIRE(spec.size() >= 2U);
@@ -301,18 +301,18 @@ TEST_CASE("amiga500 adapter configures Amiga 500+ metadata and chip RAM",
     CHECK(sys.paula.chipram()[upper_chip_ram] == 0x5AU);
 }
 
-TEST_CASE("amiga500 adapter configures Amiga 600 metadata and chip RAM",
+TEST_CASE("amiga adapter configures Amiga 600 metadata and chip RAM",
           "[apps][player][amiga600]") {
-    const amiga500_config config{.video_region = mnemos::video_region::pal,
-                                 .keyboard_layout = amiga500_keyboard_layout::us,
-                                 .model = amiga500_model::amiga600};
+    const amiga_config config{.video_region = mnemos::video_region::pal,
+                                 .keyboard_layout = amiga_keyboard_layout::us,
+                                 .model = amiga_model::amiga600};
     std::vector<std::vector<std::uint8_t>> disks;
     disks.push_back(tiny_adf(0x55U));
-    amiga500_adapter adapter(tiny_kickstart(), config, "Kickstart 2.0", std::move(disks));
+    amiga_adapter adapter(tiny_kickstart(), config, "Kickstart 2.0", std::move(disks));
     auto& sys = adapter.system();
 
-    REQUIRE(sys.chip_ram.size() == amiga500_system::chip_ram_size_1m);
-    REQUIRE(sys.paula.chipram().size() == amiga500_system::chip_ram_size_1m);
+    REQUIRE(sys.chip_ram.size() == amiga_system::chip_ram_size_1m);
+    REQUIRE(sys.paula.chipram().size() == amiga_system::chip_ram_size_1m);
 
     const auto& spec = adapter.system_spec();
     REQUIRE(spec.size() >= 2U);
@@ -332,18 +332,18 @@ TEST_CASE("amiga500 adapter configures Amiga 600 metadata and chip RAM",
     CHECK(sys.paula.chipram()[upper_chip_ram] == 0x7CU);
 }
 
-TEST_CASE("amiga500 adapter configures Amiga 2000 metadata and OCS chip RAM",
+TEST_CASE("amiga adapter configures Amiga 2000 metadata and OCS chip RAM",
           "[apps][player][amiga2000]") {
-    const amiga500_config config{.video_region = mnemos::video_region::pal,
-                                 .keyboard_layout = amiga500_keyboard_layout::us,
-                                 .model = amiga500_model::amiga2000};
+    const amiga_config config{.video_region = mnemos::video_region::pal,
+                                 .keyboard_layout = amiga_keyboard_layout::us,
+                                 .model = amiga_model::amiga2000};
     std::vector<std::vector<std::uint8_t>> disks;
     disks.push_back(tiny_adf(0x66U));
-    amiga500_adapter adapter(tiny_kickstart(), config, "Kickstart 1.3", std::move(disks));
+    amiga_adapter adapter(tiny_kickstart(), config, "Kickstart 1.3", std::move(disks));
     auto& sys = adapter.system();
 
-    REQUIRE(sys.chip_ram.size() == amiga500_system::chip_ram_size);
-    REQUIRE(sys.paula.chipram().size() == amiga500_system::chip_ram_size);
+    REQUIRE(sys.chip_ram.size() == amiga_system::chip_ram_size);
+    REQUIRE(sys.paula.chipram().size() == amiga_system::chip_ram_size);
 
     const auto& spec = adapter.system_spec();
     REQUIRE(spec.size() >= 2U);
@@ -362,18 +362,18 @@ TEST_CASE("amiga500 adapter configures Amiga 2000 metadata and OCS chip RAM",
     CHECK(sys.paula.chipram()[0x000123U] == 0x9AU);
 }
 
-TEST_CASE("amiga500 adapter configures upgraded Amiga 2000 ECS metadata and chip RAM",
+TEST_CASE("amiga adapter configures upgraded Amiga 2000 ECS metadata and chip RAM",
           "[apps][player][amiga2000]") {
-    const amiga500_config config{.video_region = mnemos::video_region::pal,
-                                 .keyboard_layout = amiga500_keyboard_layout::us,
-                                 .model = amiga500_model::amiga2000_ecs_1m};
+    const amiga_config config{.video_region = mnemos::video_region::pal,
+                                 .keyboard_layout = amiga_keyboard_layout::us,
+                                 .model = amiga_model::amiga2000_ecs_1m};
     std::vector<std::vector<std::uint8_t>> disks;
     disks.push_back(tiny_adf(0x77U));
-    amiga500_adapter adapter(tiny_kickstart(), config, "Kickstart 2.0", std::move(disks));
+    amiga_adapter adapter(tiny_kickstart(), config, "Kickstart 2.0", std::move(disks));
     auto& sys = adapter.system();
 
-    REQUIRE(sys.chip_ram.size() == amiga500_system::chip_ram_size_1m);
-    REQUIRE(sys.paula.chipram().size() == amiga500_system::chip_ram_size_1m);
+    REQUIRE(sys.chip_ram.size() == amiga_system::chip_ram_size_1m);
+    REQUIRE(sys.paula.chipram().size() == amiga_system::chip_ram_size_1m);
 
     const auto& spec = adapter.system_spec();
     REQUIRE(spec.size() >= 3U);
@@ -395,24 +395,24 @@ TEST_CASE("amiga500 adapter configures upgraded Amiga 2000 ECS metadata and chip
     CHECK(sys.paula.chipram()[upper_chip_ram] == 0xB4U);
 }
 
-TEST_CASE("amiga500 adapter configures Amiga 2000 Fast RAM expansion",
+TEST_CASE("amiga adapter configures Amiga 2000 Fast RAM expansion",
           "[apps][player][amiga2000]") {
-    const amiga500_config config{.video_region = mnemos::video_region::pal,
-                                 .keyboard_layout = amiga500_keyboard_layout::us,
-                                 .model = amiga500_model::amiga2000_ecs_1m,
-                                 .fast_ram_size = amiga500_system::fast_ram_size_2m};
-    amiga500_adapter adapter(tiny_kickstart(), config, "Kickstart 2.0");
+    const amiga_config config{.video_region = mnemos::video_region::pal,
+                                 .keyboard_layout = amiga_keyboard_layout::us,
+                                 .model = amiga_model::amiga2000_ecs_1m,
+                                 .fast_ram_size = amiga_system::fast_ram_size_2m};
+    amiga_adapter adapter(tiny_kickstart(), config, "Kickstart 2.0");
     auto& sys = adapter.system();
 
-    REQUIRE(sys.chip_ram.size() == amiga500_system::chip_ram_size_1m);
-    REQUIRE(sys.fast_ram.size() == amiga500_system::fast_ram_size_2m);
+    REQUIRE(sys.chip_ram.size() == amiga_system::chip_ram_size_1m);
+    REQUIRE(sys.fast_ram.size() == amiga_system::fast_ram_size_2m);
 
     const auto views = adapter.memory_views();
     REQUIRE(views.size() == 2U);
     CHECK(views[0]->name() == "chip_ram");
-    CHECK(views[0]->bytes().size() == amiga500_system::chip_ram_size_1m);
+    CHECK(views[0]->bytes().size() == amiga_system::chip_ram_size_1m);
     CHECK(views[1]->name() == "fast_ram");
-    CHECK(views[1]->bytes().size() == amiga500_system::fast_ram_size_2m);
+    CHECK(views[1]->bytes().size() == amiga_system::fast_ram_size_2m);
 
     bool spec_reports_fast_ram = false;
     for (const auto& field : adapter.system_spec()) {
@@ -422,29 +422,29 @@ TEST_CASE("amiga500 adapter configures Amiga 2000 Fast RAM expansion",
     CHECK(spec_reports_fast_ram);
 
     constexpr std::uint32_t fast_offset = 0x004321U;
-    CHECK(sys.bus.read8(amiga500_system::fast_ram_base + fast_offset) == 0xFFU);
+    CHECK(sys.bus.read8(amiga_system::fast_ram_base + fast_offset) == 0xFFU);
     assign_first_zorro2_board(sys);
-    sys.bus.write8(amiga500_system::fast_ram_base + fast_offset, 0xD2U);
+    sys.bus.write8(amiga_system::fast_ram_base + fast_offset, 0xD2U);
     CHECK(sys.fast_ram[fast_offset] == 0xD2U);
     CHECK(sys.paula.chipram()[fast_offset] == 0x00U);
 }
 
-TEST_CASE("amiga500 adapter seeds Kickstart keyboard power-up stream",
+TEST_CASE("amiga adapter seeds Kickstart keyboard power-up stream",
           "[apps][player][amiga500][input]") {
-    amiga500_adapter adapter(kickstart_signature_rom(), {}, "Kickstart signature");
+    amiga_adapter adapter(kickstart_signature_rom(), {}, "Kickstart signature");
 
     CHECK(adapter.system().cia_a.read(0x0CU) ==
-          keyboard_sdr(amiga500_system::keyboard_powerup_stream_start_code));
+          keyboard_sdr(amiga_system::keyboard_powerup_stream_start_code));
     CHECK(adapter.system().keyboard_pending_count() == 1U);
 
     acknowledge_keyboard(adapter.system());
 
     CHECK(adapter.system().cia_a.read(0x0CU) ==
-          keyboard_sdr(amiga500_system::keyboard_powerup_stream_end_code));
+          keyboard_sdr(amiga_system::keyboard_powerup_stream_end_code));
     CHECK(adapter.system().keyboard_pending_count() == 0U);
 }
 
-TEST_CASE("amiga500 adapter CPU RESET pulse resets board devices and preserves memory",
+TEST_CASE("amiga adapter CPU RESET pulse resets board devices and preserves memory",
           "[apps][player][amiga500]") {
     auto rom = tiny_kickstart();
     rom[0x0008U] = 0x4EU;
@@ -454,7 +454,7 @@ TEST_CASE("amiga500 adapter CPU RESET pulse resets board devices and preserves m
 
     std::vector<std::vector<std::uint8_t>> disks;
     disks.push_back(tiny_adf(0x44U));
-    amiga500_adapter adapter(std::move(rom), {}, "Workbench", std::move(disks));
+    amiga_adapter adapter(std::move(rom), {}, "Workbench", std::move(disks));
     auto& sys = adapter.system();
     REQUIRE(sys.floppy_loaded());
 
@@ -464,15 +464,15 @@ TEST_CASE("amiga500 adapter CPU RESET pulse resets board devices and preserves m
     sys.bus.write8(0x000123U, 0x5AU);
     REQUIRE(sys.chip_ram[0x0123U] == 0x5AU);
 
-    sys.write_custom_word(0x09AU, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
-                                                             amiga500_system::int_master |
-                                                             amiga500_system::int_vertb));
+    sys.write_custom_word(0x09AU, static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                             amiga_system::int_master |
+                                                             amiga_system::int_vertb));
     sys.write_custom_word(0x080U, 0x0001U);
     sys.write_custom_word(0x082U, 0x2340U);
     sys.write_custom_word(0x084U, 0x0002U);
     sys.write_custom_word(0x086U, 0x4680U);
     sys.write_custom_word(0x096U,
-                          static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                          static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                      agnus::dmacon_dmaen | agnus::dmacon_copen |
                                                      agnus::dmacon_dsken));
     sys.write_custom_word(0x024U, 0x8004U);
@@ -483,7 +483,7 @@ TEST_CASE("amiga500 adapter CPU RESET pulse resets board devices and preserves m
     const int cycles = sys.cpu.step_instruction();
     const auto regs = sys.cpu.cpu_registers();
     CHECK(cycles == 132);
-    CHECK(regs.pc == amiga500_system::kickstart_base + 0x000AU);
+    CHECK(regs.pc == amiga_system::kickstart_base + 0x000AU);
     CHECK(sys.kickstart_overlay_active());
     CHECK(sys.read_custom_word(0x01CU) == 0U);
     CHECK(sys.read_custom_word(0x002U) == 0U);
@@ -492,23 +492,23 @@ TEST_CASE("amiga500 adapter CPU RESET pulse resets board devices and preserves m
     CHECK(sys.cop2lc == 0U);
     CHECK(sys.frame_index == 0U);
     CHECK(sys.floppy_loaded());
-    CHECK(sys.selected_floppy_drive() == amiga500_system::no_floppy_drive);
+    CHECK(sys.selected_floppy_drive() == amiga_system::no_floppy_drive);
     CHECK_FALSE(sys.floppy_motor_on);
     CHECK(sys.chip_ram[0x0123U] == 0x5AU);
     CHECK(sys.paula.chipram()[0x0123U] == 0x5AU);
 }
 
-TEST_CASE("amiga500 adapter mounts and swaps ADF disk media", "[apps][player][amiga500]") {
+TEST_CASE("amiga adapter mounts and swaps ADF disk media", "[apps][player][amiga500]") {
     std::vector<std::vector<std::uint8_t>> disks;
     disks.push_back(tiny_adf(0x11U));
     disks.push_back(tiny_adf(0x22U));
-    amiga500_adapter adapter(tiny_kickstart(), {}, "Workbench", std::move(disks));
+    amiga_adapter adapter(tiny_kickstart(), {}, "Workbench", std::move(disks));
 
     REQUIRE(adapter.media_count() == 2U);
     CHECK(adapter.current_media_index() == 0U);
     CHECK(adapter.system().floppy_loaded());
     CHECK(adapter.system().floppy_loaded(1U));
-    CHECK(adapter.system().floppy_size() == amiga500_system::floppy_dd_size);
+    CHECK(adapter.system().floppy_size() == amiga_system::floppy_dd_size);
     select_df0(adapter.system());
     CHECK((adapter.system().cia_a.read(0x00U) & 0x04U) != 0U);
 
@@ -521,7 +521,7 @@ TEST_CASE("amiga500 adapter mounts and swaps ADF disk media", "[apps][player][am
 
     select_df1(adapter.system());
     CHECK(adapter.system().selected_floppy_drive() == 1U);
-    CHECK(adapter.system().floppy_size(1U) == amiga500_system::floppy_dd_size);
+    CHECK(adapter.system().floppy_size(1U) == amiga_system::floppy_dd_size);
 
     REQUIRE(adapter.insert_media(1U));
     CHECK(adapter.current_media_index() == 1U);
@@ -531,9 +531,9 @@ TEST_CASE("amiga500 adapter mounts and swaps ADF disk media", "[apps][player][am
     CHECK_FALSE(adapter.insert_media(2U));
 }
 
-TEST_CASE("amiga500 adapter routes controller state to the Amiga game ports",
+TEST_CASE("amiga adapter routes controller state to the Amiga game ports",
           "[apps][player][amiga500][input]") {
-    amiga500_adapter adapter(tiny_kickstart());
+    amiga_adapter adapter(tiny_kickstart());
 
     mnemos::frontend_sdk::controller_state p1{};
     p1.up = true;
@@ -564,9 +564,9 @@ TEST_CASE("amiga500 adapter routes controller state to the Amiga game ports",
     CHECK((adapter.system().cia_a.read(0x00U) & 0x40U) == 0U);
 }
 
-TEST_CASE("amiga500 adapter maps frontend input edges to Amiga keyboard serial",
+TEST_CASE("amiga adapter maps frontend input edges to Amiga keyboard serial",
           "[apps][player][amiga500][input]") {
-    amiga500_adapter adapter(tiny_kickstart());
+    amiga_adapter adapter(tiny_kickstart());
     adapter.system().cia_a.write(0x0DU, 0x88U); // Enable serial interrupt mask.
 
     mnemos::frontend_sdk::controller_state p1{};
@@ -583,9 +583,9 @@ TEST_CASE("amiga500 adapter maps frontend input edges to Amiga keyboard serial",
     CHECK(adapter.system().cia_a.read(0x0CU) == keyboard_sdr(0xC4U)); // Return up.
 }
 
-TEST_CASE("amiga500 adapter accepts direct keyboard-port input",
+TEST_CASE("amiga adapter accepts direct keyboard-port input",
           "[apps][player][amiga500][input]") {
-    amiga500_adapter adapter(tiny_kickstart());
+    amiga_adapter adapter(tiny_kickstart());
 
     mnemos::frontend_sdk::controller_state keyboard{};
     keyboard.select = true;
@@ -594,9 +594,9 @@ TEST_CASE("amiga500 adapter accepts direct keyboard-port input",
     CHECK(adapter.system().cia_a.read(0x0CU) == keyboard_sdr(0x40U)); // Space down.
 }
 
-TEST_CASE("amiga500 adapter maps direct keyboard-port controls beyond the joystick port",
+TEST_CASE("amiga adapter maps direct keyboard-port controls beyond the joystick port",
           "[apps][player][amiga500][input]") {
-    amiga500_adapter adapter(tiny_kickstart());
+    amiga_adapter adapter(tiny_kickstart());
 
     mnemos::frontend_sdk::controller_state pad{};
     pad.y = true;
@@ -619,9 +619,9 @@ TEST_CASE("amiga500 adapter maps direct keyboard-port controls beyond the joysti
     CHECK(adapter.system().cia_a.read(0x0CU) == keyboard_sdr(0x45U)); // Escape down.
 }
 
-TEST_CASE("amiga500 adapter maps physical keyboard usages to Amiga raw serial",
+TEST_CASE("amiga adapter maps physical keyboard usages to Amiga raw serial",
           "[apps][player][amiga500][input]") {
-    amiga500_adapter adapter(tiny_kickstart());
+    amiga_adapter adapter(tiny_kickstart());
 
     mnemos::frontend_sdk::controller_state keyboard{};
     keyboard.set_key(0x04U, true); // HID A -> Amiga A.
@@ -665,9 +665,9 @@ TEST_CASE("amiga500 adapter maps physical keyboard usages to Amiga raw serial",
     CHECK(adapter.system().keyboard_pending_count() == 0U);
 }
 
-TEST_CASE("amiga500 adapter keeps raw keys held across duplicate frontend sources",
+TEST_CASE("amiga adapter keeps raw keys held across duplicate frontend sources",
           "[apps][player][amiga500][input]") {
-    amiga500_adapter adapter(tiny_kickstart());
+    amiga_adapter adapter(tiny_kickstart());
 
     mnemos::frontend_sdk::controller_state keyboard{};
     keyboard.select = true;        // Frontend shortcut for Amiga Space.
@@ -685,9 +685,9 @@ TEST_CASE("amiga500 adapter keeps raw keys held across duplicate frontend source
     CHECK(adapter.system().cia_a.read(0x0CU) == keyboard_sdr(0xC0U));
 }
 
-TEST_CASE("amiga500 adapter keeps raw keys held across keyboard-producing ports",
+TEST_CASE("amiga adapter keeps raw keys held across keyboard-producing ports",
           "[apps][player][amiga500][input]") {
-    amiga500_adapter adapter(tiny_kickstart());
+    amiga_adapter adapter(tiny_kickstart());
 
     mnemos::frontend_sdk::controller_state pad{};
     pad.start = true; // Frontend shortcut for Amiga Return.
@@ -709,9 +709,9 @@ TEST_CASE("amiga500 adapter keeps raw keys held across keyboard-producing ports"
     CHECK(adapter.system().cia_a.read(0x0CU) == keyboard_sdr(0xC4U));
 }
 
-TEST_CASE("amiga500 adapter blocks new keys that would ghost in the keyboard matrix",
+TEST_CASE("amiga adapter blocks new keys that would ghost in the keyboard matrix",
           "[apps][player][amiga500][input]") {
-    amiga500_adapter adapter(tiny_kickstart());
+    amiga_adapter adapter(tiny_kickstart());
 
     mnemos::frontend_sdk::controller_state keyboard{};
     keyboard.set_key(0x04U, true); // HID A -> raw 0x20.
@@ -742,11 +742,11 @@ TEST_CASE("amiga500 adapter blocks new keys that would ghost in the keyboard mat
     CHECK(adapter.system().keyboard_pending_count() == 0U);
 }
 
-TEST_CASE("amiga500 adapter selects German physical keyboard layout",
+TEST_CASE("amiga adapter selects German physical keyboard layout",
           "[apps][player][amiga500][input]") {
-    const amiga500_config config{.video_region = mnemos::video_region::pal,
-                                 .keyboard_layout = amiga500_keyboard_layout::german};
-    amiga500_adapter adapter(tiny_kickstart(), config);
+    const amiga_config config{.video_region = mnemos::video_region::pal,
+                                 .keyboard_layout = amiga_keyboard_layout::german};
+    amiga_adapter adapter(tiny_kickstart(), config);
 
     bool spec_reports_layout = false;
     for (const auto& field : adapter.system_spec()) {
@@ -771,11 +771,11 @@ TEST_CASE("amiga500 adapter selects German physical keyboard layout",
     CHECK(adapter.system().cia_a.read(0x0CU) == keyboard_sdr(0x15U));
 }
 
-TEST_CASE("amiga500 adapter selects AZERTY physical keyboard layout",
+TEST_CASE("amiga adapter selects AZERTY physical keyboard layout",
           "[apps][player][amiga500][input]") {
-    const amiga500_config config{.video_region = mnemos::video_region::pal,
-                                 .keyboard_layout = amiga500_keyboard_layout::azerty};
-    amiga500_adapter adapter(tiny_kickstart(), config);
+    const amiga_config config{.video_region = mnemos::video_region::pal,
+                                 .keyboard_layout = amiga_keyboard_layout::azerty};
+    amiga_adapter adapter(tiny_kickstart(), config);
 
     bool spec_reports_layout = false;
     for (const auto& field : adapter.system_spec()) {
@@ -815,11 +815,11 @@ TEST_CASE("amiga500 adapter selects AZERTY physical keyboard layout",
     CHECK(adapter.system().cia_a.read(0x0CU) == keyboard_sdr(0x37U));
 }
 
-TEST_CASE("amiga500 adapter selects international QWERTY physical keyboard layout",
+TEST_CASE("amiga adapter selects international QWERTY physical keyboard layout",
           "[apps][player][amiga500][input]") {
-    const amiga500_config config{.video_region = mnemos::video_region::pal,
-                                 .keyboard_layout = amiga500_keyboard_layout::qwerty_international};
-    amiga500_adapter adapter(tiny_kickstart(), config);
+    const amiga_config config{.video_region = mnemos::video_region::pal,
+                                 .keyboard_layout = amiga_keyboard_layout::qwerty_international};
+    amiga_adapter adapter(tiny_kickstart(), config);
 
     bool spec_reports_layout = false;
     for (const auto& field : adapter.system_spec()) {
@@ -844,11 +844,11 @@ TEST_CASE("amiga500 adapter selects international QWERTY physical keyboard layou
     CHECK(adapter.system().cia_a.read(0x0CU) == keyboard_sdr(0x10U));
 }
 
-TEST_CASE("amiga500 adapter maps international reserved symbol usages",
+TEST_CASE("amiga adapter maps international reserved symbol usages",
           "[apps][player][amiga500][input]") {
-    const amiga500_config config{.video_region = mnemos::video_region::pal,
-                                 .keyboard_layout = amiga500_keyboard_layout::qwerty_international};
-    amiga500_adapter adapter(tiny_kickstart(), config);
+    const amiga_config config{.video_region = mnemos::video_region::pal,
+                                 .keyboard_layout = amiga_keyboard_layout::qwerty_international};
+    amiga_adapter adapter(tiny_kickstart(), config);
 
     mnemos::frontend_sdk::controller_state keyboard{};
     expect_keyboard_edge(adapter, keyboard, 0x32U, 0x2BU);
@@ -857,7 +857,7 @@ TEST_CASE("amiga500 adapter maps international reserved symbol usages",
     expect_keyboard_edge(adapter, keyboard, 0x89U, 0x0EU);
 }
 
-TEST_CASE("amiga500 adapter registry accepts keyboard layout override",
+TEST_CASE("amiga adapter registry accepts keyboard layout override",
           "[apps][player][amiga500][input]") {
     for (const std::string layout_token : {"de_DE", "de-AT", "de CH", "qwertz"}) {
         mnemos::frontend_sdk::adapter_options options{};
@@ -879,12 +879,12 @@ TEST_CASE("amiga500 adapter registry accepts keyboard layout override",
         mnemos::frontend_sdk::controller_state keyboard{};
         keyboard.set_key(0x1CU, true); // HID Y position -> Amiga Z on German QWERTZ.
         system->apply_input(2, keyboard);
-        CHECK(static_cast<amiga500_adapter*>(system.get())->system().cia_a.read(0x0CU) ==
+        CHECK(static_cast<amiga_adapter*>(system.get())->system().cia_a.read(0x0CU) ==
               keyboard_sdr(0x31U));
     }
 }
 
-TEST_CASE("amiga500 adapter registry accepts AZERTY keyboard layout override",
+TEST_CASE("amiga adapter registry accepts AZERTY keyboard layout override",
           "[apps][player][amiga500][input]") {
     for (const std::string layout_token : {"fr_FR", "fr-BE", "be fr", "azerty"}) {
         mnemos::frontend_sdk::adapter_options options{};
@@ -906,12 +906,12 @@ TEST_CASE("amiga500 adapter registry accepts AZERTY keyboard layout override",
         mnemos::frontend_sdk::controller_state keyboard{};
         keyboard.set_key(0x1DU, true); // HID Z position -> Amiga W on AZERTY.
         system->apply_input(2, keyboard);
-        CHECK(static_cast<amiga500_adapter*>(system.get())->system().cia_a.read(0x0CU) ==
+        CHECK(static_cast<amiga_adapter*>(system.get())->system().cia_a.read(0x0CU) ==
               keyboard_sdr(0x11U));
     }
 }
 
-TEST_CASE("amiga500 adapter registry accepts international QWERTY keyboard layout override",
+TEST_CASE("amiga adapter registry accepts international QWERTY keyboard layout override",
           "[apps][player][amiga500][input]") {
     for (const std::string layout_token : {"en_GB", "uk", "us intl", "es-ES", "it_IT", "pt-BR",
                                            "br", "sv-SE", "fi", "dk", "nb-NO"}) {
@@ -934,12 +934,12 @@ TEST_CASE("amiga500 adapter registry accepts international QWERTY keyboard layou
         mnemos::frontend_sdk::controller_state keyboard{};
         keyboard.set_key(0x1DU, true); // HID Z stays Amiga Z, unlike German QWERTZ.
         system->apply_input(2, keyboard);
-        CHECK(static_cast<amiga500_adapter*>(system.get())->system().cia_a.read(0x0CU) ==
+        CHECK(static_cast<amiga_adapter*>(system.get())->system().cia_a.read(0x0CU) ==
               keyboard_sdr(0x31U));
     }
 }
 
-TEST_CASE("amiga500 adapter registry accepts Amiga 2000 ECS/1MiB model override",
+TEST_CASE("amiga adapter registry accepts Amiga 2000 ECS/1MiB model override",
           "[apps][player][amiga2000]") {
     mnemos::frontend_sdk::adapter_options options{};
     options.rom = tiny_kickstart();
@@ -949,9 +949,9 @@ TEST_CASE("amiga500 adapter registry accepts Amiga 2000 ECS/1MiB model override"
     auto system =
         mnemos::frontend_sdk::adapter_registry::instance().create("amiga2000", std::move(options));
     REQUIRE(system != nullptr);
-    auto* adapter = dynamic_cast<amiga500_adapter*>(system.get());
+    auto* adapter = dynamic_cast<amiga_adapter*>(system.get());
     REQUIRE(adapter != nullptr);
-    CHECK(adapter->system().chip_ram.size() == amiga500_system::chip_ram_size_1m);
+    CHECK(adapter->system().chip_ram.size() == amiga_system::chip_ram_size_1m);
 
     bool spec_reports_config = false;
     for (const auto& field : system->system_spec()) {
@@ -962,7 +962,7 @@ TEST_CASE("amiga500 adapter registry accepts Amiga 2000 ECS/1MiB model override"
     CHECK(spec_reports_config);
 }
 
-TEST_CASE("amiga500 adapter registry accepts Amiga 2000 Fast RAM model override",
+TEST_CASE("amiga adapter registry accepts Amiga 2000 Fast RAM model override",
           "[apps][player][amiga2000]") {
     mnemos::frontend_sdk::adapter_options options{};
     options.rom = tiny_kickstart();
@@ -972,14 +972,14 @@ TEST_CASE("amiga500 adapter registry accepts Amiga 2000 Fast RAM model override"
     auto system =
         mnemos::frontend_sdk::adapter_registry::instance().create("amiga2000", std::move(options));
     REQUIRE(system != nullptr);
-    auto* adapter = dynamic_cast<amiga500_adapter*>(system.get());
+    auto* adapter = dynamic_cast<amiga_adapter*>(system.get());
     REQUIRE(adapter != nullptr);
-    CHECK(adapter->system().chip_ram.size() == amiga500_system::chip_ram_size_1m);
-    CHECK(adapter->system().fast_ram.size() == amiga500_system::fast_ram_size_2m);
+    CHECK(adapter->system().chip_ram.size() == amiga_system::chip_ram_size_1m);
+    CHECK(adapter->system().fast_ram.size() == amiga_system::fast_ram_size_2m);
 
-    CHECK(adapter->system().bus.read8(amiga500_system::fast_ram_base) == 0xFFU);
+    CHECK(adapter->system().bus.read8(amiga_system::fast_ram_base) == 0xFFU);
     assign_first_zorro2_board(adapter->system());
-    adapter->system().bus.write8(amiga500_system::fast_ram_base, 0xE4U);
+    adapter->system().bus.write8(amiga_system::fast_ram_base, 0xE4U);
     CHECK(adapter->system().fast_ram[0] == 0xE4U);
 
     bool spec_reports_fast_ram = false;
@@ -990,9 +990,9 @@ TEST_CASE("amiga500 adapter registry accepts Amiga 2000 Fast RAM model override"
     CHECK(spec_reports_fast_ram);
 }
 
-TEST_CASE("amiga500 adapter converts frontend mouse movement to Amiga counters",
+TEST_CASE("amiga adapter converts frontend mouse movement to Amiga counters",
           "[apps][player][amiga500][input]") {
-    amiga500_adapter adapter(tiny_kickstart());
+    amiga_adapter adapter(tiny_kickstart());
 
     mnemos::frontend_sdk::controller_state mouse{};
     mouse.aim_x = 10;
@@ -1028,9 +1028,9 @@ TEST_CASE("amiga500 adapter converts frontend mouse movement to Amiga counters",
     CHECK((adapter.system().read_custom_word(0x016U) & 0x0400U) != 0U);
 }
 
-TEST_CASE("amiga500 adapter routes frontend analog axes to POT counters",
+TEST_CASE("amiga adapter routes frontend analog axes to POT counters",
           "[apps][player][amiga500][input]") {
-    amiga500_adapter adapter(tiny_kickstart());
+    amiga_adapter adapter(tiny_kickstart());
 
     mnemos::frontend_sdk::controller_state pot0{};
     pot0.aim_x = 4;
@@ -1057,19 +1057,19 @@ TEST_CASE("amiga500 adapter routes frontend analog axes to POT counters",
     CHECK(adapter.system().read_custom_word(0x012U) == 0xFFFFU);
 }
 
-TEST_CASE("amiga500 adapter whole-machine save-state round-trips",
+TEST_CASE("amiga adapter whole-machine save-state round-trips",
           "[apps][player][amiga500][save]") {
-    namespace amiga500 = mnemos::apps::player::adapters::amiga500;
+    namespace amiga500 = mnemos::apps::player::adapters::amiga;
 
     std::vector<std::vector<std::uint8_t>> disks;
     disks.push_back(tiny_adf(0x33U));
-    amiga500_adapter a(tiny_kickstart(), {}, "Workbench", disks);
+    amiga_adapter a(tiny_kickstart(), {}, "Workbench", disks);
 
     select_df0(a.system());
     a.system().cia_b.write(0x01U, 0x76U); // Step inward to make drive state non-default.
-    a.system().set_joystick(1U, static_cast<std::uint8_t>(amiga500_system::joy_up |
-                                                          amiga500_system::joy_right |
-                                                          amiga500_system::joy_fire));
+    a.system().set_joystick(1U, static_cast<std::uint8_t>(amiga_system::joy_up |
+                                                          amiga_system::joy_right |
+                                                          amiga_system::joy_fire));
     REQUIRE(a.system().enqueue_keyboard_key(0x4CU, true));
     REQUIRE(a.system().enqueue_keyboard_key(0x4CU, false));
     a.system().bus.write8(0x000123U, 0x5AU);
@@ -1083,7 +1083,7 @@ TEST_CASE("amiga500 adapter whole-machine save-state round-trips",
     a.system().write_custom_word(0x094U, 0x00D0U);
     a.system().write_custom_word(0x0E0U, 0x0000U);
     a.system().write_custom_word(0x0E2U, 0x0000U);
-    a.system().write_custom_word(0x096U, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+    a.system().write_custom_word(0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                                     agnus::dmacon_dmaen |
                                                                     agnus::dmacon_bplen));
     a.system().agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) *
@@ -1100,7 +1100,7 @@ TEST_CASE("amiga500 adapter whole-machine save-state round-trips",
     const std::vector<std::uint8_t> blob = mnemos::runtime::write_save_state(ta);
     REQUIRE(!blob.empty());
 
-    amiga500_adapter b(tiny_kickstart(), {}, "Workbench", disks);
+    amiga_adapter b(tiny_kickstart(), {}, "Workbench", disks);
     CHECK(b.system().chip_ram[0x0123U] != 0x5AU);
     CHECK(b.scheduler().master_cycle() != saved_cycle);
 
@@ -1136,12 +1136,12 @@ TEST_CASE("amiga500 adapter whole-machine save-state round-trips",
     CHECK(b.system().cia_a.read(0x0CU) == keyboard_sdr(0xCCU));
 }
 
-TEST_CASE("amiga500 adapter player save-state preserves frontend input cursors",
+TEST_CASE("amiga adapter player save-state preserves frontend input cursors",
           "[apps][player][amiga500][save][input]") {
     std::vector<std::vector<std::uint8_t>> disks;
     disks.push_back(tiny_adf(0x33U));
     disks.push_back(tiny_adf(0x77U));
-    amiga500_adapter live(tiny_kickstart(), {}, "Workbench", disks);
+    amiga_adapter live(tiny_kickstart(), {}, "Workbench", disks);
     constexpr std::size_t disk_payload_probe = 2U;
 
     REQUIRE(live.insert_media(1U));
@@ -1170,7 +1170,7 @@ TEST_CASE("amiga500 adapter player save-state preserves frontend input cursors",
     const std::vector<std::uint8_t> blob = live.save_state();
     REQUIRE(!blob.empty());
 
-    amiga500_adapter restored(tiny_kickstart(), {}, "Workbench", disks);
+    amiga_adapter restored(tiny_kickstart(), {}, "Workbench", disks);
     CHECK(restored.current_media_index() == 0U);
     const mnemos::runtime::load_result result = restored.load_state(blob);
     REQUIRE(result.ok());
@@ -1190,7 +1190,7 @@ TEST_CASE("amiga500 adapter player save-state preserves frontend input cursors",
     CHECK(restored.system().read_custom_word(0x00AU) == 0xFE03U);
 }
 
-TEST_CASE("amiga500 adapter renders the real Kickstart insert-disk prompt",
+TEST_CASE("amiga adapter renders the real Kickstart insert-disk prompt",
           "[apps][player][amiga500][data][video]") {
     const auto kickstart_path = get_env("MNEMOS_AMIGA500_KICKSTART");
     if (!kickstart_path) {
@@ -1200,10 +1200,10 @@ TEST_CASE("amiga500 adapter renders the real Kickstart insert-disk prompt",
 
     auto kickstart = read_file(fs::path(*kickstart_path));
     REQUIRE(kickstart.has_value());
-    REQUIRE((kickstart->size() == amiga500_system::kickstart_window_size ||
-             kickstart->size() == amiga500_system::kickstart_window_size / 2U));
+    REQUIRE((kickstart->size() == amiga_system::kickstart_window_size ||
+             kickstart->size() == amiga_system::kickstart_window_size / 2U));
 
-    amiga500_adapter adapter(std::move(*kickstart), {}, fs::path(*kickstart_path).filename().string());
+    amiga_adapter adapter(std::move(*kickstart), {}, fs::path(*kickstart_path).filename().string());
     const std::uint64_t frames = get_env_u64("MNEMOS_AMIGA500_PROMPT_FRAMES", 900U);
     for (std::uint64_t frame = 0U; frame < frames; ++frame) {
         adapter.step_one_frame();
@@ -1240,7 +1240,7 @@ TEST_CASE("amiga500 adapter renders the real Kickstart insert-disk prompt",
     CHECK(color_stats.center_non_background < 10000U);
 }
 
-TEST_CASE("amiga500 adapter boots real Kickstart with an ADF disk when data is supplied",
+TEST_CASE("amiga adapter boots real Kickstart with an ADF disk when data is supplied",
           "[apps][player][amiga500][data]") {
     const auto kickstart_path = get_env("MNEMOS_AMIGA500_KICKSTART");
     const auto adf_path = get_env("MNEMOS_AMIGA500_ADF");
@@ -1251,24 +1251,24 @@ TEST_CASE("amiga500 adapter boots real Kickstart with an ADF disk when data is s
 
     auto kickstart = read_file(fs::path(*kickstart_path));
     REQUIRE(kickstart.has_value());
-    REQUIRE((kickstart->size() == amiga500_system::kickstart_window_size ||
-             kickstart->size() == amiga500_system::kickstart_window_size / 2U));
+    REQUIRE((kickstart->size() == amiga_system::kickstart_window_size ||
+             kickstart->size() == amiga_system::kickstart_window_size / 2U));
 
     auto adf = read_file(fs::path(*adf_path));
     REQUIRE(adf.has_value());
-    REQUIRE(adf->size() == amiga500_system::floppy_dd_size);
+    REQUIRE(adf->size() == amiga_system::floppy_dd_size);
 
     std::vector<std::vector<std::uint8_t>> disks;
     disks.push_back(std::move(*adf));
-    amiga500_adapter adapter(std::move(*kickstart), {}, fs::path(*adf_path).filename().string(),
+    amiga_adapter adapter(std::move(*kickstart), {}, fs::path(*adf_path).filename().string(),
                              std::move(disks));
 
     REQUIRE(adapter.system().floppy_loaded());
-    CHECK(adapter.system().floppy_size() == amiga500_system::floppy_dd_size);
+    CHECK(adapter.system().floppy_size() == amiga_system::floppy_dd_size);
     CHECK(adapter.system().kickstart_overlay_active());
 
     const auto initial_regs = adapter.system().cpu.cpu_registers();
-    CHECK(initial_regs.pc >= amiga500_system::kickstart_base);
+    CHECK(initial_regs.pc >= amiga_system::kickstart_base);
 
     const std::uint64_t frames = get_env_u64("MNEMOS_AMIGA500_BOOT_FRAMES", 300U);
     bool pc_moved = false;

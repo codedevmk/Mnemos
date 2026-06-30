@@ -4,6 +4,7 @@
 #include "bus.hpp"
 #include "cia8520.hpp"
 #include "denise.hpp"
+#include "expansions/zorro2.hpp"
 #include "m68000.hpp"
 #include "paula.hpp"
 #include "region.hpp"
@@ -16,11 +17,11 @@
 #include <span>
 #include <vector>
 
-namespace mnemos::manifests::amiga500 {
+namespace mnemos::manifests::amiga {
 
-    enum class amiga500_keyboard_layout : std::uint8_t { us, qwerty_international, german, azerty };
+    enum class amiga_keyboard_layout : std::uint8_t { us, qwerty_international, german, azerty };
 
-    enum class amiga500_model : std::uint8_t {
+    enum class amiga_model : std::uint8_t {
         amiga500,
         amiga500_plus,
         amiga600,
@@ -28,19 +29,19 @@ namespace mnemos::manifests::amiga500 {
         amiga2000_ecs_1m
     };
 
-    struct amiga500_config final {
+    struct amiga_config final {
         mnemos::video_region video_region{mnemos::video_region::pal};
-        amiga500_keyboard_layout keyboard_layout{amiga500_keyboard_layout::us};
-        amiga500_model model{amiga500_model::amiga500};
+        amiga_keyboard_layout keyboard_layout{amiga_keyboard_layout::us};
+        amiga_model model{amiga_model::amiga500};
         std::size_t fast_ram_size{};
     };
 
-    // Commodore Amiga 500, OCS baseline: MC68000 + Agnus + Denise + Paula +
-    // two CIA 8520s over a 24-bit, big-endian 68K bus. The implementation is a
-    // bootable integration path around the existing clean-room OCS chips:
-    // Kickstart reset overlay, chip RAM, custom registers, CIA overlay control,
-    // frame IRQ generation, and Paula audio DMA register routing.
-    struct amiga500_system final {
+    // Shared classic Amiga machine assembly: MC68000 + Agnus + Denise + Paula +
+    // two CIA 8520s over a 24-bit, big-endian 68K bus, configured by model
+    // descriptors for A500/A500+/A600/A2000-style boards. The reusable silicon
+    // stays in src/chips; this type owns board wiring, Kickstart overlay, chip
+    // RAM, custom register routing, CIA glue, drives, input, and expansions.
+    struct amiga_system final {
         static constexpr std::size_t chip_ram_size = 512U * 1024U;
         static constexpr std::size_t chip_ram_size_1m = 1024U * 1024U;
         static constexpr std::size_t fast_ram_size_512k = 512U * 1024U;
@@ -115,17 +116,6 @@ namespace mnemos::manifests::amiga500 {
         std::vector<std::uint8_t> chip_ram = std::vector<std::uint8_t>(chip_ram_size, 0U);
         std::vector<std::uint8_t> fast_ram{};
         std::array<std::uint8_t, kickstart_window_size> kickstart_rom{};
-
-        struct zorro2_expansion_board final {
-            std::uint8_t product{};
-            std::uint16_t manufacturer{};
-            std::uint32_t serial{};
-            std::size_t memory_size{};
-            std::uint32_t assigned_base{};
-            bool memory{};
-            bool configured{};
-            bool shut_up{};
-        };
 
         std::vector<zorro2_expansion_board> zorro2_boards{};
         std::size_t zorro2_autoconfig_index{};
@@ -300,7 +290,7 @@ namespace mnemos::manifests::amiga500 {
         void load_state(chips::state_reader& reader);
     };
 
-    [[nodiscard]] std::unique_ptr<amiga500_system>
-    assemble_amiga500(std::vector<std::uint8_t> kickstart_rom, const amiga500_config& config = {});
+    [[nodiscard]] std::unique_ptr<amiga_system>
+    assemble_amiga(std::vector<std::uint8_t> kickstart_rom, const amiga_config& config = {});
 
-} // namespace mnemos::manifests::amiga500
+} // namespace mnemos::manifests::amiga

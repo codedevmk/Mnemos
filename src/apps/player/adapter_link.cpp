@@ -1,6 +1,6 @@
 #include "adapter_link.hpp"
 
-#include "amiga500_adapter.hpp"
+#include "amiga_adapter.hpp"
 #include "c64_adapter.hpp"
 #include "capcom_cps1_adapter.hpp"
 #include "capcom_cps2_adapter.hpp"
@@ -79,7 +79,7 @@ namespace mnemos::apps::player {
         adapters::nes::force_link();
         adapters::msx::force_link();
         adapters::msx2::force_link();
-        adapters::amiga500::force_link();
+        adapters::amiga::force_link();
     }
 
 } // namespace mnemos::apps::player

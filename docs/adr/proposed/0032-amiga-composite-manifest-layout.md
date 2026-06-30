@@ -1,0 +1,67 @@
+---
+id: ADR-0032
+title: "Amiga Composite Manifest Layout"
+status: proposed
+version: 1.0.0
+supersedes: []
+superseded_by: null
+proposed: 2026-06-30
+---
+
+# ADR 0032: Amiga Composite Manifest Layout
+
+**Status:** Proposed
+**Date:** 2026-06-30
+
+## Context
+
+The initial Amiga integration landed under `src/manifests/amiga500/` because
+the Amiga 500 was the first boot target. The same implementation now assembles
+Amiga 500, Amiga 500+, Amiga 600, and Amiga 2000 profiles. Keeping shared OCS,
+ECS, floppy, keyboard, and Zorro II work under an `amiga500` directory makes
+Amiga 2000 changes appear misplaced and invites duplicate machine
+implementations.
+
+ADR-0009 currently prefers flat modules with public headers at the module root.
+Classic Amiga is different enough to justify a scoped exception: it is one
+machine family composed from reusable chips, chipset profiles, expansion buses,
+drives, devices, and model descriptors.
+
+## Decision
+
+Use `src/manifests/amiga/` as the canonical home for classic Amiga machine
+assembly.
+
+Actual silicon remains in `src/chips/`:
+
+- `m68000`
+- `agnus`
+- `denise`
+- `paula`
+- `cia8520`
+
+The Amiga manifest owns board-level composition and model descriptors:
+
+```text
+src/manifests/amiga/
+  amiga_system.hpp/.cpp
+  chipsets/
+  expansions/
+  drives/
+  devices/
+  models/
+```
+
+Subdirectories are allowed inside this manifest only for Amiga family
+building-blocks. They do not create new tiers and do not allow higher-tier
+dependencies. Public CLI IDs and ROM environment variables remain model-specific
+(`amiga500`, `amiga2000`, `MNEMOS_AMIGA2000_KICKSTART`, and so on).
+
+## Consequences
+
+- Amiga 2000-specific expansion logic no longer lives under an Amiga 500 path.
+- Additional models can add descriptors without duplicating the shared
+  Kickstart, custom-chip, floppy, keyboard, and input glue.
+- The refactor creates a contained exception to ADR-0009's flat-module rule;
+  if this layout proves useful beyond Amiga, ADR-0009 should be amended rather
+  than copying the exception ad hoc.

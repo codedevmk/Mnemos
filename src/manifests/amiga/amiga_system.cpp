@@ -1,4 +1,4 @@
-#include "amiga500_system.hpp"
+#include "amiga_system.hpp"
 
 #include <algorithm>
 #include <array>
@@ -6,7 +6,7 @@
 #include <limits>
 #include <utility>
 
-namespace mnemos::manifests::amiga500 {
+namespace mnemos::manifests::amiga {
 
     namespace {
         constexpr std::uint32_t state_version = 26U;
@@ -111,115 +111,30 @@ namespace mnemos::manifests::amiga500 {
             return rhs > room ? std::numeric_limits<std::uint32_t>::max() : lhs + rhs;
         }
 
-        [[nodiscard]] std::size_t chip_ram_size_for_model(amiga500_model model) noexcept {
-            return model == amiga500_model::amiga500_plus || model == amiga500_model::amiga600 ||
-                           model == amiga500_model::amiga2000_ecs_1m
-                       ? amiga500_system::chip_ram_size_1m
-                       : amiga500_system::chip_ram_size;
+        [[nodiscard]] std::size_t chip_ram_size_for_model(amiga_model model) noexcept {
+            return model == amiga_model::amiga500_plus || model == amiga_model::amiga600 ||
+                           model == amiga_model::amiga2000_ecs_1m
+                       ? amiga_system::chip_ram_size_1m
+                       : amiga_system::chip_ram_size;
         }
 
-        [[nodiscard]] std::uint32_t copper_address_mask_for_model(amiga500_model model) noexcept {
-            return model == amiga500_model::amiga500_plus || model == amiga500_model::amiga600 ||
-                           model == amiga500_model::amiga2000_ecs_1m
+        [[nodiscard]] std::uint32_t copper_address_mask_for_model(amiga_model model) noexcept {
+            return model == amiga_model::amiga500_plus || model == amiga_model::amiga600 ||
+                           model == amiga_model::amiga2000_ecs_1m
                        ? chips::video::agnus::ecs_1m_copper_address_mask
                        : chips::video::agnus::ocs_copper_address_mask;
         }
 
-        [[nodiscard]] std::size_t fast_ram_size_for_config(const amiga500_config& config) noexcept {
-            if (config.model != amiga500_model::amiga2000 &&
-                config.model != amiga500_model::amiga2000_ecs_1m) {
+        [[nodiscard]] std::size_t fast_ram_size_for_config(const amiga_config& config) noexcept {
+            if (config.model != amiga_model::amiga2000 &&
+                config.model != amiga_model::amiga2000_ecs_1m) {
                 return 0U;
             }
-            return std::min(config.fast_ram_size, amiga500_system::fast_ram_max_size);
+            return std::min(config.fast_ram_size, amiga_system::fast_ram_max_size);
         }
 
-        [[nodiscard]] std::uint8_t zorro2_size_code(std::size_t size) noexcept {
-            if (size >= amiga500_system::fast_ram_max_size) {
-                return 0U;
-            }
-            if (size > amiga500_system::fast_ram_size_4m) {
-                return 0U;
-            }
-            if (size > amiga500_system::fast_ram_size_2m) {
-                return 7U;
-            }
-            if (size > amiga500_system::fast_ram_size_1m) {
-                return 6U;
-            }
-            if (size > amiga500_system::fast_ram_size_512k) {
-                return 5U;
-            }
-            return 4U;
-        }
-
-        [[nodiscard]] std::uint8_t zorro2_logical_config_byte(
-            const amiga500_system::zorro2_expansion_board& board,
-            std::uint8_t logical_offset) noexcept {
-            constexpr std::uint8_t ert_newboard = 0xC0U;
-            constexpr std::uint8_t ert_memlist = 0x20U;
-            constexpr std::uint8_t erff_memspace = 0x80U;
-
-            switch (logical_offset) {
-            case 0x00U:
-                return static_cast<std::uint8_t>(
-                    ert_newboard | (board.memory ? ert_memlist : 0U) |
-                    zorro2_size_code(board.memory_size));
-            case 0x01U:
-                return board.product;
-            case 0x02U:
-                return board.memory ? erff_memspace : 0U;
-            case 0x04U:
-                return static_cast<std::uint8_t>(board.manufacturer >> 8U);
-            case 0x05U:
-                return static_cast<std::uint8_t>(board.manufacturer);
-            case 0x06U:
-                return static_cast<std::uint8_t>(board.serial >> 24U);
-            case 0x07U:
-                return static_cast<std::uint8_t>(board.serial >> 16U);
-            case 0x08U:
-                return static_cast<std::uint8_t>(board.serial >> 8U);
-            case 0x09U:
-                return static_cast<std::uint8_t>(board.serial);
-            case 0x0AU:
-            case 0x0BU:
-                return 0U;
-            default:
-                return 0U;
-            }
-        }
-
-        [[nodiscard]] std::uint8_t zorro2_config_storage_byte(
-            const amiga500_system::zorro2_expansion_board& board,
-            std::uint8_t logical_offset) noexcept {
-            const std::uint8_t value = zorro2_logical_config_byte(board, logical_offset);
-            return logical_offset == 0U ? value : static_cast<std::uint8_t>(~value);
-        }
-
-        [[nodiscard]] std::uint8_t repeat_nibble(std::uint8_t nibble) noexcept {
-            nibble = static_cast<std::uint8_t>(nibble & 0x0FU);
-            return static_cast<std::uint8_t>((nibble << 4U) | nibble);
-        }
-
-        [[nodiscard]] std::uint8_t zorro2_autoconfig_read(
-            const amiga500_system::zorro2_expansion_board& board,
-            std::uint32_t address) noexcept {
-            const std::uint32_t physical =
-                (address - amiga500_system::zorro2_autoconfig_base) & 0xFFFFU;
-            const auto logical_offset = static_cast<std::uint8_t>((physical >> 2U) & 0x3FU);
-            const std::uint8_t value = zorro2_config_storage_byte(board, logical_offset);
-            const bool high_nibble = (physical & 0x02U) == 0U;
-            const std::uint8_t nibble = high_nibble ? static_cast<std::uint8_t>(value >> 4U)
-                                                    : static_cast<std::uint8_t>(value & 0x0FU);
-            return repeat_nibble(nibble);
-        }
-
-        [[nodiscard]] std::uint8_t zorro2_write_nibble(std::uint8_t value) noexcept {
-            return (value & 0xF0U) != 0U ? static_cast<std::uint8_t>(value >> 4U)
-                                         : static_cast<std::uint8_t>(value & 0x0FU);
-        }
-
-        [[nodiscard]] amiga500_system::zorro2_expansion_board*
-        configured_zorro2_memory_board_at(amiga500_system& sys, std::uint32_t address) noexcept {
+        [[nodiscard]] zorro2_expansion_board*
+        configured_zorro2_memory_board_at(amiga_system& sys, std::uint32_t address) noexcept {
             for (auto& board : sys.zorro2_boards) {
                 if (!board.memory || !board.configured || board.shut_up ||
                     board.memory_size == 0U) {
@@ -236,7 +151,7 @@ namespace mnemos::manifests::amiga500 {
             return nullptr;
         }
 
-        void advance_zorro2_autoconfig(amiga500_system& sys) noexcept {
+        void advance_zorro2_autoconfig(amiga_system& sys) noexcept {
             sys.zorro2_base_low_nibble = 0U;
             sys.zorro2_base_low_nibble_valid = false;
             if (sys.zorro2_autoconfig_index < sys.zorro2_boards.size()) {
@@ -251,14 +166,14 @@ namespace mnemos::manifests::amiga500 {
             }
         }
 
-        void zorro2_autoconfig_write(amiga500_system& sys, std::uint32_t address,
+        void zorro2_autoconfig_write(amiga_system& sys, std::uint32_t address,
                                      std::uint8_t value) noexcept {
             auto* board = sys.active_zorro2_autoconfig_board();
             if (board == nullptr) {
                 return;
             }
             const std::uint32_t physical =
-                (address - amiga500_system::zorro2_autoconfig_base) & 0xFFFFU;
+                (address - amiga_system::zorro2_autoconfig_base) & 0xFFFFU;
             const std::uint32_t even_physical = physical & ~0x01U;
             const bool base_high = even_physical == 0x48U || even_physical == 0x24U;
             const bool base_low = even_physical == 0x4AU || even_physical == 0x26U;
@@ -292,7 +207,7 @@ namespace mnemos::manifests::amiga500 {
         }
 
         [[nodiscard]] std::uint32_t chip_ram_address_mask(std::size_t size) noexcept {
-            if (size >= amiga500_system::chip_ram_size_1m) {
+            if (size >= amiga_system::chip_ram_size_1m) {
                 return 0x000FFFFFU;
             }
             return ocs_disk_dma_address_mask;
@@ -305,7 +220,7 @@ namespace mnemos::manifests::amiga500 {
         [[nodiscard]] std::uint16_t apply_setclr(std::uint16_t current, std::uint16_t value,
                                                  std::uint16_t writable) noexcept {
             const std::uint16_t payload = value & writable;
-            if ((value & amiga500_system::setclr_bit) != 0U) {
+            if ((value & amiga_system::setclr_bit) != 0U) {
                 return static_cast<std::uint16_t>(current | payload);
             }
             return static_cast<std::uint16_t>(current & ~payload);
@@ -369,7 +284,7 @@ namespace mnemos::manifests::amiga500 {
         }
 
         [[nodiscard]] std::uint8_t
-        advance_weak_bit_lfsr(amiga500_system::floppy_drive_state& drive) noexcept {
+        advance_weak_bit_lfsr(amiga_system::floppy_drive_state& drive) noexcept {
             std::uint16_t state =
                 drive.weak_bit_lfsr == 0U ? weak_bit_lfsr_seed : drive.weak_bit_lfsr;
             const bool feedback = (state & 0x0001U) != 0U;
@@ -382,7 +297,7 @@ namespace mnemos::manifests::amiga500 {
         }
 
         [[nodiscard]] std::uint8_t
-        sample_raw_track_bit(amiga500_system::floppy_drive_state& drive) noexcept {
+        sample_raw_track_bit(amiga_system::floppy_drive_state& drive) noexcept {
             if (drive.weak_bit_stream.size() == drive.track_stream.size() &&
                 raw_track_bit_at_phase(std::span<const std::uint8_t>(drive.weak_bit_stream),
                                        drive.stream_offset, drive.stream_bit_offset) != 0U) {
@@ -392,7 +307,7 @@ namespace mnemos::manifests::amiga500 {
                                           drive.stream_offset, drive.stream_bit_offset);
         }
 
-        void advance_raw_track_phase(amiga500_system::floppy_drive_state& drive) noexcept {
+        void advance_raw_track_phase(amiga_system::floppy_drive_state& drive) noexcept {
             if (drive.track_stream.empty()) {
                 drive.stream_offset = 0U;
                 drive.stream_bit_offset = 0U;
@@ -406,7 +321,7 @@ namespace mnemos::manifests::amiga500 {
             }
         }
 
-        void restore_raw_track_phase(amiga500_system::floppy_drive_state& drive,
+        void restore_raw_track_phase(amiga_system::floppy_drive_state& drive,
                                      std::size_t old_track_size, std::size_t old_stream_offset,
                                      std::uint8_t old_stream_bit_offset) noexcept {
             if (old_track_size == 0U || drive.track_stream.empty()) {
@@ -502,7 +417,7 @@ namespace mnemos::manifests::amiga500 {
             return static_cast<std::uint16_t>((ram[a] << 8U) | ram[a + 1U]);
         }
 
-        void write_chip_word(amiga500_system& sys, std::uint32_t byte_address,
+        void write_chip_word(amiga_system& sys, std::uint32_t byte_address,
                              std::uint16_t value) noexcept {
             if (sys.chip_ram.size() < 2U) {
                 return;
@@ -606,10 +521,10 @@ namespace mnemos::manifests::amiga500 {
         }
 
         [[nodiscard]] std::uint16_t encode_joystick(std::uint8_t mask) noexcept {
-            const bool right = (mask & amiga500_system::joy_right) != 0U;
-            const bool left = (mask & amiga500_system::joy_left) != 0U;
-            const bool down = (mask & amiga500_system::joy_down) != 0U;
-            const bool up = (mask & amiga500_system::joy_up) != 0U;
+            const bool right = (mask & amiga_system::joy_right) != 0U;
+            const bool left = (mask & amiga_system::joy_left) != 0U;
+            const bool down = (mask & amiga_system::joy_down) != 0U;
+            const bool up = (mask & amiga_system::joy_up) != 0U;
 
             std::uint16_t value = 0U;
             if (right) {
@@ -706,7 +621,7 @@ namespace mnemos::manifests::amiga500 {
             const std::uint32_t info =
                 0xFF000000U | (static_cast<std::uint32_t>(track) << 16U) |
                 (static_cast<std::uint32_t>(sector) << 8U) |
-                static_cast<std::uint32_t>(amiga500_system::floppy_sectors_per_track - sector);
+                static_cast<std::uint32_t>(amiga_system::floppy_sectors_per_track - sector);
 
             std::array<std::uint32_t, 10> header_encoded{};
             const auto info_encoded = mfm_odd_even(info);
@@ -714,8 +629,8 @@ namespace mnemos::manifests::amiga500 {
             header_encoded[1] = info_encoded[1];
             const std::uint32_t header_checksum = mfm_checksum(header_encoded);
 
-            std::array<std::uint32_t, amiga500_system::floppy_sector_size / 2U> data_encoded{};
-            for (std::size_t i = 0U; i < amiga500_system::floppy_sector_size / 4U; ++i) {
+            std::array<std::uint32_t, amiga_system::floppy_sector_size / 2U> data_encoded{};
+            for (std::size_t i = 0U; i < amiga_system::floppy_sector_size / 4U; ++i) {
                 const auto encoded = mfm_odd_even(read_be32(sector_data, i * 4U));
                 data_encoded[i * 2U] = encoded[0];
                 data_encoded[i * 2U + 1U] = encoded[1];
@@ -739,12 +654,12 @@ namespace mnemos::manifests::amiga500 {
         [[nodiscard]] bool decode_amigados_sector(
             std::span<const std::uint8_t> track_bytes, std::size_t offset,
             std::uint8_t expected_track, std::uint8_t& sector,
-            std::array<std::uint8_t, amiga500_system::floppy_sector_size>& sector_data) noexcept {
+            std::array<std::uint8_t, amiga_system::floppy_sector_size>& sector_data) noexcept {
             constexpr std::uint32_t sync = 0x44894489U;
             constexpr std::size_t header_longs = 10U;
             constexpr std::size_t sync_bytes = 4U;
             constexpr std::size_t checksum_bytes = 8U;
-            constexpr std::size_t data_encoded_longs = amiga500_system::floppy_sector_size / 2U;
+            constexpr std::size_t data_encoded_longs = amiga_system::floppy_sector_size / 2U;
             constexpr std::size_t sector_bytes =
                 sync_bytes + header_longs * 4U + checksum_bytes * 2U + data_encoded_longs * 4U;
             if (offset + sector_bytes > track_bytes.size() ||
@@ -777,9 +692,9 @@ namespace mnemos::manifests::amiga500 {
             }
             sector = static_cast<std::uint8_t>(info >> 8U);
             const auto sectors_remaining = static_cast<std::uint8_t>(info);
-            if (sector >= amiga500_system::floppy_sectors_per_track ||
+            if (sector >= amiga_system::floppy_sectors_per_track ||
                 sectors_remaining !=
-                    static_cast<std::uint8_t>(amiga500_system::floppy_sectors_per_track - sector)) {
+                    static_cast<std::uint8_t>(amiga_system::floppy_sectors_per_track - sector)) {
                 return false;
             }
 
@@ -793,7 +708,7 @@ namespace mnemos::manifests::amiga500 {
                 return false;
             }
 
-            for (std::size_t i = 0U; i < amiga500_system::floppy_sector_size / 4U; ++i) {
+            for (std::size_t i = 0U; i < amiga_system::floppy_sector_size / 4U; ++i) {
                 const std::uint32_t raw =
                     mfm_decode_odd_even(data_encoded[i * 2U], data_encoded[i * 2U + 1U]);
                 const std::size_t dst = i * 4U;
@@ -806,7 +721,7 @@ namespace mnemos::manifests::amiga500 {
         }
     } // namespace
 
-    std::uint16_t amiga500_system::read_custom_word(std::uint16_t reg) noexcept {
+    std::uint16_t amiga_system::read_custom_word(std::uint16_t reg) noexcept {
         reg = static_cast<std::uint16_t>(reg & 0x01FEU);
         if (reg >= reg_color_base &&
             reg < reg_color_base + chips::video::agnus::palette_entries * 2U) {
@@ -945,7 +860,7 @@ namespace mnemos::manifests::amiga500 {
         }
     }
 
-    void amiga500_system::write_custom_word(std::uint16_t reg, std::uint16_t value) noexcept {
+    void amiga_system::write_custom_word(std::uint16_t reg, std::uint16_t value) noexcept {
         reg = static_cast<std::uint16_t>(reg & 0x01FEU);
 
         if (reg >= reg_color_base &&
@@ -1207,14 +1122,14 @@ namespace mnemos::manifests::amiga500 {
         }
     }
 
-    std::uint8_t amiga500_system::read_custom_byte(std::uint32_t address) noexcept {
+    std::uint8_t amiga_system::read_custom_byte(std::uint32_t address) noexcept {
         const std::uint16_t reg = static_cast<std::uint16_t>((address - custom_base) & 0x01FEU);
         const std::uint16_t value = read_custom_word(reg);
         return (address & 1U) == 0U ? static_cast<std::uint8_t>(value >> 8U)
                                     : static_cast<std::uint8_t>(value);
     }
 
-    void amiga500_system::write_custom_byte(std::uint32_t address, std::uint8_t value) noexcept {
+    void amiga_system::write_custom_byte(std::uint32_t address, std::uint8_t value) noexcept {
         const std::uint16_t reg = static_cast<std::uint16_t>((address - custom_base) & 0x01FEU);
         const auto current_word = [&]() noexcept -> std::uint16_t {
             if (reg >= reg_color_base &&
@@ -1349,8 +1264,7 @@ namespace mnemos::manifests::amiga500 {
         write_custom_word(reg, static_cast<std::uint16_t>((previous & 0xFF00U) | value));
     }
 
-    amiga500_system::zorro2_expansion_board*
-    amiga500_system::active_zorro2_autoconfig_board() noexcept {
+    zorro2_expansion_board* amiga_system::active_zorro2_autoconfig_board() noexcept {
         if (zorro2_autoconfig_index < zorro2_boards.size()) {
             auto& board = zorro2_boards[zorro2_autoconfig_index];
             if (!board.configured && !board.shut_up) {
@@ -1368,8 +1282,7 @@ namespace mnemos::manifests::amiga500 {
         return nullptr;
     }
 
-    const amiga500_system::zorro2_expansion_board*
-    amiga500_system::active_zorro2_autoconfig_board() const noexcept {
+    const zorro2_expansion_board* amiga_system::active_zorro2_autoconfig_board() const noexcept {
         if (zorro2_autoconfig_index < zorro2_boards.size()) {
             const auto& board = zorro2_boards[zorro2_autoconfig_index];
             if (!board.configured && !board.shut_up) {
@@ -1384,11 +1297,11 @@ namespace mnemos::manifests::amiga500 {
         return nullptr;
     }
 
-    bool amiga500_system::zorro2_autoconfig_pending() const noexcept {
+    bool amiga_system::zorro2_autoconfig_pending() const noexcept {
         return active_zorro2_autoconfig_board() != nullptr;
     }
 
-    void amiga500_system::reset_zorro2_autoconfig() noexcept {
+    void amiga_system::reset_zorro2_autoconfig() noexcept {
         zorro2_autoconfig_index = 0U;
         zorro2_base_low_nibble = 0U;
         zorro2_base_low_nibble_valid = false;
@@ -1400,23 +1313,23 @@ namespace mnemos::manifests::amiga500 {
         static_cast<void>(active_zorro2_autoconfig_board());
     }
 
-    bool amiga500_system::floppy_loaded(std::size_t drive) const noexcept {
+    bool amiga_system::floppy_loaded(std::size_t drive) const noexcept {
         return drive < floppy_drives.size() && !floppy_drives[drive].image.empty();
     }
 
-    std::size_t amiga500_system::floppy_size(std::size_t drive) const noexcept {
+    std::size_t amiga_system::floppy_size(std::size_t drive) const noexcept {
         return drive < floppy_drives.size() ? floppy_drives[drive].image.size() : 0U;
     }
 
-    std::uint8_t amiga500_system::floppy_cylinder(std::size_t drive) const noexcept {
+    std::uint8_t amiga_system::floppy_cylinder(std::size_t drive) const noexcept {
         return drive < floppy_drives.size() ? floppy_drives[drive].cylinder_pos : 0U;
     }
 
-    bool amiga500_system::mount_floppy(std::span<const std::uint8_t> adf_image) {
+    bool amiga_system::mount_floppy(std::span<const std::uint8_t> adf_image) {
         return mount_floppy(0U, adf_image);
     }
 
-    bool amiga500_system::mount_floppy(std::size_t drive, std::span<const std::uint8_t> adf_image) {
+    bool amiga_system::mount_floppy(std::size_t drive, std::span<const std::uint8_t> adf_image) {
         if (drive >= floppy_drives.size() || adf_image.size() != floppy_dd_size) {
             return false;
         }
@@ -1452,9 +1365,9 @@ namespace mnemos::manifests::amiga500 {
         return true;
     }
 
-    void amiga500_system::unmount_floppy() noexcept { unmount_floppy(0U); }
+    void amiga_system::unmount_floppy() noexcept { unmount_floppy(0U); }
 
-    void amiga500_system::unmount_floppy(std::size_t drive) noexcept {
+    void amiga_system::unmount_floppy(std::size_t drive) noexcept {
         if (drive >= floppy_drives.size()) {
             return;
         }
@@ -1486,27 +1399,27 @@ namespace mnemos::manifests::amiga500 {
         disk_dma_bytes_remaining = 0U;
     }
 
-    void amiga500_system::set_floppy_change_latch(std::size_t drive, bool changed) noexcept {
+    void amiga_system::set_floppy_change_latch(std::size_t drive, bool changed) noexcept {
         if (drive < floppy_drives.size() && !floppy_drives[drive].image.empty()) {
             floppy_drives[drive].change_latch = changed;
         }
     }
 
-    void amiga500_system::set_floppy_write_protected(std::size_t drive,
+    void amiga_system::set_floppy_write_protected(std::size_t drive,
                                                      bool write_protected) noexcept {
         if (drive < floppy_drives.size()) {
             floppy_drives[drive].write_protected = write_protected;
         }
     }
 
-    std::uint32_t amiga500_system::floppy_index_lines_per_revolution() const noexcept {
+    std::uint32_t amiga_system::floppy_index_lines_per_revolution() const noexcept {
         const auto lines_per_frame = agnus.is_pal() ? chips::video::agnus::scanlines_pal
                                                     : chips::video::agnus::scanlines_ntsc;
         const std::uint32_t frames_per_second = agnus.is_pal() ? 50U : 60U;
         return (lines_per_frame * frames_per_second) / floppy_index_pulses_per_second;
     }
 
-    void amiga500_system::set_joystick(std::size_t hardware_port, std::uint8_t mask) noexcept {
+    void amiga_system::set_joystick(std::size_t hardware_port, std::uint8_t mask) noexcept {
         if (hardware_port >= joystick_state.size()) {
             return;
         }
@@ -1517,7 +1430,7 @@ namespace mnemos::manifests::amiga500 {
             (joydat[hardware_port] & 0xFCFCU) | encode_joystick(joystick_state[hardware_port]));
     }
 
-    void amiga500_system::set_mouse(std::size_t hardware_port, std::int16_t delta_x,
+    void amiga_system::set_mouse(std::size_t hardware_port, std::int16_t delta_x,
                                     std::int16_t delta_y, bool left_button, bool right_button,
                                     bool middle_button) noexcept {
         if (hardware_port >= joystick_state.size()) {
@@ -1544,7 +1457,7 @@ namespace mnemos::manifests::amiga500 {
         joystick_state[hardware_port] = buttons;
     }
 
-    void amiga500_system::set_pot_position(std::size_t hardware_port, std::uint8_t x,
+    void amiga_system::set_pot_position(std::size_t hardware_port, std::uint8_t x,
                                            std::uint8_t y) noexcept {
         if (hardware_port >= pot_target.size()) {
             return;
@@ -1553,7 +1466,7 @@ namespace mnemos::manifests::amiga500 {
             static_cast<std::uint16_t>((static_cast<std::uint16_t>(y) << 8U) | x);
     }
 
-    bool amiga500_system::enqueue_keyboard_key(std::uint8_t raw_keycode, bool pressed) noexcept {
+    bool amiga_system::enqueue_keyboard_key(std::uint8_t raw_keycode, bool pressed) noexcept {
         const std::uint8_t key = static_cast<std::uint8_t>(raw_keycode & 0x7FU);
         if (keyboard_key_down[key] == pressed) {
             return false;
@@ -1566,11 +1479,11 @@ namespace mnemos::manifests::amiga500 {
         return true;
     }
 
-    bool amiga500_system::enqueue_keyboard_control_code(std::uint8_t code) noexcept {
+    bool amiga_system::enqueue_keyboard_control_code(std::uint8_t code) noexcept {
         return enqueue_keyboard_code(code);
     }
 
-    bool amiga500_system::press_caps_lock() noexcept {
+    bool amiga_system::press_caps_lock() noexcept {
         const bool next_led = !keyboard_caps_lock_led;
         const std::uint8_t code = static_cast<std::uint8_t>(0x62U | (next_led ? 0x00U : 0x80U));
         if (!enqueue_keyboard_code(code)) {
@@ -1580,7 +1493,7 @@ namespace mnemos::manifests::amiga500 {
         return true;
     }
 
-    bool amiga500_system::enqueue_keyboard_code(std::uint8_t code) noexcept {
+    bool amiga_system::enqueue_keyboard_code(std::uint8_t code) noexcept {
         if (keyboard_queue_count >= keyboard_queue.size()) {
             return false;
         }
@@ -1592,7 +1505,7 @@ namespace mnemos::manifests::amiga500 {
         return true;
     }
 
-    void amiga500_system::transmit_keyboard_code(std::uint8_t code) noexcept {
+    void amiga_system::transmit_keyboard_code(std::uint8_t code) noexcept {
         const std::uint8_t sdr = encode_keyboard_sdr(code);
         for (int bit = 7; bit >= 0; --bit) {
             cia_a.sp_level(((sdr >> static_cast<unsigned>(bit)) & 0x01U) != 0U);
@@ -1604,7 +1517,7 @@ namespace mnemos::manifests::amiga500 {
         keyboard_ack_low_seen = false;
     }
 
-    void amiga500_system::service_keyboard_queue() noexcept {
+    void amiga_system::service_keyboard_queue() noexcept {
         if (keyboard_byte_in_flight) {
             return;
         }
@@ -1617,7 +1530,7 @@ namespace mnemos::manifests::amiga500 {
         transmit_keyboard_code(code);
     }
 
-    void amiga500_system::write_cia_a_sp(bool level) noexcept {
+    void amiga_system::write_cia_a_sp(bool level) noexcept {
         if (!keyboard_byte_in_flight) {
             keyboard_ack_low_seen = false;
             return;
@@ -1633,7 +1546,7 @@ namespace mnemos::manifests::amiga500 {
         keyboard_byte_in_flight = false;
     }
 
-    std::uint8_t amiga500_system::cia_a_port_a_inputs() const noexcept {
+    std::uint8_t amiga_system::cia_a_port_a_inputs() const noexcept {
         std::uint8_t pins = 0xFFU;
         if ((joystick_state[0] & joy_fire) != 0U) {
             pins = static_cast<std::uint8_t>(pins & ~0x40U);
@@ -1665,7 +1578,7 @@ namespace mnemos::manifests::amiga500 {
         return pins;
     }
 
-    std::uint16_t amiga500_system::read_potinp() const noexcept {
+    std::uint16_t amiga_system::read_potinp() const noexcept {
         constexpr std::uint16_t out_lx = 0x0200U;
         constexpr std::uint16_t dat_lx = 0x0100U;
         constexpr std::uint16_t out_ly = 0x0800U;
@@ -1693,7 +1606,7 @@ namespace mnemos::manifests::amiga500 {
         return value;
     }
 
-    std::uint16_t amiga500_system::read_pot_counter(std::size_t hardware_port) noexcept {
+    std::uint16_t amiga_system::read_pot_counter(std::size_t hardware_port) noexcept {
         if (hardware_port >= pot_counter.size()) {
             return 0xFFFFU;
         }
@@ -1710,7 +1623,7 @@ namespace mnemos::manifests::amiga500 {
         return pot_counter[hardware_port];
     }
 
-    void amiga500_system::write_cia_b_port_b(std::uint8_t value) {
+    void amiga_system::write_cia_b_port_b(std::uint8_t value) {
         const std::uint8_t next_selected_mask = static_cast<std::uint8_t>((~value >> 3U) & 0x0FU);
         const std::uint8_t newly_selected_mask =
             static_cast<std::uint8_t>(next_selected_mask & ~floppy_selected_mask);
@@ -1783,22 +1696,22 @@ namespace mnemos::manifests::amiga500 {
         floppy_step_line = next_step_line;
     }
 
-    amiga500_system::floppy_drive_state* amiga500_system::active_floppy_drive_state() noexcept {
+    amiga_system::floppy_drive_state* amiga_system::active_floppy_drive_state() noexcept {
         if (static_cast<std::size_t>(floppy_active_drive) >= floppy_drives.size()) {
             return nullptr;
         }
         return &floppy_drives[static_cast<std::size_t>(floppy_active_drive)];
     }
 
-    const amiga500_system::floppy_drive_state*
-    amiga500_system::active_floppy_drive_state() const noexcept {
+    const amiga_system::floppy_drive_state*
+    amiga_system::active_floppy_drive_state() const noexcept {
         if (static_cast<std::size_t>(floppy_active_drive) >= floppy_drives.size()) {
             return nullptr;
         }
         return &floppy_drives[static_cast<std::size_t>(floppy_active_drive)];
     }
 
-    void amiga500_system::preserve_dirty_floppy_track(std::size_t drive) noexcept {
+    void amiga_system::preserve_dirty_floppy_track(std::size_t drive) noexcept {
         if (drive >= floppy_drives.size()) {
             return;
         }
@@ -1820,13 +1733,13 @@ namespace mnemos::manifests::amiga500 {
         df.track_stream_dirty = false;
     }
 
-    void amiga500_system::update_floppy_track_stream() {
+    void amiga_system::update_floppy_track_stream() {
         if (static_cast<std::size_t>(floppy_active_drive) < floppy_drives.size()) {
             update_floppy_track_stream(floppy_active_drive);
         }
     }
 
-    void amiga500_system::update_floppy_track_stream(std::size_t drive) {
+    void amiga_system::update_floppy_track_stream(std::size_t drive) {
         if (drive >= floppy_drives.size()) {
             return;
         }
@@ -1883,7 +1796,7 @@ namespace mnemos::manifests::amiga500 {
         restore_raw_track_phase(df, old_track_size, old_stream_offset, old_stream_bit_offset);
     }
 
-    bool amiga500_system::flush_floppy_track_to_image(std::size_t drive) noexcept {
+    bool amiga_system::flush_floppy_track_to_image(std::size_t drive) noexcept {
         if (drive >= floppy_drives.size()) {
             return false;
         }
@@ -1920,7 +1833,7 @@ namespace mnemos::manifests::amiga500 {
         return wrote_sector;
     }
 
-    std::uint8_t amiga500_system::next_floppy_byte() noexcept {
+    std::uint8_t amiga_system::next_floppy_byte() noexcept {
         auto* drive = active_floppy_drive_state();
         if (drive == nullptr || drive->track_stream.empty()) {
             disk_data = 0U;
@@ -1935,7 +1848,7 @@ namespace mnemos::manifests::amiga500 {
         return value;
     }
 
-    void amiga500_system::accept_floppy_byte(std::uint8_t byte) noexcept {
+    void amiga_system::accept_floppy_byte(std::uint8_t byte) noexcept {
         disk_data = static_cast<std::uint16_t>((disk_data << 8U) | byte);
         disk_shift = static_cast<std::uint16_t>((disk_shift << 8U) | byte);
         disk_byte_valid = true;
@@ -1945,7 +1858,7 @@ namespace mnemos::manifests::amiga500 {
         }
     }
 
-    bool amiga500_system::shift_floppy_read_bit() noexcept {
+    bool amiga_system::shift_floppy_read_bit() noexcept {
         auto* drive = active_floppy_drive_state();
         if (drive == nullptr || drive->track_stream.empty()) {
             return false;
@@ -1967,7 +1880,7 @@ namespace mnemos::manifests::amiga500 {
         return true;
     }
 
-    void amiga500_system::shift_floppy_write_bit() noexcept {
+    void amiga_system::shift_floppy_write_bit() noexcept {
         auto* drive = active_floppy_drive_state();
         if (drive == nullptr || drive->track_stream.empty()) {
             return;
@@ -2020,7 +1933,7 @@ namespace mnemos::manifests::amiga500 {
         }
     }
 
-    void amiga500_system::tick_floppy_scanline() noexcept {
+    void amiga_system::tick_floppy_scanline() noexcept {
         auto* drive = active_floppy_drive_state();
         if (!floppy_selected || drive == nullptr || !drive->motor_on || drive->image.empty()) {
             if (drive != nullptr) {
@@ -2042,7 +1955,7 @@ namespace mnemos::manifests::amiga500 {
         }
     }
 
-    void amiga500_system::tick_floppy_data_cycle() noexcept {
+    void amiga_system::tick_floppy_data_cycle() noexcept {
         auto* drive = active_floppy_drive_state();
         if (!floppy_selected || drive == nullptr || !drive->motor_on || drive->image.empty()) {
             if (drive != nullptr) {
@@ -2087,7 +2000,7 @@ namespace mnemos::manifests::amiga500 {
         }
     }
 
-    void amiga500_system::complete_disk_dma_byte() noexcept {
+    void amiga_system::complete_disk_dma_byte() noexcept {
         --disk_dma_bytes_remaining;
         if (disk_dma_bytes_remaining == 0U) {
             disk_length = static_cast<std::uint16_t>(disk_length & 0xC000U);
@@ -2101,7 +2014,7 @@ namespace mnemos::manifests::amiga500 {
         disk_length = static_cast<std::uint16_t>((disk_length & 0xC000U) | words_remaining);
     }
 
-    void amiga500_system::transfer_disk_dma_byte(std::uint8_t byte) noexcept {
+    void amiga_system::transfer_disk_dma_byte(std::uint8_t byte) noexcept {
         if (disk_dma_bytes_remaining == 0U || (disk_length & 0x8000U) == 0U ||
             (disk_length & 0x4000U) != 0U || disk_wordsync_waiting || !agnus.dma_disk()) {
             return;
@@ -2114,7 +2027,7 @@ namespace mnemos::manifests::amiga500 {
         complete_disk_dma_byte();
     }
 
-    void amiga500_system::start_disk_dma(std::uint16_t value) noexcept {
+    void amiga_system::start_disk_dma(std::uint16_t value) noexcept {
         disk_length = value;
         const auto reset_pending_write_byte = [this]() noexcept {
             if (auto* drive = active_floppy_drive_state(); drive != nullptr) {
@@ -2152,7 +2065,7 @@ namespace mnemos::manifests::amiga500 {
         disk_wordsync_waiting = (value & 0x4000U) == 0U && (disk_adkcon & adkcon_wordsync) != 0U;
     }
 
-    void amiga500_system::start_blitter_line(std::uint32_t length) noexcept {
+    void amiga_system::start_blitter_line(std::uint32_t length) noexcept {
         const auto minterm = static_cast<std::uint8_t>(bltcon0 & 0x00FFU);
         const std::uint16_t texture = blitter_data[blit_b];
         std::uint16_t texture_bit = static_cast<std::uint16_t>((bltcon1 >> 12U) & 0x000FU);
@@ -2265,7 +2178,7 @@ namespace mnemos::manifests::amiga500 {
         agnus.set_blitter_zero(zero);
     }
 
-    void amiga500_system::start_blitter(std::uint16_t value) noexcept {
+    void amiga_system::start_blitter(std::uint16_t value) noexcept {
         bltsize = value;
         const std::uint32_t width_words = (value & 0x003FU) == 0U ? 64U : (value & 0x003FU);
         const std::uint32_t height = (value >> 6U) == 0U ? 1024U : (value >> 6U);
@@ -2371,7 +2284,7 @@ namespace mnemos::manifests::amiga500 {
         agnus.set_blitter_zero(zero);
     }
 
-    void amiga500_system::tick_blitter_cycle() noexcept {
+    void amiga_system::tick_blitter_cycle() noexcept {
         if (blitter_cycles_remaining == 0U || !agnus.dma_blitter()) {
             return;
         }
@@ -2385,12 +2298,12 @@ namespace mnemos::manifests::amiga500 {
         }
     }
 
-    void amiga500_system::request_interrupt(std::uint16_t mask) noexcept {
+    void amiga_system::request_interrupt(std::uint16_t mask) noexcept {
         intreq = static_cast<std::uint16_t>(intreq | (mask & 0x7FFFU));
         update_irq_level();
     }
 
-    std::uint16_t amiga500_system::visible_intreq() const noexcept {
+    std::uint16_t amiga_system::visible_intreq() const noexcept {
         std::uint16_t visible = intreq;
         if (cia_a_irq) {
             visible = static_cast<std::uint16_t>(visible | int_ports);
@@ -2401,7 +2314,7 @@ namespace mnemos::manifests::amiga500 {
         return static_cast<std::uint16_t>(visible & 0x7FFFU);
     }
 
-    void amiga500_system::update_irq_level() noexcept {
+    void amiga_system::update_irq_level() noexcept {
         if ((intena & int_master) == 0U) {
             cpu.set_irq_level(0);
             return;
@@ -2427,11 +2340,11 @@ namespace mnemos::manifests::amiga500 {
         cpu.set_irq_level(level);
     }
 
-    void amiga500_system::update_overlay_from_cia() noexcept {
+    void amiga_system::update_overlay_from_cia() noexcept {
         overlay_active = (cia_a.port_a_pins() & 0x01U) != 0U;
     }
 
-    void amiga500_system::reset_board(chips::reset_kind kind) noexcept {
+    void amiga_system::reset_board(chips::reset_kind kind) noexcept {
         agnus.reset(kind);
         denise.reset(kind);
         paula.reset(kind);
@@ -2524,12 +2437,12 @@ namespace mnemos::manifests::amiga500 {
         agnus.attach_palette(palette_bytes);
     }
 
-    void amiga500_system::reset_board_from_cpu() noexcept {
+    void amiga_system::reset_board_from_cpu() noexcept {
         reset_board(chips::reset_kind::hard);
     }
 
     std::uint32_t
-    amiga500_system::cpu_bus_wait_cycles(std::uint32_t address, bool /*program*/, bool write,
+    amiga_system::cpu_bus_wait_cycles(std::uint32_t address, bool /*program*/, bool write,
                                          std::uint32_t instruction_cycles_before_access,
                                          std::uint32_t instruction_wait_cycles) const noexcept {
         const bool chip_ram_window = (address & 0x00FFFFFFU) < chip_ram.size();
@@ -2574,7 +2487,7 @@ namespace mnemos::manifests::amiga500 {
         return wait;
     }
 
-    void amiga500_system::save_state(chips::state_writer& writer) const {
+    void amiga_system::save_state(chips::state_writer& writer) const {
         writer.u32(state_version);
         writer.boolean(overlay_active);
         writer.u16(intena);
@@ -2724,7 +2637,7 @@ namespace mnemos::manifests::amiga500 {
         }
     }
 
-    void amiga500_system::load_state(chips::state_reader& reader) {
+    void amiga_system::load_state(chips::state_reader& reader) {
         if (reader.u32() != state_version) {
             reader.fail();
             return;
@@ -2911,11 +2824,11 @@ namespace mnemos::manifests::amiga500 {
             board.shut_up = reader.boolean();
             if (board.configured && board.memory) {
                 const std::uint32_t expansion_end =
-                    amiga500_system::zorro2_expansion_ram_base +
-                    amiga500_system::zorro2_expansion_ram_size;
+                    amiga_system::zorro2_expansion_ram_base +
+                    amiga_system::zorro2_expansion_ram_size;
                 const std::uint64_t board_end = static_cast<std::uint64_t>(board.assigned_base) +
                                                 static_cast<std::uint64_t>(board.memory_size);
-                if (board.assigned_base < amiga500_system::zorro2_expansion_ram_base ||
+                if (board.assigned_base < amiga_system::zorro2_expansion_ram_base ||
                     board_end > expansion_end) {
                     reader.fail();
                     return;
@@ -3010,17 +2923,17 @@ namespace mnemos::manifests::amiga500 {
         }
     }
 
-    std::unique_ptr<amiga500_system> assemble_amiga500(std::vector<std::uint8_t> kickstart_rom,
-                                                       const amiga500_config& config) {
-        auto sys = std::make_unique<amiga500_system>();
-        amiga500_system* s = sys.get();
+    std::unique_ptr<amiga_system> assemble_amiga(std::vector<std::uint8_t> kickstart_rom,
+                                                       const amiga_config& config) {
+        auto sys = std::make_unique<amiga_system>();
+        amiga_system* s = sys.get();
         const std::size_t active_chip_ram_size = chip_ram_size_for_model(config.model);
         const std::size_t active_fast_ram_size = fast_ram_size_for_config(config);
         s->copper_address_mask = copper_address_mask_for_model(config.model);
         s->chip_ram.assign(active_chip_ram_size, 0U);
         s->fast_ram.assign(active_fast_ram_size, 0U);
         if (!s->fast_ram.empty()) {
-            s->zorro2_boards.push_back(amiga500_system::zorro2_expansion_board{
+            s->zorro2_boards.push_back(zorro2_expansion_board{
                 .product = 0x01U,
                 .manufacturer = 2011U,
                 .serial = 0x4D4E0001U,
@@ -3075,7 +2988,7 @@ namespace mnemos::manifests::amiga500 {
         // Chip RAM is mapped through MMIO callbacks so Paula's DMA-visible RAM
         // stays coherent with CPU writes.
         s->bus.map_mmio(
-            amiga500_system::chip_ram_base, static_cast<std::uint32_t>(s->chip_ram.size()),
+            amiga_system::chip_ram_base, static_cast<std::uint32_t>(s->chip_ram.size()),
             [s](std::uint32_t a) {
                 return s->chip_ram[mirrored_chip_byte_address(s->chip_ram, a)];
             },
@@ -3087,8 +3000,8 @@ namespace mnemos::manifests::amiga500 {
             0);
         if (!s->fast_ram.empty()) {
             s->bus.map_mmio(
-                amiga500_system::zorro2_expansion_ram_base,
-                amiga500_system::zorro2_expansion_ram_size,
+                amiga_system::zorro2_expansion_ram_base,
+                amiga_system::zorro2_expansion_ram_size,
                 [s](std::uint32_t a) {
                     const auto* board = configured_zorro2_memory_board_at(*s, a);
                     if (board == nullptr) {
@@ -3108,12 +3021,13 @@ namespace mnemos::manifests::amiga500 {
                     return configured_zorro2_memory_board_at(*s, a) != nullptr;
                 });
             s->bus.map_mmio16(
-                amiga500_system::zorro2_autoconfig_base,
-                amiga500_system::zorro2_autoconfig_size,
+                amiga_system::zorro2_autoconfig_base,
+                amiga_system::zorro2_autoconfig_size,
                 [s](std::uint32_t a) {
                     const auto* board = s->active_zorro2_autoconfig_board();
                     return board == nullptr ? static_cast<std::uint8_t>(0xFFU)
-                                            : zorro2_autoconfig_read(*board, a);
+                                            : zorro2_autoconfig_read(
+                                                  *board, amiga_system::zorro2_autoconfig_base, a);
                 },
                 [s](std::uint32_t a, std::uint8_t v) { zorro2_autoconfig_write(*s, a, v); },
                 [s](std::uint32_t a) {
@@ -3121,7 +3035,8 @@ namespace mnemos::manifests::amiga500 {
                     if (board == nullptr) {
                         return static_cast<std::uint16_t>(0xFFFFU);
                     }
-                    const std::uint8_t value = zorro2_autoconfig_read(*board, a);
+                    const std::uint8_t value = zorro2_autoconfig_read(
+                        *board, amiga_system::zorro2_autoconfig_base, a);
                     return static_cast<std::uint16_t>((static_cast<std::uint16_t>(value) << 8U) |
                                                       value);
                 },
@@ -3135,26 +3050,26 @@ namespace mnemos::manifests::amiga500 {
         // Reset overlay: Kickstart answers reads at $000000 until CIA-A PA0 is
         // driven high. Writes always fall through to chip RAM.
         s->bus.map_rom(
-            amiga500_system::chip_ram_base, s->kickstart_rom, 10,
+            amiga_system::chip_ram_base, s->kickstart_rom, 10,
             [s](std::uint32_t, bool is_write) { return !is_write && s->overlay_active; });
-        s->bus.map_rom(amiga500_system::kickstart_base, s->kickstart_rom, 0);
+        s->bus.map_rom(amiga_system::kickstart_base, s->kickstart_rom, 0);
         s->bus.map_mmio16(
-            amiga500_system::custom_base, 0x2000U,
+            amiga_system::custom_base, 0x2000U,
             [s](std::uint32_t a) { return s->read_custom_byte(a); },
             [s](std::uint32_t a, std::uint8_t v) { s->write_custom_byte(a, v); },
             [s](std::uint32_t a) {
                 const auto reg = static_cast<std::uint16_t>(
-                    (a - amiga500_system::custom_base) & 0x01FEU);
+                    (a - amiga_system::custom_base) & 0x01FEU);
                 return s->read_custom_word(reg);
             },
             [s](std::uint32_t a, std::uint16_t v) {
                 const auto reg = static_cast<std::uint16_t>(
-                    (a - amiga500_system::custom_base) & 0x01FEU);
+                    (a - amiga_system::custom_base) & 0x01FEU);
                 s->write_custom_word(reg, v);
             },
             0);
         s->bus.map_mmio(
-            amiga500_system::cia_a_base, 0x1000U,
+            amiga_system::cia_a_base, 0x1000U,
             [s](std::uint32_t a) {
                 return (a & 1U) != 0U ? s->cia_a.read(cia_register(a))
                                       : static_cast<std::uint8_t>(0xFFU);
@@ -3166,7 +3081,7 @@ namespace mnemos::manifests::amiga500 {
             },
             0);
         s->bus.map_mmio(
-            amiga500_system::cia_b_base, 0x1000U,
+            amiga_system::cia_b_base, 0x1000U,
             [s](std::uint32_t a) { return s->cia_b.read(cia_register(a)); },
             [s](std::uint32_t a, std::uint8_t v) { s->cia_b.write(cia_register(a), v); }, 0);
 
@@ -3180,7 +3095,7 @@ namespace mnemos::manifests::amiga500 {
         });
         s->agnus.set_vblank_callback([s](std::uint32_t) {
             ++s->frame_index;
-            s->request_interrupt(amiga500_system::int_vertb);
+            s->request_interrupt(amiga_system::int_vertb);
         });
         s->agnus.set_custom_write_callback(
             [s](std::uint16_t reg, std::uint16_t value) { s->write_custom_word(reg, value); });
@@ -3198,4 +3113,4 @@ namespace mnemos::manifests::amiga500 {
         return sys;
     }
 
-} // namespace mnemos::manifests::amiga500
+} // namespace mnemos::manifests::amiga
