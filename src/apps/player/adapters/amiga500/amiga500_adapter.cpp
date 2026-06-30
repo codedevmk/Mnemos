@@ -296,6 +296,8 @@ namespace mnemos::apps::player::adapters::amiga500 {
                 return "amiga500plus";
             case model_t::amiga600:
                 return "amiga600";
+            case model_t::amiga2000:
+                return "amiga2000";
             case model_t::amiga500:
                 break;
             }
@@ -310,6 +312,8 @@ namespace mnemos::apps::player::adapters::amiga500 {
                 return "Amiga 500+";
             case model_t::amiga600:
                 return "Amiga 600";
+            case model_t::amiga2000:
+                return "Amiga 2000";
             case model_t::amiga500:
                 break;
             }
@@ -1632,6 +1636,7 @@ namespace mnemos::apps::player::adapters::amiga500 {
             register_amiga_family("amiga500plus",
                                   manifests::amiga500::amiga500_model::amiga500_plus);
             register_amiga_family("amiga600", manifests::amiga500::amiga500_model::amiga600);
+            register_amiga_family("amiga2000", manifests::amiga500::amiga500_model::amiga2000);
             return 0;
         }();
     } // namespace

@@ -1607,6 +1607,29 @@ TEST_CASE("player launch boots Amiga600 from its Kickstart env without disk medi
     fs::remove_all(dir);
 }
 
+TEST_CASE("player launch boots Amiga2000 from its Kickstart env without disk media",
+          "[apps][player][launch][amiga2000]") {
+    scoped_env env({"MNEMOS_AMIGA2000_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick13.rom";
+    write_image(rom_path, tiny_kickstart());
+    REQUIRE(set_env("MNEMOS_AMIGA2000_KICKSTART", rom_path.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system({.system_arg = std::string{"amiga2000"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(outcome.primary_media_path.empty());
+    CHECK(outcome.system->media_count() == 0U);
+    CHECK(has_spec(*outcome.system, "System", "Amiga 2000"));
+    CHECK(has_spec(*outcome.system, "Chip RAM", "512 KiB"));
+    auto* adapter = dynamic_cast<amiga500_adapter*>(outcome.system.get());
+    REQUIRE(adapter != nullptr);
+    CHECK(adapter->system().chip_ram.size() == amiga500_system::chip_ram_size);
+
+    fs::remove_all(dir);
+}
+
 TEST_CASE("player launch treats a zip-wrapped Amiga ADF as disk media",
           "[apps][player][launch][amiga500]") {
     scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
@@ -1648,6 +1671,33 @@ TEST_CASE("player launch treats a zip-wrapped Amiga600 ADF as disk media",
 
     auto outcome = mnemos::apps::player::launch_system(
         {.rom_paths = {disk_path.string()}, .system_arg = std::string{"amiga600"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(outcome.primary_media_path == disk_path.string());
+    CHECK(outcome.system->media_count() == 1U);
+    auto* adapter = dynamic_cast<amiga500_adapter*>(outcome.system.get());
+    REQUIRE(adapter != nullptr);
+    CHECK(adapter->system().floppy_loaded());
+    CHECK(adapter->system().floppy_size() == amiga500_system::floppy_dd_size);
+    CHECK(has_spec(*outcome.system, "Disk", "Workbench"));
+
+    fs::remove_all(dir);
+}
+
+TEST_CASE("player launch treats a zip-wrapped Amiga2000 ADF as disk media",
+          "[apps][player][launch][amiga2000]") {
+    scoped_env env({"MNEMOS_AMIGA2000_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick13.rom";
+    const fs::path disk_path = dir / "workbench.zip";
+    write_image(rom_path, tiny_kickstart());
+    const std::vector<std::uint8_t> disk_image = tiny_adf();
+    write_image(disk_path, deflated_zip("Workbench.adf", disk_image));
+    REQUIRE(set_env("MNEMOS_AMIGA2000_KICKSTART", rom_path.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system(
+        {.rom_paths = {disk_path.string()}, .system_arg = std::string{"amiga2000"}});
 
     REQUIRE(outcome.exit_code == 0);
     REQUIRE(outcome.system != nullptr);

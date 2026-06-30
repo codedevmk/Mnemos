@@ -394,7 +394,7 @@ namespace {
     is_amiga500_family(mnemos::apps::player::adapters::system_family family) noexcept {
         using mnemos::apps::player::adapters::system_family;
         return family == system_family::amiga500 || family == system_family::amiga500_plus ||
-               family == system_family::amiga600;
+               family == system_family::amiga600 || family == system_family::amiga2000;
     }
 
     [[nodiscard]] const char*
@@ -405,6 +405,8 @@ namespace {
             return "MNEMOS_AMIGA500PLUS_KICKSTART";
         case system_family::amiga600:
             return "MNEMOS_AMIGA600_KICKSTART";
+        case system_family::amiga2000:
+            return "MNEMOS_AMIGA2000_KICKSTART";
         default:
             return "MNEMOS_AMIGA500_KICKSTART";
         }
@@ -610,6 +612,7 @@ namespace mnemos::apps::player {
         case system_family::amiga500:
         case system_family::amiga500_plus:
         case system_family::amiga600:
+        case system_family::amiga2000:
             cart_default = mnemos::video_region::pal;
             break;
         case system_family::msx2:

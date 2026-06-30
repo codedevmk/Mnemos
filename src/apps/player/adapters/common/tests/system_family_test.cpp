@@ -84,6 +84,8 @@ TEST_CASE("system_family: every registry id maps to its family") {
     CHECK(family_from_name("a500+") == system_family::amiga500_plus);
     CHECK(family_from_name("amiga600") == system_family::amiga600);
     CHECK(family_from_name("a600") == system_family::amiga600);
+    CHECK(family_from_name("amiga2000") == system_family::amiga2000);
+    CHECK(family_from_name("a2000") == system_family::amiga2000);
 }
 
 TEST_CASE("system_family: names are case-insensitive") {
@@ -121,6 +123,7 @@ TEST_CASE("system_family: names are case-insensitive") {
     CHECK(family_from_name("AMIGA500") == system_family::amiga500);
     CHECK(family_from_name("AMIGA500PLUS") == system_family::amiga500_plus);
     CHECK(family_from_name("AMIGA600") == system_family::amiga600);
+    CHECK(family_from_name("AMIGA2000") == system_family::amiga2000);
 }
 
 TEST_CASE("system_family: unknown names are rejected, never guessed") {
@@ -146,7 +149,7 @@ TEST_CASE("system_family: family_from_name and family_id round-trip") {
           system_family::capcom_cps1,
           system_family::capcom_cps2,   system_family::spectrum, system_family::nes,
           system_family::msx,           system_family::msx2,     system_family::amiga500,
-          system_family::amiga500_plus, system_family::amiga600}) {
+          system_family::amiga500_plus, system_family::amiga600, system_family::amiga2000}) {
         CHECK(family_from_name(family_id(family)) == family);
     }
 }
@@ -168,7 +171,7 @@ TEST_CASE("system_family: family_names lists every accepted id") {
           system_family::capcom_cps1,
           system_family::capcom_cps2,   system_family::spectrum, system_family::nes,
           system_family::msx,           system_family::msx2,     system_family::amiga500,
-          system_family::amiga500_plus, system_family::amiga600}) {
+          system_family::amiga500_plus, system_family::amiga600, system_family::amiga2000}) {
         CHECK(names.find(family_id(family)) != std::string::npos);
     }
 }
@@ -215,4 +218,5 @@ TEST_CASE("system_family: family_label returns the expected display name") {
     CHECK(std::string{family_label(system_family::amiga500)} == "Amiga 500");
     CHECK(std::string{family_label(system_family::amiga500_plus)} == "Amiga 500+");
     CHECK(std::string{family_label(system_family::amiga600)} == "Amiga 600");
+    CHECK(std::string{family_label(system_family::amiga2000)} == "Amiga 2000");
 }
