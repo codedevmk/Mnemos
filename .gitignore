@@ -73,6 +73,12 @@ docs/audit/
 !.claude/settings.json
 __pycache__/
 
+# Arbor runtime state: conversations, sessions, checkpoints, reports, and
+# coordinator scratch data are local-only and must not dirty research repos.
+.arbor/
+.autoresearch/
+.coordinator/
+
 # Raw session telemetry (M7/M15 inputs) — aggregated into committed
 # snapshots by metrics.py; the raw logs are working data, never authority.
 metrics/sessions/
