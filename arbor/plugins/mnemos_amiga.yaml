@@ -1,75 +1,105 @@
-# mnemos_amiga.plugin.yaml — Arbor domain plugin for the Mnemos Amiga superiority task
+# mnemos_amiga.yaml — Arbor domain plugin for the Mnemos Amiga superiority task
 #
-# Per Arbor's design, the plugin carries: prompt-injection points, config overrides,
-# profiles, lifecycle hooks, and the eval contract (protected data dirs, required outputs,
-# timeout presets). This is a SHAPE sketch built from the documented plugin description.
-# Reconcile every key against the canonical schema in the Arbor repo (examples/mle_kaggle.yaml
-# + examples/kaggle_config.example.yaml) before the first run — do not assume field names.
+# Reconciled against arbor's real plugin schema (arbor/plugins/base.py _KNOWN_PLUGIN_KEYS
+# + plugins/mle_kaggle.yaml). Only these top-level keys are consumed by arbor:
+#   name, description, schema_version,
+#   eval_contract, protected_paths, required_outputs, config_overrides, profiles,
+#   convergence, lifecycle_hooks,
+#   meta_preamble_inject, meta_init_inject, meta_ideate_inject, meta_decide_inject,
+#   sub_preamble_inject, sub_workflow_inject.
+# Any other top-level key is silently dropped with a warning — do not add them.
 
+schema_version: 1
 name: mnemos_amiga
 description: >
   Cycle-accuracy + performance optimization of the Mnemos Amiga subsystem against
   hardware-truth goldens, with WinUAE 6.0.3 as a regression-only baseline.
 
 # --- Eval contract -----------------------------------------------------------------------
-eval:
-  # Headless, deterministic, scriptable. Runs a named test to a fixed cycle count and emits
-  # trace + framebuffer + audio dumps, then scores against Tier-A goldens. Exit non-zero on
-  # harness error (distinct from a low score).
-  command: "python tools/conformance/run_eval.py --split {split} --tier {tier} --report {report_path}"
-  metric: ACS                     # primary scalar, 0-100, higher is better
-  goal: maximize
-  dev_split: "dev"
-  test_split: "test"             # held-out; used for merge decisions only
-
-  # Secondary constraint surfaced to the coordinator (lexicographic, floored — see task text).
+# arbor reads only: metric_direction, eval_cmd, submission_path, sample_submission_path
+# (and an optional `contamination` block). The remaining keys here are domain documentation
+# the coordinator/executor see via tree.meta; they are not interpreted by arbor.
+eval_contract:
+  metric_direction: maximize                      # ACS, 0-100, higher is better
+  # Headless, deterministic, scriptable. Exit non-zero on harness error (≠ low score).
+  eval_cmd: "python tools/conformance/run_eval.py --split {split} --tier {tier} --report {report_path}"
+  metric: ACS
+  dev_split: dev
+  test_split: test                                # held-out; merge decisions only
+  # Secondary constraint (lexicographic, floored — see task text): PTR x-realtime.
   constraints:
-    - name: PTR                  # x-realtime at active tier on pinned host
+    - name: PTR
       goal: maximize
-      floor: 1.0                 # hard reject below floor
-      parity_ref: winuae_6_0_3   # bonus only above this; bounded
+      floor: 1.0                                  # hard reject below floor
+      parity_ref: winuae_6_0_3                    # bounded bonus only above this
   # Hard veto independent of the scalar.
   regression_veto:
     rule: "no previously-passing conformance test may transition to failing"
 
-# --- Protected data (read-only; Executors must never edit) -------------------------------
+# --- Protected data (read-only; the merge guard blocks Executor edits here) ---------------
 protected_paths:
-  - tools/conformance/            # the harness itself
-  - testdata/golden/tier_a/       # hardware-truth oracle (correctness)
-  - testdata/baseline/winuae_6_0_3/  # Tier-B regression scaffold ONLY
-  # Non-redistributable assets are referenced by path from a local store, NOT committed:
-  #   - $MNEMOS_AMIGA_ASSETS/kickstart/   (ROMs)
-  #   - $MNEMOS_AMIGA_ASSETS/images/      (ADF/IPF/CAPS/WHDLoad)
+  - tools/conformance/
+  - testdata/golden/
+  - testdata/baseline/
 
 required_outputs:
-  - report_path                  # machine-readable per-run score: ACS, PTR, per-test pass/fail
-  - "artifacts/superiority_wins.jsonl"  # logged Tier-A-confirmed Mnemos>WinUAE divergences
+  - "build/scratch/arbor/amiga/scheduler_event_table_dev.json"
 
-# --- Timeout presets (cycle-exact runs are slow; partial-metric recovery on timeout) -----
-timeouts:
-  smoke_seconds: 600
-  pilot_seconds: 3600
-  full_seconds: 21600
-
-# --- Staged budget profiles (smoke -> pilot -> full) -------------------------------------
+# --- Staged budget profiles (a profile is applied only when selected) ---------------------
+# Profile keys arbor understands: max_cycles, max_tree_depth, executor_timeout, time_budget.
 profiles:
-  smoke:   { tiers: [a500_ocs_ce], max_cycles: 3,  executor: { max_turns: 60  } }
-  pilot:   { tiers: [a500_ocs_ce], max_cycles: 8,  executor: { max_turns: 100 } }
-  full:    { tiers: [a500_ocs_ce, ecs, aga_a1200], max_cycles: 24, executor: { max_turns: 160 } }
+  smoke: { max_cycles: 3,  executor_timeout: 600 }
+  pilot: { max_cycles: 8,  executor_timeout: 3600 }
+  full:  { max_cycles: 24, executor_timeout: 21600 }
 
-# --- Prompt-injection points (steer Executors/Coordinator without touching core) ---------
-prompts:
-  coordinator_extra: >
-    Decompose by Amiga subsystem (Agnus/Alice, Denise/Lisa, Paula, CPU, CIA/keyboard,
-    disk/storage, RTG, perf-arch, compatibility). Pursue accuracy tiers in order; do not
-    open a higher tier until the current tier's gate passes. On any Mnemos/WinUAE divergence,
-    adjudicate against Tier-A goldens and record the verdict — never auto-converge to WinUAE.
-  executor_extra: >
-    Cycle-exact tier uses a ZERO tolerance band. Perf changes (threading, dynarec, dirty
-    rendering) are valid only if ACS holds and the regression veto stays clean under
-    deterministic scheduling. Zero-warning build is a precondition for a passing experiment.
+# --- Convergence detection ---------------------------------------------------------------
+convergence:
+  enabled: true
+  min_experiments: 4
+  window_size: 5
+  improvement_threshold: 0.001
+  parent_exhaustion_count: 3
+
+# --- Coordinator prompt injection (was: prompts.coordinator_extra) ------------------------
+meta_preamble_inject: |
+  Decompose by Amiga subsystem (Agnus/Alice, Denise/Lisa, Paula, CPU, CIA/keyboard,
+  disk/storage, RTG, perf-arch, compatibility). Pursue accuracy tiers in order
+  (A500/OCS/cycle-exact → ECS → A1200/AGA → A3000/A4000+accelerators/RTG); do NOT
+  open a higher tier until the current tier's gate passes. On any Mnemos/WinUAE
+  divergence, adjudicate against Tier-A hardware-truth goldens and record the verdict
+  — never auto-converge to WinUAE. Treat performance (PTR) as a floored, lexicographically
+  subordinate constraint: never let a perf gain buy an accuracy regression.
+
+meta_decide_inject: |
+  Merge only on a held-out ACS gain that clears the threshold AND a clean regression veto:
+  no previously-passing conformance test may transition to failing, even if the net scalar
+  improves. Reject any change that drops PTR below its floor.
+
+# --- Executor prompt injection (was: prompts.executor_extra) ------------------------------
+sub_preamble_inject: |
+  Cycle-exact tier uses a ZERO tolerance band. Performance changes (threading, dynarec,
+  dirty rendering) are valid only if ACS holds exactly and the regression veto stays clean
+  under deterministic scheduling. A zero-warning build is a precondition for a passing
+  experiment — verify it before scoring.
+
+sub_workflow_inject: |
+  ## Workspace rules
+  - testdata/golden/, testdata/baseline/, and tools/conformance/ are READ-ONLY. Never edit them.
+  - Keep the build zero-warning; treat warnings as failures.
+  - Evaluate with: python tools/conformance/run_eval.py --split <split> --tier <tier> --report <report_path>
+  - The run must be deterministic: repeat-run trace/framebuffer/audio hashes must match exactly.
+  - If you find a better direction outside the assigned idea, record it as a proposal in your
+    report instead of silently widening scope.
 
 # --- Lifecycle hooks ---------------------------------------------------------------------
-hooks:
-  pre_experiment:  "scripts/assert_clean_build.sh"      # zero-warning gate before scoring
-  post_experiment: "scripts/check_determinism.sh"       # repeat-run hash equality check
+# arbor runs scripts only for on_workspace_setup (once, pre-INIT) and on_finalize (once,
+# post-STOP/timeout). after_executor exists but only snapshots `submission_path`; it does
+# NOT run a script. Per-experiment clean-build/determinism gating therefore lives in the
+# executor prompt injection above, with these scripts as start/end bookends.
+lifecycle_hooks:
+  on_workspace_setup:
+    script: "scripts/assert_clean_build.sh"       # zero-warning gate at run start
+    prompt: "A zero-warning build is a precondition for every passing experiment."
+  on_finalize:
+    script: "scripts/check_determinism.sh"        # repeat-run hash-equality check at run end
+    prompt: "Confirm the merged trunk reproduces identical trace/framebuffer/audio hashes."
