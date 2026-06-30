@@ -4,6 +4,7 @@
 #include "bus.hpp"
 #include "cia8520.hpp"
 #include "denise.hpp"
+#include "devices/amiga_input.hpp"
 #include "drives/amiga_floppy.hpp"
 #include "expansions/zorro2.hpp"
 #include "m68000.hpp"
@@ -82,13 +83,13 @@ namespace mnemos::manifests::amiga {
         static constexpr std::uint16_t int_exter = 1U << 13U;
         static constexpr std::uint16_t int_master = 1U << 14U;
         static constexpr std::uint16_t setclr_bit = 1U << 15U;
-        static constexpr std::uint8_t joy_up = 1U << 0U;
-        static constexpr std::uint8_t joy_down = 1U << 1U;
-        static constexpr std::uint8_t joy_left = 1U << 2U;
-        static constexpr std::uint8_t joy_right = 1U << 3U;
-        static constexpr std::uint8_t joy_fire = 1U << 4U;
-        static constexpr std::uint8_t joy_secondary_fire = 1U << 5U;
-        static constexpr std::uint8_t joy_middle_fire = 1U << 6U;
+        static constexpr std::uint8_t joy_up = amiga_joy_up;
+        static constexpr std::uint8_t joy_down = amiga_joy_down;
+        static constexpr std::uint8_t joy_left = amiga_joy_left;
+        static constexpr std::uint8_t joy_right = amiga_joy_right;
+        static constexpr std::uint8_t joy_fire = amiga_joy_fire;
+        static constexpr std::uint8_t joy_secondary_fire = amiga_joy_secondary_fire;
+        static constexpr std::uint8_t joy_middle_fire = amiga_joy_middle_fire;
 
         chips::cpu::m68000 cpu;
         chips::video::agnus agnus;
@@ -135,10 +136,10 @@ namespace mnemos::manifests::amiga {
         bool disk_byte_valid{};
         bool disk_sync_match{};
         bool disk_wordsync_waiting{};
-        std::array<std::uint16_t, 2> joydat{};
-        std::array<std::uint8_t, 2> joystick_state{};
-        std::array<std::uint16_t, 2> pot_counter{0xFFFFU, 0xFFFFU};
-        std::array<std::uint16_t, 2> pot_target{0xFFFFU, 0xFFFFU};
+        std::array<std::uint16_t, amiga_controller_port_count> joydat{};
+        std::array<std::uint8_t, amiga_controller_port_count> joystick_state{};
+        std::array<std::uint16_t, amiga_controller_port_count> pot_counter{0xFFFFU, 0xFFFFU};
+        std::array<std::uint16_t, amiga_controller_port_count> pot_target{0xFFFFU, 0xFFFFU};
         std::uint64_t beam_line_epoch{};
         std::uint64_t pot_start_line_epoch{};
         std::uint16_t potgo{};

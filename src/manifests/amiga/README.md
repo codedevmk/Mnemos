@@ -22,11 +22,13 @@ Layout:
 - `drives/` — Amiga drive and disk-controller glue. `amiga_floppy.*`
   currently owns DD floppy geometry and drive-local stream/cache state.
 - `devices/` — keyboard, joystick, mouse, and port-device glue.
+  `amiga_input.*` currently owns controller-port masks, JOYDAT encoding, mouse
+  counter wrapping, and POT counter composition.
 - `models/` — model descriptors for A500, A500+, A600, A2000, and later
   machines. `amiga_models.*` currently owns base chip RAM, chipset selection,
   and expansion capability policy.
 
 The current refactor has split out `chipsets/amiga_chipsets.*`,
-`drives/amiga_floppy.*`, `expansions/zorro2.*`, and `models/amiga_models.*`;
-remaining large blocks in `amiga_system.cpp` should move into the matching
-folders as the next behavior work touches them.
+`devices/amiga_input.*`, `drives/amiga_floppy.*`, `expansions/zorro2.*`, and
+`models/amiga_models.*`; remaining large blocks in `amiga_system.cpp` should
+move into the matching folders as the next behavior work touches them.

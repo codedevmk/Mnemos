@@ -21,6 +21,19 @@ namespace {
     using mnemos::manifests::amiga::amiga_floppy_sectors_per_track;
     using mnemos::manifests::amiga::amiga_floppy_track_count;
     using mnemos::manifests::amiga::amiga_fast_ram_size_for_config;
+    using mnemos::manifests::amiga::amiga_encode_joystick;
+    using mnemos::manifests::amiga::amiga_joy_fire;
+    using mnemos::manifests::amiga::amiga_joy_middle_fire;
+    using mnemos::manifests::amiga::amiga_joy_secondary_fire;
+    using mnemos::manifests::amiga::amiga_joy_up;
+    using mnemos::manifests::amiga::amiga_mouse_button_mask;
+    using mnemos::manifests::amiga::amiga_pack_pot_target;
+    using mnemos::manifests::amiga::amiga_pot_axis_value;
+    using mnemos::manifests::amiga::amiga_pot_counter_value;
+    using mnemos::manifests::amiga::amiga_pot_full_scale_scanlines;
+    using mnemos::manifests::amiga::amiga_pot_reset_scanlines;
+    using mnemos::manifests::amiga::amiga_sanitize_controller_mask;
+    using mnemos::manifests::amiga::amiga_wrap_mouse_counter;
     using mnemos::manifests::amiga::amiga_model;
     using mnemos::manifests::amiga::amiga_model_profile;
     using mnemos::manifests::amiga::amiga_system;
@@ -249,6 +262,28 @@ TEST_CASE("amiga floppy drive profile preserves public DD geometry",
     CHECK(amiga_system::floppy_sector_size == amiga_floppy_sector_size);
     CHECK(amiga_system::floppy_dd_size == amiga_floppy_dd_size);
     CHECK(amiga_system::floppy_drive_count == amiga_floppy_drive_count);
+}
+
+TEST_CASE("amiga input helpers preserve public controller semantics",
+          "[manifests][amiga][devices]") {
+    CHECK(amiga_system::joy_up == amiga_joy_up);
+    CHECK(amiga_system::joy_fire == amiga_joy_fire);
+    CHECK(amiga_system::joy_secondary_fire == amiga_joy_secondary_fire);
+    CHECK(amiga_system::joy_middle_fire == amiga_joy_middle_fire);
+    CHECK(amiga_sanitize_controller_mask(0xFFU) == 0x7FU);
+    CHECK(amiga_encode_joystick(amiga_system::joy_up) == 0x0100U);
+    CHECK(amiga_encode_joystick(amiga_system::joy_right) == 0x0003U);
+    CHECK(amiga_wrap_mouse_counter(0xFEU, 3) == 0x01U);
+    CHECK(amiga_wrap_mouse_counter(0x01U, -3) == 0xFEU);
+    CHECK(amiga_mouse_button_mask(true, true, true) ==
+          (amiga_system::joy_fire | amiga_system::joy_secondary_fire |
+           amiga_system::joy_middle_fire));
+    CHECK(amiga_pack_pot_target(3U, 5U) == 0x0503U);
+    CHECK(amiga_pot_axis_value(0xFFU, amiga_pot_reset_scanlines) == 0U);
+    CHECK(amiga_pot_axis_value(0xFFU,
+                               amiga_pot_reset_scanlines + amiga_pot_full_scale_scanlines + 1U) ==
+          0xFFU);
+    CHECK(amiga_pot_counter_value(0x0503U, amiga_pot_reset_scanlines + 2U) == 0x0202U);
 }
 
 TEST_CASE("amiga500 boots through the Kickstart reset overlay", "[manifests][amiga500]") {

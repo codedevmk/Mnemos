@@ -98,10 +98,8 @@ namespace mnemos::manifests::amiga {
         constexpr std::size_t blit_b = 1U;
         constexpr std::size_t blit_c = 2U;
         constexpr std::size_t blit_d = 3U;
-        constexpr std::uint64_t pot_reset_scanlines = 7U;
-        constexpr std::uint64_t pot_full_scale_scanlines =
-            chips::video::agnus::scanlines_ntsc - pot_reset_scanlines;
-        static_assert(pot_full_scale_scanlines == 255U);
+        static_assert(chips::video::agnus::scanlines_ntsc - amiga_pot_reset_scanlines ==
+                      amiga_pot_full_scale_scanlines);
         constexpr std::uint32_t non_nasty_blitter_release_wait_cycles = 6U;
         constexpr std::uint16_t weak_bit_lfsr_seed = amiga_floppy_weak_bit_lfsr_seed;
         constexpr std::uint16_t weak_bit_lfsr_feedback = 0xB400U;
@@ -496,52 +494,6 @@ namespace mnemos::manifests::amiga {
 
         [[nodiscard]] std::uint8_t cia_register(std::uint32_t address) noexcept {
             return static_cast<std::uint8_t>((address >> 8U) & 0x0FU);
-        }
-
-        [[nodiscard]] std::uint16_t encode_joystick(std::uint8_t mask) noexcept {
-            const bool right = (mask & amiga_system::joy_right) != 0U;
-            const bool left = (mask & amiga_system::joy_left) != 0U;
-            const bool down = (mask & amiga_system::joy_down) != 0U;
-            const bool up = (mask & amiga_system::joy_up) != 0U;
-
-            std::uint16_t value = 0U;
-            if (right) {
-                value = static_cast<std::uint16_t>(value | 0x0002U);
-            }
-            if (left) {
-                value = static_cast<std::uint16_t>(value | 0x0200U);
-            }
-            if (down != right) {
-                value = static_cast<std::uint16_t>(value | 0x0001U);
-            }
-            if (up != left) {
-                value = static_cast<std::uint16_t>(value | 0x0100U);
-            }
-            return value;
-        }
-
-        [[nodiscard]] std::uint8_t wrap_mouse_counter(std::uint8_t value,
-                                                      std::int16_t delta) noexcept {
-            return static_cast<std::uint8_t>((static_cast<int>(value) + static_cast<int>(delta)) &
-                                             0xFF);
-        }
-
-        [[nodiscard]] std::uint8_t pot_axis_value(std::uint8_t resistance,
-                                                  std::uint64_t elapsed_lines) noexcept {
-            if (elapsed_lines <= pot_reset_scanlines) {
-                return 0U;
-            }
-
-            // The controller port ADC holds the counters reset for the first
-            // scanlines, then advances once per horizontal line until the RC
-            // charge crosses the comparator threshold. The documented
-            // 528K/47nF full-scale path is calibrated to the NTSC frame after
-            // that reset window, leaving the full 8-bit counter range.
-            const std::uint64_t charge_lines = elapsed_lines - pot_reset_scanlines;
-            const std::uint64_t target =
-                (static_cast<std::uint64_t>(resistance) * pot_full_scale_scanlines + 127U) / 255U;
-            const std::uint64_t clamped = std::min(charge_lines, target);
-            return static_cast<std::uint8_t>(clamped);
         }
 
         [[nodiscard]] std::uint8_t encode_keyboard_sdr(std::uint8_t raw_code) noexcept {
@@ -1377,11 +1329,10 @@ namespace mnemos::manifests::amiga {
         if (hardware_port >= joystick_state.size()) {
             return;
         }
-        constexpr std::uint8_t valid_mask = joy_up | joy_down | joy_left | joy_right | joy_fire |
-                                            joy_secondary_fire | joy_middle_fire;
-        joystick_state[hardware_port] = static_cast<std::uint8_t>(mask & valid_mask);
+        joystick_state[hardware_port] = amiga_sanitize_controller_mask(mask);
         joydat[hardware_port] = static_cast<std::uint16_t>(
-            (joydat[hardware_port] & 0xFCFCU) | encode_joystick(joystick_state[hardware_port]));
+            (joydat[hardware_port] & 0xFCFCU) |
+            amiga_encode_joystick(joystick_state[hardware_port]));
     }
 
     void amiga_system::set_mouse(std::size_t hardware_port, std::int16_t delta_x,
@@ -1392,23 +1343,15 @@ namespace mnemos::manifests::amiga {
         }
 
         const auto x =
-            wrap_mouse_counter(static_cast<std::uint8_t>(joydat[hardware_port]), delta_x);
+            amiga_wrap_mouse_counter(static_cast<std::uint8_t>(joydat[hardware_port]), delta_x);
         const auto y =
-            wrap_mouse_counter(static_cast<std::uint8_t>(joydat[hardware_port] >> 8U), delta_y);
+            amiga_wrap_mouse_counter(static_cast<std::uint8_t>(joydat[hardware_port] >> 8U),
+                                     delta_y);
         joydat[hardware_port] =
             static_cast<std::uint16_t>((static_cast<std::uint16_t>(y) << 8U) | x);
 
-        std::uint8_t buttons = 0U;
-        if (left_button) {
-            buttons = static_cast<std::uint8_t>(buttons | joy_fire);
-        }
-        if (right_button) {
-            buttons = static_cast<std::uint8_t>(buttons | joy_secondary_fire);
-        }
-        if (middle_button) {
-            buttons = static_cast<std::uint8_t>(buttons | joy_middle_fire);
-        }
-        joystick_state[hardware_port] = buttons;
+        joystick_state[hardware_port] =
+            amiga_mouse_button_mask(left_button, right_button, middle_button);
     }
 
     void amiga_system::set_pot_position(std::size_t hardware_port, std::uint8_t x,
@@ -1416,8 +1359,7 @@ namespace mnemos::manifests::amiga {
         if (hardware_port >= pot_target.size()) {
             return;
         }
-        pot_target[hardware_port] =
-            static_cast<std::uint16_t>((static_cast<std::uint16_t>(y) << 8U) | x);
+        pot_target[hardware_port] = amiga_pack_pot_target(x, y);
     }
 
     bool amiga_system::enqueue_keyboard_key(std::uint8_t raw_keycode, bool pressed) noexcept {
@@ -1533,31 +1475,7 @@ namespace mnemos::manifests::amiga {
     }
 
     std::uint16_t amiga_system::read_potinp() const noexcept {
-        constexpr std::uint16_t out_lx = 0x0200U;
-        constexpr std::uint16_t dat_lx = 0x0100U;
-        constexpr std::uint16_t out_ly = 0x0800U;
-        constexpr std::uint16_t dat_ly = 0x0400U;
-        constexpr std::uint16_t out_rx = 0x2000U;
-        constexpr std::uint16_t dat_rx = 0x1000U;
-        constexpr std::uint16_t out_ry = 0x8000U;
-        constexpr std::uint16_t dat_ry = 0x4000U;
-
-        const auto pin = [this](std::uint16_t out_bit, std::uint16_t data_bit,
-                                bool external_low) noexcept -> std::uint16_t {
-            if ((potgo & out_bit) != 0U) {
-                return (potgo & data_bit) != 0U ? data_bit : 0U;
-            }
-            return external_low ? 0U : data_bit;
-        };
-
-        std::uint16_t value =
-            static_cast<std::uint16_t>(potgo & (out_lx | out_ly | out_rx | out_ry));
-        value = static_cast<std::uint16_t>(
-            value | pin(out_lx, dat_lx, (joystick_state[0] & joy_middle_fire) != 0U) |
-            pin(out_ly, dat_ly, (joystick_state[0] & joy_secondary_fire) != 0U) |
-            pin(out_rx, dat_rx, (joystick_state[1] & joy_middle_fire) != 0U) |
-            pin(out_ry, dat_ry, (joystick_state[1] & joy_secondary_fire) != 0U));
-        return value;
+        return amiga_potinp_value(potgo, joystick_state);
     }
 
     std::uint16_t amiga_system::read_pot_counter(std::size_t hardware_port) noexcept {
@@ -1569,11 +1487,8 @@ namespace mnemos::manifests::amiga {
         }
 
         const std::uint64_t elapsed_lines = beam_line_epoch - pot_start_line_epoch;
-        const std::uint16_t target = pot_target[hardware_port];
-        const auto x = pot_axis_value(static_cast<std::uint8_t>(target), elapsed_lines);
-        const auto y = pot_axis_value(static_cast<std::uint8_t>(target >> 8U), elapsed_lines);
         pot_counter[hardware_port] =
-            static_cast<std::uint16_t>((static_cast<std::uint16_t>(y) << 8U) | x);
+            amiga_pot_counter_value(pot_target[hardware_port], elapsed_lines);
         return pot_counter[hardware_port];
     }
 

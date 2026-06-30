@@ -2,6 +2,7 @@ add_library(
     mnemos_manifests_amiga
     amiga_system.cpp
     chipsets/amiga_chipsets.cpp
+    devices/amiga_input.cpp
     drives/amiga_floppy.cpp
     expansions/zorro2.cpp
     models/amiga_models.cpp

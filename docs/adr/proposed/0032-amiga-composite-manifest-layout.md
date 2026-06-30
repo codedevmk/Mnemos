@@ -48,7 +48,7 @@ src/manifests/amiga/
   chipsets/amiga_chipsets.hpp/.cpp
   expansions/zorro2.hpp/.cpp
   drives/amiga_floppy.hpp/.cpp
-  devices/
+  devices/amiga_input.hpp/.cpp
   models/amiga_models.hpp/.cpp
 ```
 
@@ -66,6 +66,11 @@ Drive descriptors and state helpers own Amiga floppy geometry and drive-local
 stream/cache state. The system assembly still owns the disk DMA register
 contract and CIA wiring until those responsibilities can be split without
 changing timing behavior.
+
+Device helpers own controller-port button masks, joystick register encoding,
+mouse counter wrapping, and POT counter composition. The system assembly still
+owns CIA pin routing and keyboard serial state until those can be moved with
+focused save-state coverage.
 
 ## Consequences
 
