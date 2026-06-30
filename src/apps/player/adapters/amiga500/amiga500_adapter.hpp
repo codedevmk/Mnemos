@@ -56,7 +56,8 @@ namespace mnemos::apps::player::adapters::amiga500 {
         }
         [[nodiscard]] std::span<instrumentation::memory_view* const>
         memory_views() const noexcept override {
-            return system_mem_view_;
+            return std::span<instrumentation::memory_view* const>(system_mem_view_.data(),
+                                                                  system_mem_view_count_);
         }
         [[nodiscard]] std::size_t media_count() const noexcept override { return disks_.size(); }
         [[nodiscard]] std::size_t current_media_index() const noexcept override {
@@ -80,7 +81,9 @@ namespace mnemos::apps::player::adapters::amiga500 {
         std::unique_ptr<manifests::amiga500::amiga500_system> sys_;
         std::unique_ptr<chips::ichip> board_debug_chip_;
         instrumentation::span_memory_view chip_ram_view_;
-        std::array<instrumentation::memory_view*, 1> system_mem_view_{};
+        instrumentation::span_memory_view fast_ram_view_;
+        std::array<instrumentation::memory_view*, 2> system_mem_view_{};
+        std::size_t system_mem_view_count_{};
         std::array<chips::ichip*, 7> chip_view_{};
         runtime::scheduler scheduler_;
         mnemos::video_region region_;

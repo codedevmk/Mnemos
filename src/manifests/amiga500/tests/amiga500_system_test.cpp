@@ -587,6 +587,27 @@ TEST_CASE("amiga2000 ECS upgrade Copper location pointers use the ECS 1 MiB addr
     CHECK(sys->agnus.cop2lc() == 0x00095678U);
 }
 
+TEST_CASE("amiga2000 Fast RAM maps as CPU-visible expansion memory",
+          "[manifests][amiga500][memory][amiga2000]") {
+    const amiga500_config config{.model = amiga500_model::amiga2000,
+                                 .fast_ram_size = amiga500_system::fast_ram_size_2m};
+    auto sys = assemble_amiga500(tiny_kickstart(), config);
+    REQUIRE(sys != nullptr);
+
+    REQUIRE(sys->chip_ram.size() == amiga500_system::chip_ram_size);
+    REQUIRE(sys->fast_ram.size() == amiga500_system::fast_ram_size_2m);
+
+    constexpr std::uint32_t fast_offset = 0x001234U;
+    sys->bus.write8(amiga500_system::fast_ram_base + fast_offset, 0xA6U);
+    CHECK(sys->bus.read8(amiga500_system::fast_ram_base + fast_offset) == 0xA6U);
+    CHECK(sys->fast_ram[fast_offset] == 0xA6U);
+    CHECK(sys->paula.chipram()[fast_offset] == 0x00U);
+    CHECK(sys->cpu_bus_wait_cycles(amiga500_system::fast_ram_base + fast_offset, false, false, 0U,
+                                   0U) == 0U);
+    CHECK(sys->bus.read8(amiga500_system::fast_ram_base +
+                         static_cast<std::uint32_t>(sys->fast_ram.size())) == 0xFFU);
+}
+
 TEST_CASE("amiga500plus Copper location pointers use the ECS 1 MiB address width",
           "[manifests][amiga500][custom][amiga500plus]") {
     const amiga500_config config{.model = amiga500_model::amiga500_plus};
@@ -3117,4 +3138,29 @@ TEST_CASE("amiga500 save_state restores overlay and chip RAM", "[manifests][amig
     CHECK(sys->floppy_cylinder() == 1U);
     CHECK(sys->keyboard_caps_lock_led_on());
     CHECK((sys->cia_a.read(0x00U) & 0x04U) != 0U);
+}
+
+TEST_CASE("amiga2000 save_state restores configured Fast RAM",
+          "[manifests][amiga500][memory][amiga2000]") {
+    const amiga500_config config{.model = amiga500_model::amiga2000,
+                                 .fast_ram_size = amiga500_system::fast_ram_size_2m};
+    auto sys = assemble_amiga500(tiny_kickstart(), config);
+    REQUIRE(sys != nullptr);
+    REQUIRE(sys->fast_ram.size() == amiga500_system::fast_ram_size_2m);
+
+    constexpr std::uint32_t fast_offset = 0x010123U;
+    sys->bus.write8(amiga500_system::fast_ram_base + fast_offset, 0x6DU);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    sys->save_state(writer);
+
+    sys->bus.write8(amiga500_system::fast_ram_base + fast_offset, 0x00U);
+    REQUIRE(sys->fast_ram[fast_offset] == 0x00U);
+
+    mnemos::chips::state_reader reader(blob);
+    sys->load_state(reader);
+    REQUIRE(reader.ok());
+    CHECK(sys->bus.read8(amiga500_system::fast_ram_base + fast_offset) == 0x6DU);
+    CHECK(sys->fast_ram[fast_offset] == 0x6DU);
 }

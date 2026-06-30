@@ -32,6 +32,7 @@ namespace mnemos::manifests::amiga500 {
         mnemos::video_region video_region{mnemos::video_region::pal};
         amiga500_keyboard_layout keyboard_layout{amiga500_keyboard_layout::us};
         amiga500_model model{amiga500_model::amiga500};
+        std::size_t fast_ram_size{};
     };
 
     // Commodore Amiga 500, OCS baseline: MC68000 + Agnus + Denise + Paula +
@@ -42,6 +43,11 @@ namespace mnemos::manifests::amiga500 {
     struct amiga500_system final {
         static constexpr std::size_t chip_ram_size = 512U * 1024U;
         static constexpr std::size_t chip_ram_size_1m = 1024U * 1024U;
+        static constexpr std::size_t fast_ram_size_512k = 512U * 1024U;
+        static constexpr std::size_t fast_ram_size_1m = 1024U * 1024U;
+        static constexpr std::size_t fast_ram_size_2m = 2U * 1024U * 1024U;
+        static constexpr std::size_t fast_ram_size_4m = 4U * 1024U * 1024U;
+        static constexpr std::size_t fast_ram_max_size = 8U * 1024U * 1024U;
         static constexpr std::size_t kickstart_window_size = 512U * 1024U;
         static constexpr std::size_t floppy_cylinders = 80U;
         static constexpr std::size_t floppy_heads = 2U;
@@ -63,6 +69,7 @@ namespace mnemos::manifests::amiga500 {
         static constexpr std::uint8_t keyboard_powerup_stream_end_code = 0xFEU;
 
         static constexpr std::uint32_t chip_ram_base = 0x000000U;
+        static constexpr std::uint32_t fast_ram_base = 0x200000U;
         static constexpr std::uint32_t kickstart_base = 0xF80000U;
         static constexpr std::uint32_t custom_base = 0xDFF000U;
         static constexpr std::uint32_t cia_a_base = 0xBFE000U;
@@ -101,6 +108,7 @@ namespace mnemos::manifests::amiga500 {
         topology::bus bus{24U, topology::endianness::big};
 
         std::vector<std::uint8_t> chip_ram = std::vector<std::uint8_t>(chip_ram_size, 0U);
+        std::vector<std::uint8_t> fast_ram{};
         std::array<std::uint8_t, kickstart_window_size> kickstart_rom{};
 
         std::array<std::uint16_t, chips::video::agnus::palette_entries> palette_words{};

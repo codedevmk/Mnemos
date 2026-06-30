@@ -388,6 +388,38 @@ TEST_CASE("amiga500 adapter configures upgraded Amiga 2000 ECS metadata and chip
     CHECK(sys.paula.chipram()[upper_chip_ram] == 0xB4U);
 }
 
+TEST_CASE("amiga500 adapter configures Amiga 2000 Fast RAM expansion",
+          "[apps][player][amiga2000]") {
+    const amiga500_config config{.video_region = mnemos::video_region::pal,
+                                 .keyboard_layout = amiga500_keyboard_layout::us,
+                                 .model = amiga500_model::amiga2000_ecs_1m,
+                                 .fast_ram_size = amiga500_system::fast_ram_size_2m};
+    amiga500_adapter adapter(tiny_kickstart(), config, "Kickstart 2.0");
+    auto& sys = adapter.system();
+
+    REQUIRE(sys.chip_ram.size() == amiga500_system::chip_ram_size_1m);
+    REQUIRE(sys.fast_ram.size() == amiga500_system::fast_ram_size_2m);
+
+    const auto views = adapter.memory_views();
+    REQUIRE(views.size() == 2U);
+    CHECK(views[0]->name() == "chip_ram");
+    CHECK(views[0]->bytes().size() == amiga500_system::chip_ram_size_1m);
+    CHECK(views[1]->name() == "fast_ram");
+    CHECK(views[1]->bytes().size() == amiga500_system::fast_ram_size_2m);
+
+    bool spec_reports_fast_ram = false;
+    for (const auto& field : adapter.system_spec()) {
+        spec_reports_fast_ram =
+            spec_reports_fast_ram || (field.label == "Fast RAM" && field.value == "2 MiB");
+    }
+    CHECK(spec_reports_fast_ram);
+
+    constexpr std::uint32_t fast_offset = 0x004321U;
+    sys.bus.write8(amiga500_system::fast_ram_base + fast_offset, 0xD2U);
+    CHECK(sys.fast_ram[fast_offset] == 0xD2U);
+    CHECK(sys.paula.chipram()[fast_offset] == 0x00U);
+}
+
 TEST_CASE("amiga500 adapter seeds Kickstart keyboard power-up stream",
           "[apps][player][amiga500][input]") {
     amiga500_adapter adapter(kickstart_signature_rom(), {}, "Kickstart signature");
@@ -919,6 +951,33 @@ TEST_CASE("amiga500 adapter registry accepts Amiga 2000 ECS/1MiB model override"
                                field.value == "ECS / 1 MiB upgrade");
     }
     CHECK(spec_reports_config);
+}
+
+TEST_CASE("amiga500 adapter registry accepts Amiga 2000 Fast RAM model override",
+          "[apps][player][amiga2000]") {
+    mnemos::frontend_sdk::adapter_options options{};
+    options.rom = tiny_kickstart();
+    options.video_region = mnemos::video_region::pal;
+    options.amiga_model_override = "ecs-1m+fast-ram=2m";
+
+    auto system =
+        mnemos::frontend_sdk::adapter_registry::instance().create("amiga2000", std::move(options));
+    REQUIRE(system != nullptr);
+    auto* adapter = dynamic_cast<amiga500_adapter*>(system.get());
+    REQUIRE(adapter != nullptr);
+    CHECK(adapter->system().chip_ram.size() == amiga500_system::chip_ram_size_1m);
+    CHECK(adapter->system().fast_ram.size() == amiga500_system::fast_ram_size_2m);
+
+    CHECK(adapter->system().bus.read8(amiga500_system::fast_ram_base) == 0x00U);
+    adapter->system().bus.write8(amiga500_system::fast_ram_base, 0xE4U);
+    CHECK(adapter->system().fast_ram[0] == 0xE4U);
+
+    bool spec_reports_fast_ram = false;
+    for (const auto& field : system->system_spec()) {
+        spec_reports_fast_ram =
+            spec_reports_fast_ram || (field.label == "Fast RAM" && field.value == "2 MiB");
+    }
+    CHECK(spec_reports_fast_ram);
 }
 
 TEST_CASE("amiga500 adapter converts frontend mouse movement to Amiga counters",

@@ -1675,6 +1675,31 @@ TEST_CASE("player launch applies Amiga2000 model env override",
     fs::remove_all(dir);
 }
 
+TEST_CASE("player launch applies Amiga2000 Fast RAM model override",
+          "[apps][player][launch][amiga2000]") {
+    scoped_env env({"MNEMOS_AMIGA2000_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT",
+                    "MNEMOS_AMIGA2000_MODEL"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick20.rom";
+    write_image(rom_path, tiny_kickstart());
+    REQUIRE(set_env("MNEMOS_AMIGA2000_KICKSTART", rom_path.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system(
+        {.system_arg = std::string{"amiga2000"},
+         .amiga_model_override = std::string{"ecs-1m+fast-ram=2m"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(has_spec(*outcome.system, "Chip RAM", "1 MiB"));
+    CHECK(has_spec(*outcome.system, "Fast RAM", "2 MiB"));
+    CHECK(has_spec(*outcome.system, "Configuration", "ECS / 1 MiB upgrade"));
+    auto* adapter = dynamic_cast<amiga500_adapter*>(outcome.system.get());
+    REQUIRE(adapter != nullptr);
+    CHECK(adapter->system().fast_ram.size() == amiga500_system::fast_ram_size_2m);
+
+    fs::remove_all(dir);
+}
+
 TEST_CASE("player launch treats a zip-wrapped Amiga ADF as disk media",
           "[apps][player][launch][amiga500]") {
     scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
