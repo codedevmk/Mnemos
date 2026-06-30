@@ -21,9 +21,15 @@ namespace {
     class flat_bus final : public ibus {
       public:
         std::vector<std::uint8_t> memory = std::vector<std::uint8_t>(0x100000U, 0U);
+        std::vector<std::uint8_t> opcode_memory = std::vector<std::uint8_t>(0x100000U, 0U);
+        bool opcode_overlay{};
 
         [[nodiscard]] std::uint8_t read8(std::uint32_t address) override {
             return memory[address & 0xFFFFFU];
+        }
+
+        [[nodiscard]] std::uint8_t fetch_opcode8(std::uint32_t address) override {
+            return opcode_overlay ? opcode_memory[address & 0xFFFFFU] : read8(address);
         }
 
         void write8(std::uint32_t address, std::uint8_t value) override {
@@ -39,7 +45,9 @@ namespace {
     void load_program(flat_bus& bus, v30& cpu, std::uint16_t segment, std::uint16_t offset,
                       const std::vector<std::uint8_t>& code) {
         for (std::size_t i = 0; i < code.size(); ++i) {
-            bus.memory[(linear(segment, offset) + i) & 0xFFFFFU] = code[i];
+            const std::uint32_t address = (linear(segment, offset) + i) & 0xFFFFFU;
+            bus.memory[address] = code[i];
+            bus.opcode_memory[address] = code[i];
         }
         auto regs = cpu.cpu_registers();
         regs.cs = segment;
@@ -55,6 +63,19 @@ TEST_CASE("v30 registers through the chip registry and reports cpu metadata", "[
     CHECK(chip->metadata().manufacturer == "NEC");
     CHECK(chip->metadata().part_number == "v30");
     CHECK(chip->metadata().klass == mnemos::chips::chip_class::cpu);
+}
+
+TEST_CASE("v30 core reports configured NEC V-series model metadata", "[v30]") {
+    v30 cpu;
+    CHECK(cpu.metadata().part_number == "v30");
+
+    cpu.set_model(v30::model::v33);
+    CHECK(cpu.cpu_model() == v30::model::v33);
+    CHECK(cpu.metadata().part_number == "v33");
+
+    cpu.set_model(v30::model::v35);
+    CHECK(cpu.cpu_model() == v30::model::v35);
+    CHECK(cpu.metadata().part_number == "v35");
 }
 
 TEST_CASE("v30 powers on at FFFF:0000 and takes a far jump", "[v30]") {
@@ -77,6 +98,45 @@ TEST_CASE("v30 powers on at FFFF:0000 and takes a far jump", "[v30]") {
     const auto after = cpu.cpu_registers();
     CHECK(after.cs == 0x1000U);
     CHECK(after.ip == 0x8000U);
+}
+
+TEST_CASE("v30 fetches instruction bytes from the opcode path and data from read8",
+          "[v30][opcode]") {
+    flat_bus bus;
+    v30 cpu;
+    cpu.attach_bus(bus);
+    bus.opcode_overlay = true;
+
+    const std::uint16_t segment = 0x0100U;
+    const std::uint16_t offset = 0x0000U;
+    const std::uint32_t base = linear(segment, offset);
+    const std::vector<std::uint8_t> decrypted{
+        0xB0U, 0x7EU,        // MOV AL,7E
+        0xA2U, 0x00U, 0x20U, // MOV [2000],AL
+        0xA0U, 0x01U, 0x00U  // MOV AL,[0001]
+    };
+    const std::vector<std::uint8_t> encrypted{0x00U, 0xC7U, 0x00U, 0x00U,
+                                              0x00U, 0x00U, 0x00U, 0x00U};
+    for (std::size_t i = 0; i < decrypted.size(); ++i) {
+        bus.opcode_memory[(base + i) & 0xFFFFFU] = decrypted[i];
+        bus.memory[(base + i) & 0xFFFFFU] = encrypted[i];
+    }
+
+    auto regs = cpu.cpu_registers();
+    regs.cs = segment;
+    regs.ds = segment;
+    regs.ip = offset;
+    cpu.set_registers(regs);
+
+    cpu.step_instruction();
+    CHECK((cpu.cpu_registers().ax & 0x00FFU) == 0x7EU);
+    CHECK(bus.read8(base + 1U) == 0xC7U);
+
+    cpu.step_instruction();
+    CHECK(bus.memory[linear(segment, 0x2000U)] == 0x7EU);
+
+    cpu.step_instruction();
+    CHECK((cpu.cpu_registers().ax & 0x00FFU) == 0xC7U);
 }
 
 TEST_CASE("v30 arithmetic sets the documented flags", "[v30]") {
@@ -242,6 +302,29 @@ TEST_CASE("v30 multiplies and divides through group 3", "[v30]") {
         CHECK(after.cs == 0x0050U);
         CHECK(after.ip == 0x0060U);
         CHECK((after.flags & v30::flag_i) == 0U); // IF cleared on entry
+    }
+
+    SECTION("byte IDIV quotient -128 vectors through INT 0 on V20/V30") {
+        // IVT[0] -> 0050:0060
+        bus.memory[0x0000U] = 0x60U;
+        bus.memory[0x0001U] = 0x00U;
+        bus.memory[0x0002U] = 0x50U;
+        bus.memory[0x0003U] = 0x00U;
+        // MOV AX, C960; MOV BX, 006D; IDIV BL
+        load_program(bus, cpu, 0x0100U, 0x0000U,
+                     {0xB8U, 0x60U, 0xC9U, 0xBBU, 0x6DU, 0x00U, 0xF6U, 0xFBU});
+        auto regs = cpu.cpu_registers();
+        regs.ss = 0x0900U;
+        regs.sp = 0x0100U;
+        cpu.set_registers(regs);
+        cpu.step_instruction();
+        cpu.step_instruction();
+        cpu.step_instruction();
+        const auto after = cpu.cpu_registers();
+        CHECK(after.cs == 0x0050U);
+        CHECK(after.ip == 0x0060U);
+        CHECK(after.sp == 0x00FAU);
+        CHECK((after.flags & v30::flag_i) == 0U);
     }
 }
 
@@ -423,6 +506,68 @@ TEST_CASE("v30 0F bit-manipulation group operates on registers and memory", "[v3
     }
 }
 
+TEST_CASE("v30 0F bitfield insert and extract stream bits through memory", "[v30]") {
+    flat_bus bus;
+    v30 cpu;
+    cpu.attach_bus(bus);
+
+    SECTION("INS with immediate length inserts AX bits at ES:DI using a low-nibble offset") {
+        // INS BL, imm4=3: length is encoded as imm4 + 1, so this writes 4 bits.
+        load_program(bus, cpu, 0x0100U, 0x0000U, {0x0FU, 0x39U, 0xC3U, 0x03U, 0xF4U});
+        auto regs = cpu.cpu_registers();
+        regs.ax = 0x000DU; // bit stream 1,0,1,1
+        regs.bx = 0x1203U; // BL supplies bit offset 3 and is advanced to 7
+        regs.es = 0x3000U;
+        regs.di = 0x0010U;
+        cpu.set_registers(regs);
+
+        cpu.step_instruction();
+        const auto after = cpu.cpu_registers();
+        CHECK((after.bx & 0x00FFU) == 0x07U);
+        CHECK((after.bx & 0xFF00U) == 0x1200U);
+        CHECK(after.di == 0x0010U);
+        CHECK(bus.memory[linear(0x3000U, 0x0010U)] == 0x68U);
+    }
+
+    SECTION("INS with register length crosses the next 16-bit bitfield word") {
+        // INS BL, CL: BL starts at bit 14, CL low nibble 3 selects a 4-bit length.
+        load_program(bus, cpu, 0x0100U, 0x0000U, {0x0FU, 0x31U, 0xCBU, 0xF4U});
+        auto regs = cpu.cpu_registers();
+        regs.ax = 0x000BU; // bit stream 1,1,0,1
+        regs.bx = 0x000EU;
+        regs.cx = 0x0003U;
+        regs.es = 0x3000U;
+        regs.di = 0x0020U;
+        cpu.set_registers(regs);
+
+        cpu.step_instruction();
+        const auto after = cpu.cpu_registers();
+        CHECK((after.bx & 0x00FFU) == 0x02U);
+        CHECK(after.cx == 0x0003U);
+        CHECK(after.di == 0x0022U);
+        CHECK(bus.memory[linear(0x3000U, 0x0021U)] == 0xC0U);
+        CHECK(bus.memory[linear(0x3000U, 0x0022U)] == 0x02U);
+    }
+
+    SECTION("EXT with immediate length extracts a cross-byte stream into AX") {
+        // EXT BL, imm4=3: read positions 5..8, yielding low bits 1,0,1,1.
+        load_program(bus, cpu, 0x0100U, 0x0000U, {0x0FU, 0x3BU, 0xC3U, 0x03U, 0xF4U});
+        auto regs = cpu.cpu_registers();
+        regs.bx = 0x0005U;
+        regs.ds = 0x2000U;
+        regs.si = 0x0020U;
+        cpu.set_registers(regs);
+        bus.memory[linear(0x2000U, 0x0020U)] = 0xA0U;
+        bus.memory[linear(0x2000U, 0x0021U)] = 0x01U;
+
+        cpu.step_instruction();
+        const auto after = cpu.cpu_registers();
+        CHECK(after.ax == 0x000DU);
+        CHECK((after.bx & 0x00FFU) == 0x09U);
+        CHECK(after.si == 0x0020U);
+    }
+}
+
 TEST_CASE("v30 ROL4 and ROR4 rotate nibbles through AL", "[v30]") {
     flat_bus bus;
     v30 cpu;
@@ -443,6 +588,51 @@ TEST_CASE("v30 ROL4 and ROR4 rotate nibbles through AL", "[v30]") {
     regs = cpu.cpu_registers();
     CHECK((regs.bx & 0xFFU) == 0x34U);
     CHECK((regs.ax & 0xFFU) == 0x4AU);
+}
+
+TEST_CASE("v30 FPO2 and BRKEM stubs consume operands", "[v30]") {
+    flat_bus bus;
+    v30 cpu;
+    cpu.attach_bus(bus);
+
+    SECTION("FPO2 memory form consumes ModR/M displacement") {
+        // MOV AX,1234; FPO2 op,[BP+0010]; INC AX; HLT
+        load_program(bus, cpu, 0x0100U, 0x0000U,
+                     {0xB8U, 0x34U, 0x12U, 0x66U, 0x86U, 0x10U, 0x00U, 0x40U, 0xF4U});
+        auto regs = cpu.cpu_registers();
+        regs.ss = 0x3000U;
+        regs.bp = 0x0020U;
+        cpu.set_registers(regs);
+
+        cpu.step_instruction(); // MOV
+        cpu.step_instruction(); // FPO2
+        CHECK(cpu.cpu_registers().ip == 0x0007U);
+        cpu.step_instruction(); // INC AX
+        CHECK(cpu.cpu_registers().ax == 0x1235U);
+    }
+
+    SECTION("FPO2 register form consumes ModR/M") {
+        // MOV AX,0000; FPO2 op,AX; INC AX; HLT
+        load_program(bus, cpu, 0x0100U, 0x0000U, {0xB8U, 0x00U, 0x00U, 0x67U, 0xC0U, 0x40U, 0xF4U});
+
+        cpu.step_instruction(); // MOV
+        cpu.step_instruction(); // FPO2
+        CHECK(cpu.cpu_registers().ip == 0x0005U);
+        cpu.step_instruction(); // INC AX
+        CHECK(cpu.cpu_registers().ax == 0x0001U);
+    }
+
+    SECTION("BRKEM consumes its immediate while mode switch remains stubbed") {
+        // MOV AX,0000; BRKEM 21h; INC AX; HLT
+        load_program(bus, cpu, 0x0100U, 0x0000U,
+                     {0xB8U, 0x00U, 0x00U, 0x0FU, 0xFFU, 0x21U, 0x40U, 0xF4U});
+
+        cpu.step_instruction(); // MOV
+        cpu.step_instruction(); // BRKEM
+        CHECK(cpu.cpu_registers().ip == 0x0006U);
+        cpu.step_instruction(); // INC AX
+        CHECK(cpu.cpu_registers().ax == 0x0001U);
+    }
 }
 
 TEST_CASE("v30 packed-BCD string arithmetic", "[v30]") {

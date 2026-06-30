@@ -1,0 +1,62 @@
+# Hook (Japan) -- Irem M92-D-A clone of hook.
+# The local split clone carries the Japan program and sound CPU pairs; shared
+# graphics, samples, PLDs, and upper program pair resolve from the parent.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "hookj"
+parent      = "hook"
+board       = "irem_m92"
+orientation = "horizontal"
+players     = 4
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "hook_-h0-g.ic25"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x5964c886
+
+[[region.file]]
+name   = "hook_-l0-g.ic38"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0x7f7433f2
+
+[[region.file]]
+name   = "hook_-h1-.ic24"
+offset = 0x080001
+stride = 2
+size   = 0x20000
+crc32  = 0x264ba1f0
+
+[[region.file]]
+name   = "hook_-l1-.ic37"
+offset = 0x080000
+stride = 2
+size   = 0x20000
+crc32  = 0xf9913731
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name   = "hook_-sh0-a.ic27"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0xbd3d1f61
+
+[[region.file]]
+name   = "hook_-sl0-a.ic28"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x76371def

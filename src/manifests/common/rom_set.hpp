@@ -36,6 +36,10 @@ namespace mnemos::manifests::common {
     // relative to the region.
     struct rom_set_file final {
         std::string name;
+        // Alternate dump names accepted for the same bytes. This keeps
+        // split-parent zips and standalone archives loadable when they carry
+        // CRC-identical dumps under board-location-specific labels.
+        std::vector<std::string> aliases;
         std::size_t offset{};                 // first destination byte
         std::size_t stride{1U};               // destination step per source unit
         std::size_t unit{1U};                 // source bytes per chunk (contiguous)
@@ -55,14 +59,60 @@ namespace mnemos::manifests::common {
 
     // Monitor orientation the board is wired for. A vertical (TATE) set is
     // rotated by the frontend for upright presentation; absent in the TOML =>
-    // horizontal.
-    enum class screen_orientation : std::uint8_t { horizontal, vertical };
+    // horizontal. `vertical` preserves the legacy clockwise presentation;
+    // `vertical_ccw` exists for ROT270 boards such as 19XX and Dimahoo.
+    enum class screen_orientation : std::uint8_t {
+        horizontal,
+        vertical,
+        vertical_clockwise = vertical,
+        vertical_counterclockwise,
+    };
 
     // Sprite-list draw order the board renders in (board-interpreted; capcom_cps1
     // maps it to its video chip). Some bootleg sets relocate the object list and
     // must be drawn in reverse; absent in the TOML => ascending (the hardware
     // default for every official set).
     enum class sprite_draw_order : std::uint8_t { ascending, descending };
+
+    struct rom_set_dip_option final {
+        std::string label;
+        // Full 16-bit DSW word bits covered by the parent switch mask. M72 reads
+        // SW1 in the low byte and SW2 in the high byte.
+        std::uint16_t value{};
+    };
+
+    struct rom_set_dip_condition final {
+        // The option group is active when `(dip_word & mask) == value`.
+        std::uint16_t mask{};
+        std::uint16_t value{};
+    };
+
+    struct rom_set_dip_switch final {
+        std::string bank; // display grouping, e.g. "SW1" / "SW2"
+        std::string name;
+        std::uint16_t mask{};
+        std::uint16_t default_value{};
+        std::optional<rom_set_dip_condition> condition;
+        std::vector<rom_set_dip_option> options;
+    };
+
+    // Explicit high-level emulation substitution. The constitution requires every
+    // non-cycle-accurate/HLE chip path to be visible in the manifest rather than
+    // hidden in a board implementation. `profile` is optional (empty when the
+    // substitution needs no profile id, e.g. CPS2 sets).
+    struct rom_set_hle_sample_trigger final {
+        std::uint8_t trigger{};
+        std::uint32_t start{};
+    };
+
+    struct rom_set_hle_decl final {
+        std::string chip;
+        std::string profile;
+        std::string rationale;
+        // Optional board-interpreted sample cursor declarations carried by the
+        // same explicit HLE profile that consumes them.
+        std::vector<rom_set_hle_sample_trigger> sample_triggers;
+    };
 
     struct rom_set_decl final {
         std::string name;  // set id, e.g. "rtype"
@@ -73,11 +123,11 @@ namespace mnemos::manifests::common {
         // own files first, then the parent's) -- every file is still CRC-verified
         // regardless of which zip supplied it. Absent => a standalone set.
         // Constrained to a plain set id by the loader (no path separators).
-        // NOTE: only the capcom_cps1 adapter currently consumes this (it threads
-        // adapter_options.rom_path and composes the fallback); other boards parse
-        // it but ignore it, so a `parent` there would report the shared files
-        // missing. Single level only -- the parent set must be standalone, not
-        // itself a clone.
+        // NOTE: capcom_cps1, taito_f2, irem_m52, and irem_m62 consume this by
+        // composing a clone-first fallback provider from the ROM path. Other boards
+        // parse it but ignore it, so a `parent` there would report the shared files
+        // missing. Single level only -- the parent set must be standalone, not itself
+        // a clone.
         std::optional<std::string> parent;
         // Optional CPS-B board / PAL profile id: capcom_cps1 boards select their
         // hardware profile by this numeric id; absent on families that don't use it.
@@ -85,6 +135,12 @@ namespace mnemos::manifests::common {
         // Display orientation (default horizontal); the frontend rotates a
         // vertical set's framebuffer for upright presentation.
         screen_orientation orientation{screen_orientation::horizontal};
+        // Local player panel count exposed by the board/cabinet. Arcade boards
+        // default to two panels unless a set declares a dedicated 3P/4P layout.
+        std::uint8_t players{2U};
+        // Optional board-interpreted input/cabinet wiring profile. CPS2 uses this
+        // to distinguish six-button fighters from cabinets that repurpose IN1.
+        std::optional<std::string> input;
         // Sprite-list draw order (default ascending); a few bootleg sets relocate
         // the object list and declare "descending". Board-interpreted (capcom_cps1).
         sprite_draw_order sprite_order{sprite_draw_order::ascending};
@@ -95,6 +151,45 @@ namespace mnemos::manifests::common {
         // Optional Kabuki-encrypted-sound key name (board-interpreted): capcom_cps1
         // reads "dino" / "wof" / "punisher" to decrypt the QSound Z80 program.
         std::optional<std::string> kabuki;
+        // Optional cabinet DIP switch metadata. Values are the board's raw
+        // active-low bit pattern after applying `mask`; adapters decide how to
+        // surface or edit them.
+        std::vector<rom_set_dip_switch> dips;
+        // Explicit high-level substitution declarations. These are never a
+        // hidden fallback: a board may consume a known profile only when the
+        // manifest declares the substituted chip and rationale.
+        std::vector<rom_set_hle_decl> hle;
+        // Optional Taito F2 board wiring selectors. The family is not one fixed
+        // decode: games move the IO/sound/video windows and several need distinct
+        // sprite buffering or banking behavior.
+        std::optional<std::string> taito_f2_map;
+        std::optional<std::string> taito_f2_sprite_policy;
+        std::optional<std::string> taito_f2_sprite_buffering;
+        std::optional<std::string> taito_f2_palette_format;
+        std::optional<std::uint32_t> taito_f2_sprite_extension_base;
+        std::optional<std::uint32_t> taito_f2_sprite_extension_size;
+        std::optional<std::string> taito_f2_sprite_active_area;
+        std::optional<std::int16_t> taito_f2_sprite_hide_pixels;
+        std::optional<std::int16_t> taito_f2_sprite_flip_hide_pixels;
+        std::optional<std::string> taito_f2_input_profile;
+        std::optional<std::string> taito_f2_text_gfx_source;
+        std::optional<std::uint32_t> taito_f2_text_gfx_base;
+        std::optional<std::int16_t> taito_f2_tc0100scn_bg_x_offset;
+        std::optional<std::int16_t> taito_f2_tc0100scn_text_x_offset;
+        std::optional<std::int16_t> taito_f2_tc0100scn_text_y_origin;
+        std::optional<std::int16_t> taito_f2_tc0100scn_positive_text_y_origin;
+        std::optional<std::string> taito_f2_io_profile;
+        std::optional<std::string> taito_f2_palette_profile;
+        std::optional<std::string> taito_f2_priority_profile;
+        std::optional<std::string> taito_f2_sprite_chip_pair;
+        std::optional<std::string> taito_f2_sound_comm_chip;
+        std::optional<std::string> taito_f2_video_profile;
+        std::optional<std::string> taito_f2_tc0480scp_profile;
+        std::optional<std::int16_t> taito_f2_roz_x_offset;
+        std::optional<std::int16_t> taito_f2_roz_y_offset;
+        std::optional<std::string> taito_f2_aux_profile;
+        std::optional<std::uint8_t> taito_f2_vblank_irq_level;
+        std::optional<std::uint8_t> taito_f2_sprite_dma_irq_level;
         std::vector<rom_set_region> regions;
     };
 
@@ -121,6 +216,13 @@ namespace mnemos::manifests::common {
 
     [[nodiscard]] rom_set_image load_rom_set(const rom_set_decl& decl,
                                              const rom_file_provider& provider);
+
+    // Builds an effective clone declaration from a standalone parent and a
+    // child clone declaration. Child metadata wins when present; regions are
+    // inherited by name, with a child region replacing the parent's region of
+    // the same name.
+    [[nodiscard]] rom_set_decl inherit_parent_regions(const rom_set_decl& parent,
+                                                      rom_set_decl child);
 
     // Provider over a directory of loose dump files (name -> directory/name).
     [[nodiscard]] rom_file_provider make_directory_rom_provider(std::string directory);

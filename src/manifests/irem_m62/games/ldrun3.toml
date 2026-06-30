@@ -1,0 +1,185 @@
+# Lode Runner III - Golden Labyrinth -- Irem M62 region contract.
+# Local wrapper: D:\emu\irem\M62\ldrun3.zip -> ldrun3.zip.
+# Region placement follows public Irem M62 ROM metadata and the local CRC-clean
+# corpus. Exact KNA video priority, MC6803 port/timer behavior, bank behavior,
+# and MSM5205 timing remain implementation gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "ldrun3"
+board       = "irem_m62"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name   = "lr3a4eb.bin"
+offset = 0x0000
+size   = 0x4000
+crc32  = 0x09affc47
+
+[[region.file]]
+name   = "lr3a4db.bin"
+offset = 0x4000
+size   = 0x4000
+crc32  = 0x23a02178
+
+[[region.file]]
+name   = "lr3a4bb.bin"
+offset = 0x8000
+size   = 0x4000
+crc32  = 0x3d501a1a
+
+[[region]]
+name = "soundcpu"
+size = 0x10000
+
+[[region.file]]
+name   = "lr3-a-3d"
+offset = 0x8000
+size   = 0x4000
+crc32  = 0x28be68cd
+
+[[region.file]]
+name   = "lr3-a-3f"
+offset = 0xc000
+size   = 0x4000
+crc32  = 0xcb7186b7
+
+[[region]]
+name = "gfx1"
+size = 0xc000
+
+[[region.file]]
+name   = "lr3-n-2a"
+offset = 0x0000
+size   = 0x4000
+crc32  = 0xf9b74dee
+
+[[region.file]]
+name   = "lr3-n-2c"
+offset = 0x4000
+size   = 0x4000
+crc32  = 0xfef707ba
+
+[[region.file]]
+name   = "lr3-n-2b"
+offset = 0x8000
+size   = 0x4000
+crc32  = 0xaf3d27b9
+
+[[region]]
+name = "gfx2"
+size = 0x18000
+
+[[region.file]]
+name   = "lr3b4kb.bin"
+offset = 0x00000
+size   = 0x4000
+crc32  = 0x21ecd8c5
+
+[[region.file]]
+name   = "snxb4fb.bin"
+offset = 0x04000
+size   = 0x4000
+crc32  = 0xed719d7b
+
+[[region.file]]
+name   = "lr3b3nb.bin"
+offset = 0x08000
+size   = 0x4000
+crc32  = 0xda8cffab
+
+[[region.file]]
+name   = "snxb4nb.bin"
+offset = 0x0c000
+size   = 0x4000
+crc32  = 0xdc675003
+
+[[region.file]]
+name   = "snxb4cb.bin"
+offset = 0x10000
+size   = 0x4000
+crc32  = 0x585aa244
+
+[[region.file]]
+name   = "snxb4eb.bin"
+offset = 0x14000
+size   = 0x4000
+crc32  = 0x2d3b69dd
+
+[[region]]
+name = "proms"
+size = 0x100
+
+[[region.file]]
+name   = "lr3-n-4f"
+offset = 0x000
+size   = 0x100
+crc32  = 0xdf674be9
+
+[[region]]
+name = "spr_height_prom"
+size = 0x20
+
+[[region.file]]
+name   = "lr3-b-5p"
+offset = 0x00
+size   = 0x20
+crc32  = 0xe01f69e2
+
+[[region]]
+name = "spr_color_proms"
+size = 0x300
+
+[[region.file]]
+name   = "lr3-b-1m"
+offset = 0x000
+size   = 0x100
+crc32  = 0xf02d7167
+
+[[region.file]]
+name   = "lr3-b-1n"
+offset = 0x100
+size   = 0x100
+crc32  = 0x9e37f181
+
+[[region.file]]
+name   = "lr3-b-1l"
+offset = 0x200
+size   = 0x100
+crc32  = 0x5b11c41d
+
+[[region]]
+name = "chr_color_proms"
+size = 0x300
+
+[[region.file]]
+name   = "lr3-n-2l"
+offset = 0x000
+size   = 0x100
+crc32  = 0xe880b86b
+
+[[region.file]]
+name   = "lr3-n-2k"
+offset = 0x100
+size   = 0x100
+crc32  = 0x047ee051
+
+[[region.file]]
+name   = "lr3-n-2m"
+offset = 0x200
+size   = 0x100
+crc32  = 0x69ad8678
+
+[[region]]
+name = "timing"
+size = 0x100
+
+[[region.file]]
+name   = "lr3-b-6f"
+offset = 0x000
+size   = 0x100
+crc32  = 0x34d88d3c

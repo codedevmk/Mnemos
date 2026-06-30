@@ -1,0 +1,67 @@
+# Bomber Man World / New Atomic Punk - Global Quest (Japan alternate) -- Irem M90.
+# Local evidence includes the V35 program pair plus alternate Z80 program and
+# shared DAC sample media; the adapter resolves shared GA25 graphics from
+# bbmanw.zip.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "bbmanwja"
+board       = "irem_m90"
+parent      = "bbmanw"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "bbm2-h0.ic77"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0xe1407b91
+
+[[region.file]]
+name   = "bbm2-l0.ic79"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0x20873b49
+
+[[region.file]]
+name          = "bbm2-h0.ic77"
+offset        = 0x0ffff1
+stride        = 2
+source_offset = 0x3fff8
+length        = 0x8
+size          = 0x40000
+crc32         = 0xe1407b91
+
+[[region.file]]
+name          = "bbm2-l0.ic79"
+offset        = 0x0ffff0
+stride        = 2
+source_offset = 0x3fff8
+length        = 0x8
+size          = 0x40000
+crc32         = 0x20873b49
+
+[[region]]
+name = "soundcpu"
+size = 0x010000
+
+[[region.file]]
+name   = "bbm2-sp-b.ic33"
+offset = 0x000000
+size   = 0x10000
+crc32  = 0xb8d8108c
+
+[[region]]
+name = "samples"
+size = 0x020000
+
+[[region.file]]
+name   = "bbm2-v0-b.ic30"
+offset = 0x000000
+size   = 0x20000
+crc32  = 0x0ae655ff

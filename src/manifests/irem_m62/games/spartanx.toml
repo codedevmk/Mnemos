@@ -1,0 +1,44 @@
+# Spartan X -- Irem M62 raw-media contract.
+# Local wrapper: D:\emu\irem\M62\spartanx.zip.
+# Region placement is a contiguous artifact contract only; exact M62 bus
+# mapping, video priority, and M6803/AY/MSM5205 behavior remain gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "spartanx"
+board       = "irem_m62"
+orientation = "horizontal"
+
+[[region]]
+name = "raw_media"
+size = 0xe000
+
+[[region.file]]
+name   = "a-4d-c-j.bin"
+offset = 0x0
+size   = 0x4000
+crc32  = 0x3173ea78
+
+[[region.file]]
+name   = "a-4e-c-j.bin"
+offset = 0x4000
+size   = 0x4000
+crc32  = 0x32a0a9a6
+
+[[region.file]]
+name   = "g-4c-a-j.bin"
+offset = 0x8000
+size   = 0x2000
+crc32  = 0x8af9c5a6
+
+[[region.file]]
+name   = "g-4d-a-j.bin"
+offset = 0xa000
+size   = 0x2000
+crc32  = 0xb8300c72
+
+[[region.file]]
+name   = "g-4e-a-j.bin"
+offset = 0xc000
+size   = 0x2000
+crc32  = 0xb50429cd

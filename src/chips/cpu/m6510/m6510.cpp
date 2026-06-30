@@ -18,7 +18,7 @@ namespace mnemos::chips::cpu {
     chip_metadata m6510::metadata() const noexcept {
         return {
             .manufacturer = "MOS Technology",
-            .part_number = "6510",
+            .part_number = variant_ == variant::mos_6502 ? "6502" : "6510",
             .family = "6502",
             .klass = chip_class::cpu,
             .revision = 1U,
@@ -1530,6 +1530,8 @@ namespace mnemos::chips::cpu {
     }
 
     void m6510::set_port_enabled(bool enabled) noexcept { port_enabled_ = enabled; }
+
+    void m6510::set_variant(variant value) noexcept { variant_ = value; }
 
     void m6510::set_port_input(std::uint8_t value) noexcept { port_input_ = value; }
 

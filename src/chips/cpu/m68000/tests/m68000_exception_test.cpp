@@ -319,6 +319,29 @@ TEST_CASE("m68000 RTE restores SR and PC from the stack frame") {
     CHECK(r.a[7] == 0x00003000U);
 }
 
+TEST_CASE("m68000 RTE restores user mode and swaps back to USP") {
+    machine m;
+    m.w16(0x2FFAU, 0x0000U);     // saved SR (user mode)
+    m.w32(0x2FFCU, 0x00001234U); // saved PC
+    m68000::registers s{};
+    s.sr = m68000::sr_s;
+    s.a[7] = 0x00002FFAU;
+    s.usp = 0x00002100U;
+    s.ssp = 0x00002FFAU;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.load(0x1000U, {0x4E73U}); // RTE
+
+    m.cpu.step_instruction();
+
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x00001234U);
+    CHECK((r.sr & m68000::sr_s) == 0U);
+    CHECK(r.a[7] == 0x00002100U);
+    CHECK(r.usp == 0x00002100U);
+    CHECK(r.ssp == 0x00003000U);
+}
+
 TEST_CASE("m68000 services an autovectored interrupt") {
     machine m;
     m.w32(0x0070U, 0x00005000U); // autovector level 4 = vector 28 -> $5000
@@ -333,6 +356,23 @@ TEST_CASE("m68000 services an autovectored interrupt") {
     CHECK(r.pc == 0x00005000U);
     CHECK(((r.sr >> 8U) & 7U) == 4U); // IPM raised to the accepted level
     CHECK(r.a[7] == 0x00002FFAU);
+    CHECK(m.cpu.elapsed_cycles() == 42U);
+}
+
+TEST_CASE("m68000 can opt into Genesis interrupt phase timing") {
+    machine m;
+    m.w32(0x0070U, 0x00005000U); // autovector level 4 = vector 28 -> $5000
+    m68000::registers s{};
+    s.sr = m68000::sr_s; // IPM = 0, so a level-4 request is accepted
+    s.a[7] = 0x00003000U;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+    m.cpu.set_genesis_interrupt_phase_timing_enabled(true);
+    m.cpu.set_irq_level(4);
+    const int cycles = m.cpu.step_instruction();
+
+    CHECK(cycles == 50);
+    CHECK(m.cpu.elapsed_cycles() == 50U);
 }
 
 TEST_CASE("m68000 traps a privileged instruction executed in user mode") {

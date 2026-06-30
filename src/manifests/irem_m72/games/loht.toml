@@ -1,0 +1,408 @@
+# Legend of Hero Tonma (World) -- Irem M72 protected board.
+# Schema mnemos-romset/1; the adapter embeds this checked-in manifest and
+# resolves it from the standard set zip name, so no game.toml copy is required.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "loht"
+board       = "irem_m72"
+orientation = "horizontal"
+
+[[dip]]
+bank = "SW1"
+name = "Lives"
+mask = 0x0003
+default = 0x0003
+
+[[dip.option]]
+label = "2"
+value = 0x0000
+
+[[dip.option]]
+label = "3"
+value = 0x0003
+
+[[dip.option]]
+label = "4"
+value = 0x0002
+
+[[dip.option]]
+label = "5"
+value = 0x0001
+
+[[dip]]
+bank = "SW1"
+name = "Demo Sounds"
+mask = 0x0004
+default = 0x0000
+
+[[dip.option]]
+label = "Off"
+value = 0x0004
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Coinage"
+mask = 0x00f0
+default = 0x00f0
+condition_mask = 0x0400
+condition_value = 0x0400
+
+[[dip.option]]
+label = "6 Coins / 1 Credit"
+value = 0x00a0
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0x00b0
+
+[[dip.option]]
+label = "4 Coins / 1 Credit"
+value = 0x00c0
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0x00d0
+
+[[dip.option]]
+label = "8 Coins / 3 Credits"
+value = 0x0010
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0x00e0
+
+[[dip.option]]
+label = "5 Coins / 3 Credits"
+value = 0x0020
+
+[[dip.option]]
+label = "3 Coins / 2 Credits"
+value = 0x0030
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0x00f0
+
+[[dip.option]]
+label = "2 Coins / 3 Credits"
+value = 0x0040
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0x0090
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x0080
+
+[[dip.option]]
+label = "1 Coin / 4 Credits"
+value = 0x0070
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x0060
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x0050
+
+[[dip.option]]
+label = "Free Play"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Coin A"
+mask = 0x0030
+default = 0x0030
+condition_mask = 0x0400
+condition_value = 0x0000
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0x0000
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0x0010
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0x0020
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0x0030
+
+[[dip]]
+bank = "SW1"
+name = "Coin B"
+mask = 0x00c0
+default = 0x00c0
+condition_mask = 0x0400
+condition_value = 0x0000
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0x00c0
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x0080
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x0040
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Flip Screen"
+mask = 0x0100
+default = 0x0100
+
+[[dip.option]]
+label = "Off"
+value = 0x0100
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Cabinet"
+mask = 0x0200
+default = 0x0000
+
+[[dip.option]]
+label = "Upright"
+value = 0x0000
+
+[[dip.option]]
+label = "Cocktail"
+value = 0x0200
+
+[[dip]]
+bank = "SW2"
+name = "Coin Mode"
+mask = 0x0400
+default = 0x0400
+
+[[dip.option]]
+label = "Mode 1"
+value = 0x0400
+
+[[dip.option]]
+label = "Mode 2"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Difficulty"
+mask = 0x1800
+default = 0x1800
+
+[[dip.option]]
+label = "Easy"
+value = 0x0000
+
+[[dip.option]]
+label = "Normal"
+value = 0x1800
+
+[[dip.option]]
+label = "Hard"
+value = 0x1000
+
+[[dip.option]]
+label = "Hardest"
+value = 0x0800
+
+[[dip]]
+bank = "SW2"
+name = "Stop Mode"
+mask = 0x2000
+default = 0x2000
+
+[[dip.option]]
+label = "Off"
+value = 0x2000
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Invulnerability"
+mask = 0x4000
+default = 0x4000
+
+[[dip.option]]
+label = "Off"
+value = 0x4000
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "tom_c-h0-b.ic40"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0xa63204b6
+
+[[region.file]]
+name   = "tom_c-l0-b.ic37"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xe788002f
+
+[[region.file]]
+name   = "tom_c-h3-.ic43"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x714778b5
+
+[[region.file]]
+name   = "tom_c-l3-.ic34"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x2f049b03
+
+# Boot-chunk reload of the final program pair at the top of the region.
+[[region.file]]
+name   = "tom_c-h3-.ic43"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0x714778b5
+
+[[region.file]]
+name   = "tom_c-l3-.ic34"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0x2f049b03
+
+[[region]]
+name = "mcu"
+size = 0x1000
+
+[[region.file]]
+name   = "tom_c-pr-b.ic1"
+offset = 0x0000
+size   = 0x1000
+crc32  = 0x9c9545f1
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "tom_m53.ic53"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x0b83265f
+
+[[region.file]]
+name   = "tom_m51.ic51"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x8ec5f6f3
+
+[[region.file]]
+name   = "tom_m49.ic49"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0xa41d3bfd
+
+[[region.file]]
+name   = "tom_m47.ic47"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x9d81a25b
+
+[[region]]
+name = "tiles_a"
+size = 0x040000
+
+[[region.file]]
+name   = "tom_m21.ic21"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x3ca3e771
+
+[[region.file]]
+name   = "tom_m22.ic22"
+offset = 0x10000
+size   = 0x10000
+crc32  = 0x7a05ee2f
+
+[[region.file]]
+name   = "tom_m20.ic20"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0x79aa2335
+
+[[region.file]]
+name   = "tom_m23.ic23"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0x789e8b24
+
+[[region]]
+name = "tiles_b"
+size = 0x040000
+
+[[region.file]]
+name   = "tom_m26.ic26"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x44626bf6
+
+[[region.file]]
+name   = "tom_m27.ic27"
+offset = 0x10000
+size   = 0x10000
+crc32  = 0x464952cf
+
+[[region.file]]
+name   = "tom_m25.ic25"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0x3db9b2c7
+
+[[region.file]]
+name   = "tom_m24.ic24"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0xf01fe899
+
+[[region]]
+name = "samples"
+size = 0x10000
+
+[[region.file]]
+name   = "tom_m44.ic44"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x3ed51d1f

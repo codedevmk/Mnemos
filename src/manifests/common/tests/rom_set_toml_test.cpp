@@ -33,6 +33,7 @@ offset = 0x0
 stride = 2
 size = 0x10000
 crc32 = 0x1234ABCD
+aliases = ["prog-alt.lo"]
 
 [[region.file]]
 name = "prog.hi"
@@ -57,6 +58,8 @@ fill = 0x00
     REQUIRE(main.files.size() == 2U);
     CHECK(main.files[0].stride == 2U);
     CHECK(main.files[0].size == 0x10000U);
+    REQUIRE(main.files[0].aliases.size() == 1U);
+    CHECK(main.files[0].aliases[0] == "prog-alt.lo");
     REQUIRE(main.files[0].crc32.has_value());
     CHECK(*main.files[0].crc32 == 0x1234ABCDU);
     CHECK(main.files[1].offset == 1U);
@@ -67,6 +70,10 @@ fill = 0x00
     CHECK(decl.regions[1].files.empty());
     CHECK_FALSE(decl.cps_b_profile.has_value()); // optional key, absent here
     CHECK_FALSE(decl.parent.has_value());        // optional key, absent here
+    CHECK(decl.dips.empty());            // cabinet DIP metadata is explicit
+    CHECK(decl.hle.empty());             // explicit substitutions only
+    CHECK(decl.players == 2U);           // optional key, absent here
+    CHECK_FALSE(decl.input.has_value()); // optional key, absent here
 }
 
 TEST_CASE("rom_set_toml parses the optional parent set name", "[rom_set_toml]") {
@@ -106,6 +113,220 @@ TEST_CASE("rom_set_toml parses the optional parent set name", "[rom_set_toml]") 
     }
 }
 
+TEST_CASE("rom_set_toml parses explicit HLE declarations", "[rom_set_toml]") {
+    const auto result = parse_rom_set_decl(R"(
+[set]
+schema = "mnemos-romset/1"
+name = "dbreedm72"
+board = "irem_m72"
+
+[[hle]]
+chip = "mcu"
+profile = "irem_m72.dbreedm72_no_dump_mcu"
+rationale = "The i8751 dump is unavailable; this profile declares the substitution."
+
+[[hle.sample_trigger]]
+trigger = 1
+start = 0x20
+
+[[hle.sample_trigger]]
+trigger = 20
+start = 0x12B20
+
+[[region]]
+name = "maincpu"
+size = 0x100
+)");
+    REQUIRE(result.ok());
+    REQUIRE(result.value->hle.size() == 1U);
+    CHECK(result.value->hle[0].chip == "mcu");
+    CHECK(result.value->hle[0].profile == "irem_m72.dbreedm72_no_dump_mcu");
+    CHECK_FALSE(result.value->hle[0].rationale.empty());
+    REQUIRE(result.value->hle[0].sample_triggers.size() == 2U);
+    CHECK(result.value->hle[0].sample_triggers[0].trigger == 1U);
+    CHECK(result.value->hle[0].sample_triggers[0].start == 0x20U);
+    CHECK(result.value->hle[0].sample_triggers[1].trigger == 20U);
+    CHECK(result.value->hle[0].sample_triggers[1].start == 0x12B20U);
+}
+
+TEST_CASE("rom_set_toml rejects bad HLE declarations", "[rom_set_toml]") {
+    SECTION("missing rationale") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = \"mcu\"\n"
+            "profile = \"p\"\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("empty profile") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = \"mcu\"\n"
+            "profile = \"\"\nrationale = \"documented\"\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("unknown key is rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = \"mcu\"\n"
+            "profile = \"p\"\nrationale = \"documented\"\nextra = true\n[[region]]\n"
+            "name = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("sample trigger outside 8-bit range is rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = \"mcu\"\n"
+            "profile = \"p\"\nrationale = \"documented\"\n[[hle.sample_trigger]]\n"
+            "trigger = 256\nstart = 0x20\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("sample trigger requires a start") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = \"mcu\"\n"
+            "profile = \"p\"\nrationale = \"documented\"\n[[hle.sample_trigger]]\n"
+            "trigger = 1\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("sample trigger unknown key is rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = \"mcu\"\n"
+            "profile = \"p\"\nrationale = \"documented\"\n[[hle.sample_trigger]]\n"
+            "trigger = 1\nstart = 0x20\nextra = true\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("duplicate sample trigger values are rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = \"mcu\"\n"
+            "profile = \"p\"\nrationale = \"documented\"\n[[hle.sample_trigger]]\n"
+            "trigger = 1\nstart = 0x20\n[[hle.sample_trigger]]\ntrigger = 1\n"
+            "start = 0x40\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+}
+
+TEST_CASE("rom_set_toml parses DIP switch metadata", "[rom_set_toml]") {
+    const auto result = parse_rom_set_decl(R"(
+[set]
+schema = "mnemos-romset/1"
+name = "rtype"
+board = "irem_m72"
+
+[[dip]]
+bank = "SW1"
+name = "Lives"
+mask = 0x0003
+default = 0x0003
+
+[[dip.option]]
+label = "2"
+value = 0x0002
+
+[[dip.option]]
+label = "3"
+value = 0x0003
+
+[[region]]
+name = "maincpu"
+size = 0x100
+)");
+    REQUIRE(result.ok());
+    REQUIRE(result.value->dips.size() == 1U);
+    const auto& dip = result.value->dips[0];
+    CHECK(dip.bank == "SW1");
+    CHECK(dip.name == "Lives");
+    CHECK(dip.mask == 0x0003U);
+    CHECK(dip.default_value == 0x0003U);
+    REQUIRE(dip.options.size() == 2U);
+    CHECK(dip.options[0].label == "2");
+    CHECK(dip.options[0].value == 0x0002U);
+    CHECK(dip.options[1].label == "3");
+    CHECK(dip.options[1].value == 0x0003U);
+}
+
+TEST_CASE("rom_set_toml parses conditional DIP switch metadata", "[rom_set_toml]") {
+    const auto result = parse_rom_set_decl(R"(
+[set]
+schema = "mnemos-romset/1"
+name = "rtype"
+board = "irem_m72"
+
+[[dip]]
+bank = "SW1"
+name = "Coinage"
+mask = 0x00f0
+default = 0x00f0
+condition_mask = 0x0400
+condition_value = 0x0400
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0x00f0
+
+[[region]]
+name = "maincpu"
+size = 0x100
+)");
+    REQUIRE(result.ok());
+    REQUIRE(result.value->dips.size() == 1U);
+    const auto& condition = result.value->dips[0].condition;
+    REQUIRE(condition.has_value());
+    CHECK(condition->mask == 0x0400U);
+    CHECK(condition->value == 0x0400U);
+}
+
+TEST_CASE("rom_set_toml rejects bad DIP switch metadata", "[rom_set_toml]") {
+    SECTION("zero mask") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[dip]]\nbank = \"SW1\"\n"
+            "name = \"Lives\"\nmask = 0\ndefault = 0\n[[dip.option]]\nlabel = \"3\"\n"
+            "value = 0\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("missing options") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[dip]]\nbank = \"SW1\"\n"
+            "name = \"Lives\"\nmask = 3\ndefault = 3\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("default outside mask") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[dip]]\nbank = \"SW1\"\n"
+            "name = \"Lives\"\nmask = 3\ndefault = 4\n[[dip.option]]\nlabel = \"3\"\n"
+            "value = 3\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("option outside mask") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[dip]]\nbank = \"SW1\"\n"
+            "name = \"Lives\"\nmask = 3\ndefault = 3\n[[dip.option]]\nlabel = \"bad\"\n"
+            "value = 4\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("unknown key") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[dip]]\nbank = \"SW1\"\n"
+            "name = \"Lives\"\nmask = 3\ndefault = 3\nextra = true\n[[dip.option]]\n"
+            "label = \"3\"\nvalue = 3\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("partial condition is rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[dip]]\nbank = \"SW1\"\n"
+            "name = \"Coinage\"\nmask = 0xf0\ndefault = 0xf0\ncondition_mask = 0x400\n"
+            "[[dip.option]]\nlabel = \"1 Coin / 1 Credit\"\nvalue = 0xf0\n[[region]]\n"
+            "name = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("condition value outside mask is rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[dip]]\nbank = \"SW1\"\n"
+            "name = \"Coinage\"\nmask = 0xf0\ndefault = 0xf0\ncondition_mask = 0x400\n"
+            "condition_value = 0x800\n[[dip.option]]\nlabel = \"1 Coin / 1 Credit\"\n"
+            "value = 0xf0\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+}
+
 TEST_CASE("rom_set_toml parses the optional cps_b_profile id", "[rom_set_toml]") {
     SECTION("present") {
         const auto result = parse_rom_set_decl(
@@ -131,6 +352,13 @@ TEST_CASE("rom_set_toml parses the optional orientation", "[rom_set_toml]") {
             "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
         REQUIRE(result.ok());
         CHECK(result.value->orientation == screen_orientation::vertical);
+    }
+    SECTION("vertical counterclockwise") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\norientation = \"vertical_ccw\"\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK(result.value->orientation == screen_orientation::vertical_counterclockwise);
     }
     SECTION("absent defaults to horizontal") {
         const auto result = parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
@@ -166,6 +394,472 @@ TEST_CASE("rom_set_toml parses the optional sprite_order", "[rom_set_toml]") {
             "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nsprite_order = \"sideways\"\n"
             "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
         CHECK_FALSE(result.ok());
+    }
+}
+
+TEST_CASE("rom_set_toml parses the optional local player count", "[rom_set_toml]") {
+    SECTION("present") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nplayers = 4\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK(result.value->players == 4U);
+    }
+    SECTION("absent defaults to two players") {
+        const auto result = parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+                                               "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK(result.value->players == 2U);
+    }
+    SECTION("zero is rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nplayers = 0\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("values above the CPS-style input-word limit are rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\nplayers = 5\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+}
+
+TEST_CASE("rom_set_toml parses the optional input profile", "[rom_set_toml]") {
+    SECTION("present") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\ninput = \"four_player\"\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->input.has_value());
+        CHECK(*result.value->input == "four_player");
+    }
+    SECTION("absent leaves it unset") {
+        const auto result = parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+                                               "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        CHECK_FALSE(result.value->input.has_value());
+    }
+    SECTION("non-string is rejected") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\ninput = 7\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+}
+
+TEST_CASE("rom_set_toml parses a profile-less HLE declaration", "[rom_set_toml]") {
+    const auto result = parse_rom_set_decl(R"(
+[set]
+schema = "mnemos-romset/1"
+name = "x"
+
+[[hle]]
+chip = "capcom.qsound"
+rationale = "Behavioral DL-1425 PCM mixer; DSP16 instruction-level model is not implemented."
+
+[[region]]
+name = "maincpu"
+size = 0x100
+)");
+    REQUIRE(result.ok());
+    REQUIRE(result.value->hle.size() == 1U);
+    CHECK(result.value->hle[0].chip == "capcom.qsound");
+    CHECK(result.value->hle[0].rationale.find("DL-1425") != std::string::npos);
+}
+
+TEST_CASE("rom_set_toml rejects invalid HLE declarations", "[rom_set_toml]") {
+    SECTION("missing rationale") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = "
+            "\"capcom.qsound\"\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+    SECTION("unknown key") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n[[hle]]\nchip = "
+            "\"capcom.qsound\"\nrationale = \"x\"\nextra = true\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(result.ok());
+    }
+}
+
+TEST_CASE("rom_set_toml parses the Taito F2 board selectors", "[rom_set_toml]") {
+    SECTION("present") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"gunfront\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"gunfront\"\ntaito_f2_sprite_policy = "
+            "\"banked\"\ntaito_f2_sprite_extension_base = 0xC00000\n"
+            "taito_f2_sprite_extension_size = 0x2000\n"
+            "taito_f2_sprite_buffering = \"partial_delayed\"\n"
+            "taito_f2_palette_format = \"rgbx_444\"\n"
+            "taito_f2_sprite_active_area = \"y_word_bit0\"\n"
+            "taito_f2_sprite_hide_pixels = 3\n"
+            "taito_f2_sprite_flip_hide_pixels = -3\n"
+            "taito_f2_input_profile = \"split_tmp82c265\"\n"
+            "taito_f2_text_gfx_source = \"program_1bpp\"\n"
+            "taito_f2_text_gfx_base = 0x80000\n"
+            "taito_f2_tc0100scn_bg_x_offset = 16\n"
+            "taito_f2_tc0100scn_text_x_offset = 23\n"
+            "taito_f2_tc0100scn_text_y_origin = -8\n"
+            "taito_f2_tc0100scn_positive_text_y_origin = 24\n"
+            "taito_f2_io_profile = \"tc0510nio\"\n"
+            "taito_f2_palette_profile = \"tc0110pcr_tc0070rgb\"\n"
+            "taito_f2_priority_profile = \"tc0360pri\"\n"
+            "taito_f2_sprite_chip_pair = \"tc0200obj_tc0210fbc\"\n"
+            "taito_f2_sound_comm_chip = \"tc0140syt\"\n"
+            "taito_f2_video_profile = \"tc0100scn\"\n"
+            "taito_f2_tc0480scp_profile = \"none\"\n"
+            "taito_f2_roz_x_offset = -16\n"
+            "taito_f2_roz_y_offset = 0\n"
+            "taito_f2_aux_profile = \"none\"\n"
+            "taito_f2_vblank_irq_level = 5\n"
+            "taito_f2_sprite_dma_irq_level = 6\n"
+            "[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        REQUIRE(result.value->taito_f2_sprite_policy.has_value());
+        REQUIRE(result.value->taito_f2_sprite_buffering.has_value());
+        REQUIRE(result.value->taito_f2_palette_format.has_value());
+        REQUIRE(result.value->taito_f2_sprite_extension_base.has_value());
+        REQUIRE(result.value->taito_f2_sprite_extension_size.has_value());
+        REQUIRE(result.value->taito_f2_sprite_active_area.has_value());
+        REQUIRE(result.value->taito_f2_sprite_hide_pixels.has_value());
+        REQUIRE(result.value->taito_f2_sprite_flip_hide_pixels.has_value());
+        REQUIRE(result.value->taito_f2_input_profile.has_value());
+        REQUIRE(result.value->taito_f2_text_gfx_source.has_value());
+        REQUIRE(result.value->taito_f2_text_gfx_base.has_value());
+        REQUIRE(result.value->taito_f2_tc0100scn_bg_x_offset.has_value());
+        REQUIRE(result.value->taito_f2_tc0100scn_text_x_offset.has_value());
+        REQUIRE(result.value->taito_f2_tc0100scn_text_y_origin.has_value());
+        REQUIRE(result.value->taito_f2_tc0100scn_positive_text_y_origin.has_value());
+        REQUIRE(result.value->taito_f2_io_profile.has_value());
+        REQUIRE(result.value->taito_f2_palette_profile.has_value());
+        REQUIRE(result.value->taito_f2_priority_profile.has_value());
+        REQUIRE(result.value->taito_f2_sprite_chip_pair.has_value());
+        REQUIRE(result.value->taito_f2_sound_comm_chip.has_value());
+        REQUIRE(result.value->taito_f2_video_profile.has_value());
+        REQUIRE(result.value->taito_f2_tc0480scp_profile.has_value());
+        REQUIRE(result.value->taito_f2_roz_x_offset.has_value());
+        REQUIRE(result.value->taito_f2_roz_y_offset.has_value());
+        REQUIRE(result.value->taito_f2_aux_profile.has_value());
+        REQUIRE(result.value->taito_f2_vblank_irq_level.has_value());
+        REQUIRE(result.value->taito_f2_sprite_dma_irq_level.has_value());
+        CHECK(*result.value->taito_f2_map == "gunfront");
+        CHECK(*result.value->taito_f2_sprite_policy == "banked");
+        CHECK(*result.value->taito_f2_sprite_buffering == "partial_delayed");
+        CHECK(*result.value->taito_f2_palette_format == "rgbx_444");
+        CHECK(*result.value->taito_f2_sprite_extension_base == 0xC00000U);
+        CHECK(*result.value->taito_f2_sprite_extension_size == 0x2000U);
+        CHECK(*result.value->taito_f2_sprite_active_area == "y_word_bit0");
+        CHECK(*result.value->taito_f2_sprite_hide_pixels == 3);
+        CHECK(*result.value->taito_f2_sprite_flip_hide_pixels == -3);
+        CHECK(*result.value->taito_f2_input_profile == "split_tmp82c265");
+        CHECK(*result.value->taito_f2_text_gfx_source == "program_1bpp");
+        CHECK(*result.value->taito_f2_text_gfx_base == 0x80000U);
+        CHECK(*result.value->taito_f2_tc0100scn_bg_x_offset == 16);
+        CHECK(*result.value->taito_f2_tc0100scn_text_x_offset == 23);
+        CHECK(*result.value->taito_f2_tc0100scn_text_y_origin == -8);
+        CHECK(*result.value->taito_f2_tc0100scn_positive_text_y_origin == 24);
+        CHECK(*result.value->taito_f2_io_profile == "tc0510nio");
+        CHECK(*result.value->taito_f2_palette_profile == "tc0110pcr_tc0070rgb");
+        CHECK(*result.value->taito_f2_priority_profile == "tc0360pri");
+        CHECK(*result.value->taito_f2_sprite_chip_pair == "tc0200obj_tc0210fbc");
+        CHECK(*result.value->taito_f2_sound_comm_chip == "tc0140syt");
+        CHECK(*result.value->taito_f2_video_profile == "tc0100scn");
+        CHECK(*result.value->taito_f2_tc0480scp_profile == "none");
+        CHECK(*result.value->taito_f2_roz_x_offset == -16);
+        CHECK(*result.value->taito_f2_roz_y_offset == 0);
+        CHECK(*result.value->taito_f2_aux_profile == "none");
+        CHECK(*result.value->taito_f2_vblank_irq_level == 5U);
+        CHECK(*result.value->taito_f2_sprite_dma_irq_level == 6U);
+    }
+    SECTION("absent leaves them unset") {
+        const auto result = parse_rom_set_decl("[set]\nschema = \"mnemos-romset/1\"\nname = "
+                                               "\"x\"\n[[region]]\nname = \"maincpu\"\nsize = "
+                                               "0x100\n");
+        REQUIRE(result.ok());
+        CHECK_FALSE(result.value->taito_f2_map.has_value());
+        CHECK_FALSE(result.value->taito_f2_sprite_policy.has_value());
+        CHECK_FALSE(result.value->taito_f2_sprite_buffering.has_value());
+        CHECK_FALSE(result.value->taito_f2_palette_format.has_value());
+        CHECK_FALSE(result.value->taito_f2_sprite_extension_base.has_value());
+        CHECK_FALSE(result.value->taito_f2_sprite_extension_size.has_value());
+        CHECK_FALSE(result.value->taito_f2_sprite_active_area.has_value());
+        CHECK_FALSE(result.value->taito_f2_sprite_hide_pixels.has_value());
+        CHECK_FALSE(result.value->taito_f2_sprite_flip_hide_pixels.has_value());
+        CHECK_FALSE(result.value->taito_f2_input_profile.has_value());
+        CHECK_FALSE(result.value->taito_f2_text_gfx_source.has_value());
+        CHECK_FALSE(result.value->taito_f2_text_gfx_base.has_value());
+        CHECK_FALSE(result.value->taito_f2_tc0100scn_bg_x_offset.has_value());
+        CHECK_FALSE(result.value->taito_f2_tc0100scn_text_x_offset.has_value());
+        CHECK_FALSE(result.value->taito_f2_tc0100scn_text_y_origin.has_value());
+        CHECK_FALSE(result.value->taito_f2_tc0100scn_positive_text_y_origin.has_value());
+        CHECK_FALSE(result.value->taito_f2_io_profile.has_value());
+        CHECK_FALSE(result.value->taito_f2_palette_profile.has_value());
+        CHECK_FALSE(result.value->taito_f2_priority_profile.has_value());
+        CHECK_FALSE(result.value->taito_f2_sprite_chip_pair.has_value());
+        CHECK_FALSE(result.value->taito_f2_sound_comm_chip.has_value());
+        CHECK_FALSE(result.value->taito_f2_video_profile.has_value());
+        CHECK_FALSE(result.value->taito_f2_tc0480scp_profile.has_value());
+        CHECK_FALSE(result.value->taito_f2_roz_x_offset.has_value());
+        CHECK_FALSE(result.value->taito_f2_roz_y_offset.has_value());
+        CHECK_FALSE(result.value->taito_f2_aux_profile.has_value());
+        CHECK_FALSE(result.value->taito_f2_vblank_irq_level.has_value());
+        CHECK_FALSE(result.value->taito_f2_sprite_dma_irq_level.has_value());
+    }
+    SECTION("compound RGBx palette format is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"growl\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_palette_format = \"rrrr_gggg_bbbb_rgbx\"\n"
+            "[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_palette_format.has_value());
+        CHECK(*result.value->taito_f2_palette_format == "rrrr_gggg_bbbb_rgbx");
+    }
+    SECTION("liquid kids map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"liquidk\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"liquidk\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "liquidk");
+    }
+    SECTION("dondoko don map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"dondokod\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"dondokod\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "dondokod");
+    }
+    SECTION("quiz hq map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"quizhq\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"quizhq\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "quizhq");
+    }
+    SECTION("metal black map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"metalb\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"metalb\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "metalb");
+    }
+    SECTION("football champ map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"footchmp\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"footchmp\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "footchmp");
+    }
+    SECTION("dead connection map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"deadconx\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"deadconx\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "deadconx");
+    }
+    SECTION("dino rex map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"dinorex\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"dinorex\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "dinorex");
+    }
+    SECTION("thunder fox map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"thundfox\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"thundfox\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "thundfox");
+    }
+    SECTION("quiz chikyu map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"qzchikyu\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"qzchikyu\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "qzchikyu");
+    }
+    SECTION("quiz torimon map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"qtorimon\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"qtorimon\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "qtorimon");
+    }
+    SECTION("quiz quest map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"qzquest\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"qzquest\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "qzquest");
+    }
+    SECTION("growl map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"growl\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"growl\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "growl");
+    }
+    SECTION("ninja kids map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"ninjak\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"ninjak\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "ninjak");
+    }
+    SECTION("solitary fighter map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"solfigtr\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"solfigtr\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "solfigtr");
+    }
+    SECTION("pulirula map is accepted") {
+        const auto result = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"pulirula\"\nboard = "
+            "\"taito_f2\"\ntaito_f2_map = \"pulirula\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        REQUIRE(result.ok());
+        REQUIRE(result.value->taito_f2_map.has_value());
+        CHECK(*result.value->taito_f2_map == "pulirula");
+    }
+    SECTION("invalid values are rejected") {
+        const auto bad_map = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\ntaito_f2_map = "
+            "\"typo\"\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(bad_map.ok());
+
+        const auto bad_policy = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\ntaito_f2_sprite_policy = "
+            "\"typo\"\n[[region]]\nname = \"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(bad_policy.ok());
+
+        const auto bad_buffering = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_sprite_buffering = \"typo\"\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(bad_buffering.ok());
+
+        const auto bad_palette = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_palette_format = \"typo\"\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(bad_palette.ok());
+
+        const auto bad_base = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_sprite_extension_base = 0x1000000\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(bad_base.ok());
+
+        const auto odd_size = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_sprite_extension_base = 0xC00000\n"
+            "taito_f2_sprite_extension_size = 3\n[[region]]\nname = \"maincpu\"\nsize = "
+            "0x100\n");
+        CHECK_FALSE(odd_size.ok());
+
+        const auto size_without_base = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_sprite_extension_size = 0x1000\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(size_without_base.ok());
+
+        const auto bad_active_area = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_sprite_active_area = \"typo\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(bad_active_area.ok());
+
+        const auto bad_hide = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_sprite_hide_pixels = 17\n[[region]]\nname = \"maincpu\"\nsize = "
+            "0x100\n");
+        CHECK_FALSE(bad_hide.ok());
+
+        const auto bad_text_origin = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_tc0100scn_positive_text_y_origin = 257\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(bad_text_origin.ok());
+
+        const auto bad_input_profile = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_input_profile = \"unknown\"\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(bad_input_profile.ok());
+
+        const auto bad_text_gfx_source = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_text_gfx_source = \"unknown\"\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(bad_text_gfx_source.ok());
+
+        const auto bad_text_gfx_base = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_text_gfx_base = 0x1000000\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(bad_text_gfx_base.ok());
+
+        const auto bad_text_x_offset = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_tc0100scn_text_x_offset = -257\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(bad_text_x_offset.ok());
+
+        const auto bad_io_profile = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_io_profile = \"unknown\"\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(bad_io_profile.ok());
+
+        const auto bad_tc0480scp_profile = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_tc0480scp_profile = \"unknown\"\n[[region]]\nname = "
+            "\"maincpu\"\nsize = 0x100\n");
+        CHECK_FALSE(bad_tc0480scp_profile.ok());
+
+        const auto bad_roz_offset = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_roz_x_offset = 257\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(bad_roz_offset.ok());
+
+        const auto bad_irq_level = parse_rom_set_decl(
+            "[set]\nschema = \"mnemos-romset/1\"\nname = \"x\"\n"
+            "taito_f2_vblank_irq_level = 8\n[[region]]\nname = \"maincpu\"\n"
+            "size = 0x100\n");
+        CHECK_FALSE(bad_irq_level.ok());
     }
 }
 

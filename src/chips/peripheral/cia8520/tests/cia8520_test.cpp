@@ -16,8 +16,14 @@ namespace {
     // Register indices (low 4 bits of the address bus).
     constexpr std::uint8_t reg_ta_lo = 0x04U;
     constexpr std::uint8_t reg_ta_hi = 0x05U;
+    constexpr std::uint8_t reg_tb_lo = 0x06U;
+    constexpr std::uint8_t reg_tb_hi = 0x07U;
+    constexpr std::uint8_t reg_tod_lo = 0x08U;
+    constexpr std::uint8_t reg_tod_mid = 0x09U;
+    constexpr std::uint8_t reg_tod_hi = 0x0AU;
     constexpr std::uint8_t reg_icr = 0x0DU;
     constexpr std::uint8_t reg_cra = 0x0EU;
+    constexpr std::uint8_t reg_crb = 0x0FU;
 } // namespace
 
 static_assert(std::is_base_of_v<mnemos::chips::iperipheral, cia8520>);
@@ -68,6 +74,94 @@ TEST_CASE("cia8520 Timer A underflow sets the ICR bit and reading ICR clears it"
     const auto icr_after = cia.read(reg_icr);
     CHECK((icr_after & 0x01U) == 0U);
     CHECK((icr_after & 0x80U) == 0U);
+}
+
+TEST_CASE("cia8520 one-shot Timer B starts when the high byte is written") {
+    cia8520 cia;
+
+    cia.write(reg_icr, 0x82U); // Enable Timer B mask.
+    cia.write(reg_crb, 0x08U); // CRB: RUNMODE one-shot, START clear.
+    cia.write(reg_tb_lo, 0x02U);
+    cia.write(reg_tb_hi, 0x00U); // 8520 autostarts one-shot timers on high-byte write.
+
+    CHECK((cia.read(reg_crb) & 0x01U) != 0U);
+
+    cia.tick(4U);
+    CHECK((cia.read(reg_crb) & 0x01U) == 0U);
+    CHECK_FALSE(cia.irq_asserted());
+
+    cia.tick(1U); // Publish the delayed IRQ pin.
+    CHECK(cia.irq_asserted());
+    CHECK((cia.read(reg_icr) & 0x02U) != 0U);
+}
+
+TEST_CASE("cia8520 ICR mask changes recompute the IRQ request from latched sources") {
+    cia8520 cia;
+    cia.flag_edge(); // source latches while masked
+
+    CHECK_FALSE(cia.irq_asserted());
+
+    cia.write(reg_icr, 0x90U); // enable FLAG mask after the edge
+    cia.tick(1U);
+    CHECK(cia.irq_asserted());
+
+    cia.write(reg_icr, 0x10U); // clear FLAG mask without reading the latch
+    cia.tick(1U);
+    CHECK_FALSE(cia.irq_asserted());
+
+    const auto icr = cia.read(reg_icr);
+    CHECK((icr & 0x10U) != 0U);
+    CHECK((icr & 0x80U) == 0U);
+}
+
+TEST_CASE("cia8520 TOD is a 24-bit binary event counter") {
+    cia8520 cia;
+    cia8520::config cfg;
+    cfg.tod_tick_hz = 4U;
+    cfg.tod_src_hz = 4U;
+    cia.configure(cfg);
+
+    cia.tick(1U);
+    CHECK(cia.read(reg_tod_lo) == 0x01U);
+
+    cia.write(reg_tod_hi, 0x12U);
+    cia.write(reg_tod_mid, 0x34U);
+    cia.write(reg_tod_lo, 0xFEU);
+
+    CHECK(cia.read(reg_tod_hi) == 0x12U);
+    CHECK(cia.read(reg_tod_mid) == 0x34U);
+    CHECK(cia.read(reg_tod_lo) == 0xFEU);
+
+    cia.tick(1U);
+    CHECK(cia.read(reg_tod_lo) == 0xFFU);
+
+    cia.tick(1U);
+    CHECK(cia.read(reg_tod_hi) == 0x12U);
+    CHECK(cia.read(reg_tod_mid) == 0x35U);
+    CHECK(cia.read(reg_tod_lo) == 0x00U);
+}
+
+TEST_CASE("cia8520 TOD alarm compares all 24 event-counter bits") {
+    cia8520 cia;
+    cia8520::config cfg;
+    cfg.tod_tick_hz = 4U;
+    cfg.tod_src_hz = 4U;
+    cia.configure(cfg);
+
+    cia.write(reg_icr, 0x84U); // Enable ALARM mask.
+    cia.write(reg_crb, 0x80U); // CRB.ALARM=1 -> TOD writes set the alarm.
+    cia.write(reg_tod_hi, 0x00U);
+    cia.write(reg_tod_mid, 0x00U);
+    cia.write(reg_tod_lo, 0x02U);
+    cia.write(reg_crb, 0x00U);
+
+    cia.tick(1U);
+    CHECK_FALSE(cia.irq_asserted());
+
+    cia.tick(1U);
+    cia.tick(1U); // Publish the 1-cycle delayed /IRQ pin.
+    CHECK(cia.irq_asserted());
+    CHECK((cia.read(reg_icr) & 0x04U) != 0U);
 }
 
 TEST_CASE("cia8520 save/load round-trips") {

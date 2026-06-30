@@ -13,6 +13,10 @@ namespace mnemos::apps::player::adapters {
         // .zip, else the path. Carries no routing weight -- the engine comes
         // from --system.
         std::string name;
+        // True when the source is a directory-backed ROM set rather than a
+        // flat byte stream. Arcade adapters that understand multi-file sets
+        // consume `rom_path` directly in this case.
+        bool directory_source{};
     };
 
     // Load a ROM image from `path`, transparently extracting it when the file
@@ -24,8 +28,8 @@ namespace mnemos::apps::player::adapters {
     [[nodiscard]] std::optional<loaded_rom> load_rom(const std::string& path);
 
     // Load the file verbatim -- no archive unwrapping. Arcade families take
-    // the whole multi-dump set zip as their medium; their adapters resolve
-    // the entries themselves through the game declaration inside it.
+    // the whole multi-dump set zip or set directory as their medium; their
+    // adapters resolve the entries themselves through the game declaration.
     [[nodiscard]] std::optional<loaded_rom> load_rom_verbatim(const std::string& path);
 
     // Strip the directory + extension off a ROM path so the result reads

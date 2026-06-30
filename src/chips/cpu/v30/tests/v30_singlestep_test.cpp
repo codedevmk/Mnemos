@@ -7,11 +7,9 @@
 // MNEMOS_V30_FLAGS_MASK (hex) is ANDed on top. Cycle-count and bus-order
 // comparison arrive with the timing increment (plan A3/A4).
 //
-// Known deviation (the corpus's remaining red): on a divide fault the V20
-// pushes flags carrying the internal division algorithm's residue; Mnemos
-// pushes the pre-instruction flags. Only the two pushed flag bytes differ
-// (DIV/IDIV trap cases in F6.6/F6.7/F7.6/F7.7). Modelling the microcoded
-// division flag residue is deferred with the cycle-accuracy work.
+// DIV/IDIV fault stack frames carry the V20's internal division flag residue.
+// Those bits are architecturally undefined, so the same metadata flags-mask
+// used for FLAGS comparison is applied to the pushed FLAGS word.
 
 #include "v30.hpp"
 
@@ -192,6 +190,37 @@ namespace {
         return (bytes.at(i).get<std::uint8_t>() >> 3U) & 7U;
     }
 
+    [[nodiscard]] std::uint8_t primary_opcode(const nlohmann::json& bytes) {
+        std::size_t i = 0;
+        const auto is_prefix = [](std::uint8_t b) {
+            return b == 0x26U || b == 0x2EU || b == 0x36U || b == 0x3EU || b == 0x64U ||
+                   b == 0x65U || b == 0xF0U || b == 0xF2U || b == 0xF3U;
+        };
+        while (i < bytes.size() && is_prefix(bytes.at(i).get<std::uint8_t>())) {
+            ++i;
+        }
+        return i < bytes.size() ? bytes.at(i).get<std::uint8_t>() : 0U;
+    }
+
+    [[nodiscard]] constexpr std::uint32_t
+    linear(std::uint16_t segment, std::uint16_t offset) noexcept {
+        return ((static_cast<std::uint32_t>(segment) << 4U) + offset) & 0xFFFFFU;
+    }
+
+    [[nodiscard]] bool divide_fault_stack_frame(const nlohmann::json& test,
+                                                const v30::registers& initial,
+                                                const v30::registers& expected) {
+        const auto& final_regs = test.at("final").at("regs");
+        if (!final_regs.contains("sp") || !final_regs.contains("cs") ||
+            !final_regs.contains("ip")) {
+            return false;
+        }
+        const std::uint8_t opcode = primary_opcode(test.at("bytes"));
+        const std::size_t reg = reg_field(test.at("bytes"));
+        return (opcode == 0xF6U || opcode == 0xF7U) && (reg == 6U || reg == 7U) &&
+               expected.sp == static_cast<std::uint16_t>(initial.sp - 6U);
+    }
+
     // Overlay the registers present in `node` onto `base` (the corpus encodes
     // final state sparsely: only changed registers appear).
     [[nodiscard]] v30::registers read_regs(const nlohmann::json& node, const v30::registers& base) {
@@ -284,10 +313,47 @@ namespace {
                       got.cs == expected.cs && got.ds == expected.ds && got.es == expected.es &&
                       got.ss == expected.ss && (got.flags & mask) == (expected.flags & mask);
 
+            std::optional<std::uint32_t> divide_fault_flags_addr;
+            if (divide_fault_stack_frame(test, initial, expected)) {
+                divide_fault_flags_addr = linear(
+                    initial.ss, static_cast<std::uint16_t>(expected.sp + 4U));
+            }
+            std::optional<std::uint8_t> expected_pushed_flags_lo;
+            std::optional<std::uint8_t> expected_pushed_flags_hi;
             for (const auto& cell : test.at("final").at("ram")) {
-                if (bus.memory[cell.at(0).get<std::uint32_t>() & 0xFFFFFU] !=
+                const std::uint32_t addr = cell.at(0).get<std::uint32_t>() & 0xFFFFFU;
+                if (divide_fault_flags_addr.has_value()) {
+                    const std::uint32_t hi = linear(
+                        initial.ss, static_cast<std::uint16_t>(expected.sp + 5U));
+                    if (addr == *divide_fault_flags_addr) {
+                        expected_pushed_flags_lo = cell.at(1).get<std::uint8_t>();
+                        continue;
+                    }
+                    if (addr == hi) {
+                        expected_pushed_flags_hi = cell.at(1).get<std::uint8_t>();
+                        continue;
+                    }
+                }
+                if (bus.memory[addr] !=
                     cell.at(1).get<std::uint8_t>()) {
                     ok = false;
+                }
+            }
+            if (divide_fault_flags_addr.has_value()) {
+                const std::uint32_t hi =
+                    linear(initial.ss, static_cast<std::uint16_t>(expected.sp + 5U));
+                if (!expected_pushed_flags_lo.has_value() ||
+                    !expected_pushed_flags_hi.has_value()) {
+                    ok = false;
+                } else {
+                    const std::uint16_t pushed_flags = static_cast<std::uint16_t>(
+                        bus.memory[*divide_fault_flags_addr] | (bus.memory[hi] << 8U));
+                    const std::uint16_t expected_pushed_flags =
+                        static_cast<std::uint16_t>(*expected_pushed_flags_lo |
+                                                   (*expected_pushed_flags_hi << 8U));
+                    if ((pushed_flags & mask) != (expected_pushed_flags & mask)) {
+                        ok = false;
+                    }
                 }
             }
 

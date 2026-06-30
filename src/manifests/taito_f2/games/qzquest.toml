@@ -1,0 +1,101 @@
+# Quiz Quest - Hime to Yuusha no Monogatari (Japan) -- Taito F2 / C92
+# with shifted TC0510NIO/TC0100SCN board windows.
+# Schema mnemos-romset/1; drop a copy of this file into the set zip as
+# "game.toml" next to the dump files it names.
+#
+# Region names are the Mnemos board regions: "tiles" maps TC0100SCN SCR
+# graphics, "sprites" maps TC0200OBJ object graphics, and "adpcma" maps
+# YM2610 ADPCM-A samples.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "qzquest"
+board  = "taito_f2"
+orientation = "horizontal"
+taito_f2_map = "qzquest"
+taito_f2_input_profile = "standard"
+taito_f2_text_gfx_source = "tc0100scn_ram_2bpp"
+taito_f2_tc0100scn_bg_x_offset = 16
+taito_f2_tc0100scn_text_x_offset = 23
+taito_f2_tc0480scp_profile = "none"
+taito_f2_io_profile = "tc0510nio"
+taito_f2_palette_profile = "tc0260dar"
+taito_f2_priority_profile = "none"
+taito_f2_sprite_chip_pair = "tc0200obj_tc0210fbc"
+taito_f2_sound_comm_chip = "tc0140syt"
+taito_f2_video_profile = "tc0100scn"
+taito_f2_aux_profile = "none"
+taito_f2_vblank_irq_level = 5
+taito_f2_sprite_dma_irq_level = 6
+taito_f2_palette_format = "xrgb_555"
+taito_f2_sprite_buffering = "partial_delayed"
+
+[[region]]
+name = "maincpu"
+size = 0x180000
+
+[[region.file]]
+name   = "c92-06.8"
+offset = 0x000000
+stride = 2
+size   = 0x020000
+crc32  = 0x424be722
+
+[[region.file]]
+name   = "c92-05.7"
+offset = 0x000001
+stride = 2
+size   = 0x020000
+crc32  = 0xda470f93
+
+[[region.file]]
+name   = "c92-03.6"
+offset = 0x100000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x080000
+crc32  = 0x1d697606
+
+[[region]]
+name = "tiles"
+size = 0x100000
+
+[[region.file]]
+name   = "c92-02.10"
+offset = 0x000000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x100000
+crc32  = 0x2daccecf
+
+[[region]]
+name = "sprites"
+size = 0x100000
+
+[[region.file]]
+name   = "c92-01.21"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0x9976a285
+
+[[region]]
+name = "audiocpu"
+size = 0x10000
+
+[[region.file]]
+name   = "c92-07.5"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x3e313db9
+
+[[region]]
+name = "adpcma"
+size = 0x080000
+
+[[region.file]]
+name   = "c92-04.9"
+offset = 0x000000
+size   = 0x080000
+crc32  = 0xe421bb43

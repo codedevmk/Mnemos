@@ -1,0 +1,187 @@
+# Daiku no Gensan (Japan, set 2) -- local Irem M84 split clone of hharry.
+# Schema mnemos-romset/1; set 2 carries alternate first program pair labels
+# while sharing the M84 program reload, graphics, PROM, and PAL/PLD contract.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "dkgensana"
+parent      = "hharry"
+board       = "irem_m84"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "gen=84=_a-h0-.ic54"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x4a2b6524
+
+[[region.file]]
+name   = "gen=84=_a-l0-.ic60"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xa2aa72ef
+
+[[region.file]]
+name   = "gen=84=_a-h1-.ic53"
+offset = 0x60001
+stride = 2
+size   = 0x10000
+crc32  = 0x54e5b73c
+
+[[region.file]]
+name   = "gen=84=_a-l1-.ic59"
+offset = 0x60000
+stride = 2
+size   = 0x10000
+crc32  = 0x894f8a9f
+
+[[region.file]]
+name   = "gen=84=_a-h1-.ic53"
+offset = 0xE0001
+stride = 2
+size   = 0x10000
+crc32  = 0x54e5b73c
+
+[[region.file]]
+name   = "gen=84=_a-l1-.ic59"
+offset = 0xE0000
+stride = 2
+size   = 0x10000
+crc32  = 0x894f8a9f
+
+[[region]]
+name = "soundcpu"
+size = 0x10000
+
+[[region.file]]
+name   = "gen_a-sp-.ic17"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xe83cfc2c
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name    = "hh_n0.ic33"
+aliases = ["gen=m81=_00.ic3"]
+offset  = 0x00000
+size    = 0x20000
+crc32   = 0xec5127ef
+
+[[region.file]]
+name    = "hh_n1.ic34"
+aliases = ["gen=m81=_10.ic5"]
+offset  = 0x20000
+size    = 0x20000
+crc32   = 0xdef65294
+
+[[region.file]]
+name    = "hh_n2.ic35"
+aliases = ["gen=m81=_20.ic12"]
+offset  = 0x40000
+size    = 0x20000
+crc32   = 0xbb0d6ad4
+
+[[region.file]]
+name    = "hh_n3.ic36"
+aliases = ["gen=m81=_30.ic14"]
+offset  = 0x60000
+size    = 0x20000
+crc32   = 0x4351044e
+
+[[region]]
+name = "tiles"
+size = 0x080000
+
+[[region.file]]
+name    = "hh_a0.ic51"
+aliases = ["gen=m81=_a0.ic50"]
+offset  = 0x00000
+size    = 0x20000
+crc32   = 0xc577ba5f
+
+[[region.file]]
+name    = "hh_a1.ic57"
+aliases = ["gen=m81=_a1.ic49"]
+offset  = 0x20000
+size    = 0x20000
+crc32   = 0x429d12ab
+
+[[region.file]]
+name    = "hh_a2.ic66"
+aliases = ["gen=m81=_a2.ic51"]
+offset  = 0x40000
+size    = 0x20000
+crc32   = 0xb5b163b0
+
+[[region.file]]
+name    = "hh_a3.ic64"
+aliases = ["gen=m81=_a3.ic52"]
+offset  = 0x60000
+size    = 0x20000
+crc32   = 0x8ef566a1
+
+[[region]]
+name = "samples"
+size = 0x20000
+
+[[region.file]]
+name   = "gen_a-vo-.ic14"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xd8595c66
+
+[[region]]
+name = "proms"
+size = 0x0200
+
+[[region.file]]
+name    = "gen=84=_c-4n-.ic21"
+aliases = ["m81_a-9l-.ic72"]
+offset  = 0x0000
+size    = 0x0100
+crc32   = 0xb460c438
+
+[[region.file]]
+name    = "gen=84=_c-4p-.ic22"
+aliases = ["m81_a-9p-.ic74"]
+offset  = 0x0100
+size    = 0x0100
+crc32   = 0xa4f2c4bc
+
+[[region]]
+name = "plds"
+size = 0x0800
+
+[[region.file]]
+name    = "gen=84=_a-2h.ic5"
+aliases = ["m81_a-2h-.ic2"]
+offset  = 0x0000
+size    = 0x0117
+crc32   = 0x21ede612
+
+[[region.file]]
+name   = "gen=84=_a-5l.ic33"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0x579e257d
+
+[[region.file]]
+name   = "gen=84=_a-7d.ic45"
+offset = 0x0400
+size   = 0x0117
+crc32  = 0x79ef86f2
+
+[[region.file]]
+name   = "gen=84=_c-3a.ic8"
+offset = 0x0600
+size   = 0x0117
+crc32  = 0xc1e19913

@@ -110,6 +110,99 @@ TEST_CASE("m68000 opcode/data split: decrypted opcodes, encrypted data, opcode-p
     CHECK((r.d[0] & 0xFFU) == 0x7FU);
 }
 
+TEST_CASE("m68000 RESET pulses the external reset callback without reloading CPU vectors") {
+    machine m;
+    m.w32(0x0000U, 0x00002000U);
+    m.w32(0x0004U, 0x00001000U);
+    m.load(0x1000U, {0x4E70U, 0x707FU}); // RESET; MOVEQ #$7F,D0
+    m.cpu.reset(reset_kind::power_on);
+
+    int reset_pulses = 0;
+    m.cpu.set_reset_callback([&reset_pulses] { ++reset_pulses; });
+
+    const int reset_cycles = m.cpu.step_instruction();
+    auto r = m.cpu.cpu_registers();
+    CHECK(reset_pulses == 1);
+    CHECK(reset_cycles == 132);
+    CHECK(r.pc == 0x00001002U);
+    CHECK(r.a[7] == 0x00002000U);
+
+    m.cpu.step_instruction();
+    r = m.cpu.cpu_registers();
+    CHECK((r.d[0] & 0xFFU) == 0x7FU);
+}
+
+TEST_CASE("m68000 user-mode RESET traps without pulsing the external reset callback") {
+    machine m;
+    m.w32(0x0000U, 0x00002000U);
+    m.w32(0x0004U, 0x00001000U);
+    m.w32(0x0020U, 0x00003000U); // privilege vector
+    m.load(0x1000U, {0x4E70U});
+    m.cpu.reset(reset_kind::power_on);
+
+    auto r = m.cpu.cpu_registers();
+    r.sr = 0U;
+    r.a[7] = 0x00002000U;
+    r.usp = 0x00002000U;
+    m.cpu.set_registers(r);
+
+    int reset_pulses = 0;
+    m.cpu.set_reset_callback([&reset_pulses] { ++reset_pulses; });
+    m.cpu.step_instruction();
+
+    r = m.cpu.cpu_registers();
+    CHECK(reset_pulses == 0);
+    CHECK(r.pc == 0x00003000U);
+}
+
+TEST_CASE("m68000 MOVEM PC-indexed source reads the opcode image on split buses") {
+    // Giga Wing uses MOVEM.L ($4,PC,D0.W),A2-A3 as a decrypted jump-table load.
+    // On CPS-2 the same addresses contain encrypted data bytes on the data bus.
+    std::array<std::uint8_t, 0x18> data_image{};
+    data_image[0x10] = 0x0FU;
+    data_image[0x11] = 0x75U;
+    data_image[0x12] = 0x4BU;
+    data_image[0x13] = 0x57U;
+    data_image[0x14] = 0xFFU;
+    data_image[0x15] = 0xEEU;
+    data_image[0x16] = 0xDDU;
+    data_image[0x17] = 0xCCU;
+
+    std::array<std::uint8_t, 0x18> opcode_image{};
+    opcode_image[0x08] = 0x4CU; // MOVEM.L ($4,PC,D0.W),A2-A3
+    opcode_image[0x09] = 0xFBU;
+    opcode_image[0x0A] = 0x0CU; // register mask: A2/A3
+    opcode_image[0x0B] = 0x00U;
+    opcode_image[0x0C] = 0x00U; // indexed extension: D0.W + 4
+    opcode_image[0x0D] = 0x04U;
+    opcode_image[0x10] = 0x00U; // decrypted jump-table entry for A2
+    opcode_image[0x11] = 0x08U;
+    opcode_image[0x12] = 0x8AU;
+    opcode_image[0x13] = 0x5AU;
+    opcode_image[0x14] = 0x00U; // decrypted jump-table entry for A3
+    opcode_image[0x15] = 0x08U;
+    opcode_image[0x16] = 0x8AU;
+    opcode_image[0x17] = 0x60U;
+
+    mnemos::topology::bus b{24U, mnemos::topology::endianness::big};
+    b.map_rom(0x000000U, std::span<const std::uint8_t>(data_image));
+    b.map_opcode_rom(0x000000U, std::span<const std::uint8_t>(opcode_image));
+
+    m68000 cpu;
+    cpu.attach_bus(b);
+    m68000::registers s{};
+    s.pc = 0x00000008U;
+    s.d[0] = 0U;
+    cpu.set_registers(s);
+
+    cpu.step_instruction();
+
+    const auto r = cpu.cpu_registers();
+    CHECK(r.a[2] == 0x00088A5AU);
+    CHECK(r.a[3] == 0x00088A60U);
+    CHECK(r.pc == 0x0000000EU);
+}
+
 TEST_CASE("m68000 executes MOVEQ with sign extension and flags") {
     machine m;
     m.load(0x1000U, {0x7042U}); // MOVEQ #$42,D0
@@ -228,6 +321,43 @@ TEST_CASE("m68000 resolves PC-relative source operands") {
     CHECK((m.cpu.cpu_registers().d[0] & 0xFFFFU) == 0x4321U);
 }
 
+TEST_CASE("m68000 leaves Genesis DRAM refresh stalls disabled by default") {
+    machine m;
+    for (std::uint32_t i = 0; i < 40U; ++i) {
+        m.w16(0x1000U + i * 2U, 0x4E71U); // NOP.
+    }
+    m.set_pc(0x1000U);
+
+    for (std::uint32_t i = 0; i < 40U; ++i) {
+        CHECK(m.cpu.step_instruction() == 4);
+        CHECK(m.cpu.diagnostics().last_cycle_sources().refresh_fired == 0U);
+    }
+    CHECK(m.cpu.elapsed_cycles() == 160U);
+}
+
+TEST_CASE("m68000 can opt into Genesis DRAM refresh stalls") {
+    machine m;
+    m.cpu.set_bus_refresh_enabled(true);
+    for (std::uint32_t i = 0; i < 20U; ++i) {
+        m.w16(0x1000U + i * 2U, 0x4E71U); // NOP.
+    }
+    m.set_pc(0x1000U);
+
+    std::uint32_t refreshes = 0U;
+    for (std::uint32_t i = 0; i < 20U; ++i) {
+        const int cycles = m.cpu.step_instruction();
+        const auto sources = m.cpu.diagnostics().last_cycle_sources();
+        if (sources.refresh_fired != 0U) {
+            ++refreshes;
+            CHECK(cycles == 6);
+        } else {
+            CHECK(cycles == 4);
+        }
+    }
+    CHECK(refreshes == 1U);
+    CHECK(m.cpu.elapsed_cycles() == 82U);
+}
+
 TEST_CASE("m68000 round-trips its register state") {
     machine m;
     auto r = m.cpu.cpu_registers();
@@ -337,6 +467,25 @@ TEST_CASE("m68000 ADDQ to an address register skips the flags and is full-width"
     CHECK((r.sr & m68000::sr_ccr) == m68000::sr_ccr); // flags untouched
 }
 
+TEST_CASE("m68000 ADDQ address register timing distinguishes word and longword") {
+    m68000::registers s{};
+    s.a[0] = 0x00001000U;
+
+    machine longword;
+    longword.cpu.set_registers(s);
+    longword.load(0x1000U, {0x5288U}); // ADDQ.L #1,A0
+    longword.set_pc(0x1000U);
+    CHECK(longword.cpu.step_instruction() == 6);
+    CHECK(longword.cpu.cpu_registers().a[0] == 0x00001001U);
+
+    machine word;
+    word.cpu.set_registers(s);
+    word.load(0x1000U, {0x5248U}); // ADDQ.W #1,A0
+    word.set_pc(0x1000U);
+    CHECK(word.cpu.step_instruction() == 8);
+    CHECK(word.cpu.cpu_registers().a[0] == 0x00001001U);
+}
+
 TEST_CASE("m68000 MULU and MULS") {
     machine m;
     m68000::registers s{};
@@ -395,6 +544,33 @@ TEST_CASE("m68000 TST sets N/Z from the operand and clears V/C") {
     CHECK((r.sr & m68000::sr_z) != 0U);
     CHECK((r.sr & m68000::sr_v) == 0U);
     CHECK((r.sr & m68000::sr_c) == 0U);
+}
+
+TEST_CASE("m68000 TST.B d16(An) drives BMI from the byte sign bit") {
+    machine m;
+    m.bus.map_mmio(
+        0x00BFE000U, 0x1000U,
+        [](std::uint32_t address) {
+            return address == 0x00BFE701U ? static_cast<std::uint8_t>(0xFFU)
+                                          : static_cast<std::uint8_t>(0x00U);
+        },
+        [](std::uint32_t, std::uint8_t) {}, 1);
+    m.load(0x1000U, {0x4A28U, 0x0700U, 0x6BFAU, 0x7001U}); // TST.B (0x700,A0); BMI $1000
+
+    m68000::registers s{};
+    s.pc = 0x1000U;
+    s.a[0] = 0x00BFE001U;
+    s.sr = m68000::sr_s;
+    m.cpu.set_registers(s);
+
+    m.cpu.step_instruction();
+    auto r = m.cpu.cpu_registers();
+    REQUIRE(r.pc == 0x1004U);
+    CHECK((r.sr & m68000::sr_n) != 0U);
+
+    m.cpu.step_instruction();
+    r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x1000U);
 }
 
 TEST_CASE("m68000 ADDX adds with the extend flag") {
@@ -605,6 +781,72 @@ TEST_CASE("m68000 JSR then RTS returns to the caller") {
     m.cpu.step_instruction();                   // RTS
     CHECK(m.cpu.cpu_registers().pc == 0x1004U); // instruction after the JSR
     CHECK(m.cpu.cpu_registers().a[7] == 0x00003000U);
+}
+
+TEST_CASE("m68000 indexed JMP and JSR timing matches 68000 totals") {
+    {
+        machine m;
+        m68000::registers s{};
+        s.d[0] = 0U;
+        s.a[0] = 0x00002000U;
+        s.pc = 0x1000U;
+        m.cpu.set_registers(s);
+        m.load(0x1000U, {0x4EF0U, 0x0004U}); // JMP (4,A0,D0.W)
+
+        const int cycles = m.cpu.step_instruction();
+        CHECK(cycles == 14);
+        CHECK(m.cpu.cpu_registers().pc == 0x00002004U);
+    }
+
+    {
+        machine m;
+        m68000::registers s{};
+        s.d[0] = 0U;
+        s.pc = 0x1000U;
+        m.cpu.set_registers(s);
+        m.load(0x1000U, {0x4EFBU, 0x0004U}); // JMP (4,PC,D0.W)
+
+        const int cycles = m.cpu.step_instruction();
+        CHECK(cycles == 14);
+        CHECK(m.cpu.cpu_registers().pc == 0x00001006U);
+    }
+
+    {
+        machine m;
+        m68000::registers s{};
+        s.d[0] = 0U;
+        s.a[0] = 0x00002000U;
+        s.a[7] = 0x00003000U;
+        s.pc = 0x1000U;
+        m.cpu.set_registers(s);
+        m.load(0x1000U, {0x4EB0U, 0x0004U}); // JSR (4,A0,D0.W)
+
+        const int cycles = m.cpu.step_instruction();
+        const auto r = m.cpu.cpu_registers();
+        CHECK(cycles == 22);
+        CHECK(r.pc == 0x00002004U);
+        CHECK(r.a[7] == 0x00002FFCU);
+        CHECK(m.bus.read16_be(0x2FFCU) == 0x0000U);
+        CHECK(m.bus.read16_be(0x2FFEU) == 0x1004U);
+    }
+
+    {
+        machine m;
+        m68000::registers s{};
+        s.d[0] = 0U;
+        s.a[7] = 0x00003000U;
+        s.pc = 0x1000U;
+        m.cpu.set_registers(s);
+        m.load(0x1000U, {0x4EBBU, 0x0004U}); // JSR (4,PC,D0.W)
+
+        const int cycles = m.cpu.step_instruction();
+        const auto r = m.cpu.cpu_registers();
+        CHECK(cycles == 22);
+        CHECK(r.pc == 0x00001006U);
+        CHECK(r.a[7] == 0x00002FFCU);
+        CHECK(m.bus.read16_be(0x2FFCU) == 0x0000U);
+        CHECK(m.bus.read16_be(0x2FFEU) == 0x1004U);
+    }
 }
 
 TEST_CASE("m68000 DBF loops until the counter underflows") {
@@ -830,6 +1072,36 @@ TEST_CASE("m68000 MOVEM round-trips registers through the stack") {
     CHECK(r.d[2] == 0xAAAA0000U); // restored from D0
     CHECK(r.d[3] == 0xBBBB1111U); // restored from D1
     CHECK(r.a[7] == 0x00003000U); // stack balanced
+}
+
+TEST_CASE("m68000 MOVEM restores a full Exec-style context from the stack") {
+    machine m;
+    m68000::registers s{};
+    s.a[7] = 0x00003000U;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+
+    constexpr std::array<std::uint32_t, 15> expected{
+        0xD0000000U, 0xD1111111U, 0xD2222222U, 0xD3333333U, 0xD4444444U,
+        0xD5555555U, 0xD6666666U, 0xD7777777U, 0xA0000000U, 0xA1111111U,
+        0xA2222222U, 0xA3333333U, 0xA4444444U, 0xA5555555U, 0xA6666666U};
+    std::uint32_t cursor = s.a[7];
+    for (const std::uint32_t value : expected) {
+        m.w32(cursor, value);
+        cursor += 4U;
+    }
+
+    m.load(0x1000U, {0x4CDFU, 0x7FFFU}); // MOVEM.L (A7)+,D0-D7/A0-A6
+    m.cpu.step_instruction();
+
+    const auto r = m.cpu.cpu_registers();
+    for (std::size_t i = 0; i < 8U; ++i) {
+        CHECK(r.d[i] == expected[i]);
+    }
+    for (std::size_t i = 0; i < 7U; ++i) {
+        CHECK(r.a[i] == expected[8U + i]);
+    }
+    CHECK(r.a[7] == 0x0000303CU);
 }
 
 TEST_CASE("m68000 MOVEP scatters and gathers bytes at even addresses") {

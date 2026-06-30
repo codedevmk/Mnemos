@@ -1,0 +1,83 @@
+# Hasamu -- Irem M90.
+# This set has program, Z80 audio, and GA25 graphics dumps in the local corpus;
+# no external sample ROM is present for the erased sample region.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "hasamu"
+board       = "irem_m90"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "hasc-p1.ic62"
+offset = 0x000001
+stride = 2
+size   = 0x20000
+crc32  = 0x53df9834
+
+[[region.file]]
+name   = "hasc-p0.ic65"
+offset = 0x000000
+stride = 2
+size   = 0x20000
+crc32  = 0xdff0ba6e
+
+[[region.file]]
+name          = "hasc-p1.ic62"
+offset        = 0x0ffff1
+stride        = 2
+source_offset = 0x1fff8
+length        = 0x8
+size          = 0x20000
+crc32         = 0x53df9834
+
+[[region.file]]
+name          = "hasc-p0.ic65"
+offset        = 0x0ffff0
+stride        = 2
+source_offset = 0x1fff8
+length        = 0x8
+size          = 0x20000
+crc32         = 0xdff0ba6e
+
+[[region]]
+name = "soundcpu"
+size = 0x010000
+
+[[region.file]]
+name   = "hasc-sp.ic23"
+offset = 0x000000
+size   = 0x10000
+crc32  = 0x259b1687
+
+[[region]]
+name = "graphics"
+size = 0x080000
+
+[[region.file]]
+name   = "hasc-c0.ic66"
+offset = 0x000000
+size   = 0x20000
+crc32  = 0xdd5a2174
+
+[[region.file]]
+name   = "hasc-c1.ic67"
+offset = 0x020000
+size   = 0x20000
+crc32  = 0x76b8217c
+
+[[region.file]]
+name   = "hasc-c2.ic68"
+offset = 0x040000
+size   = 0x20000
+crc32  = 0xd90f9a68
+
+[[region.file]]
+name   = "hasc-c3.ic69"
+offset = 0x060000
+size   = 0x20000
+crc32  = 0x6cfe0d39

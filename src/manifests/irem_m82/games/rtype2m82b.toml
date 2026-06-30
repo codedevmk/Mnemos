@@ -1,0 +1,111 @@
+# R-Type II (M82 bootleg/local corpus set) -- Irem M82 clone of rtype2.
+# This manifest records the local nested `rtype2m82b.zip` artifact separately
+# from the M72 profile; it inherits the parent sound/sample/PROM regions.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "rtype2m82b"
+board  = "irem_m82"
+parent = "rtype2"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "rt2_h0.ic52"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x47639a78
+
+[[region.file]]
+name   = "rt2_l0.ic60"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xa1661cdf
+
+[[region.file]]
+name   = "rt2_h1.ic51"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x4b79840c
+
+[[region.file]]
+name   = "rt2_l1.ic59"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x6ab3ae42
+
+[[region.file]]
+name   = "rt2_h1.ic51"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0x4b79840c
+
+[[region.file]]
+name   = "rt2_l1.ic59"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0x6ab3ae42
+
+[[region]]
+name = "tiles"
+size = 0x080000
+
+[[region.file]]
+name   = "mt_f0.ic38"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x2d5e05d5
+
+[[region.file]]
+name   = "mt_f1.ic39"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0xc68cd65f
+
+[[region.file]]
+name   = "mt_f2.ic40"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0xa71feb2d
+
+[[region.file]]
+name   = "mt_f3.ic41"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x179f7562
+
+[[region]]
+name = "sprites"
+size = 0x100000
+
+[[region.file]]
+name   = "rt2_c0.ic38"
+offset = 0x00000
+size   = 0x40000
+crc32  = 0xf5bad5f2
+
+[[region.file]]
+name   = "rt2_c1.ic39"
+offset = 0x40000
+size   = 0x40000
+crc32  = 0x71451778
+
+[[region.file]]
+name   = "rt2_c2.ic40"
+offset = 0x80000
+size   = 0x40000
+crc32  = 0xc6b0c352
+
+[[region.file]]
+name   = "rt2_c3.ic41"
+offset = 0xC0000
+size   = 0x40000
+crc32  = 0x6d530a32

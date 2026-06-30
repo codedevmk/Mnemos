@@ -5,6 +5,11 @@
 #include <cstdint>
 #include <span>
 
+namespace mnemos::chips {
+    class state_reader;
+    class state_writer;
+} // namespace mnemos::chips
+
 namespace mnemos::chips::storage {
 
     // Serial Microwire EEPROM (93C46): 1024 bits of save storage, organised by the
@@ -60,6 +65,8 @@ namespace mnemos::chips::storage {
         [[nodiscard]] bool chip_select() const noexcept { return cs_; }
 
         void reset() noexcept;
+        void save_state(chips::state_writer& writer) const;
+        void load_state(chips::state_reader& reader) noexcept;
 
       private:
         enum class stage : std::uint8_t { standby, wait_start, get_opcode, write_word, read_word };

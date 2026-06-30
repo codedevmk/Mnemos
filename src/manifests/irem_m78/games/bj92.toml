@@ -1,0 +1,99 @@
+# Black Jack (Irem, satellite unit, rev. T) -- Irem M78 ROM contract.
+# Manifest-only local corpus contract. Public M78 metadata still marks this
+# board not working and no-sound: I/O, video registers, communications, colors,
+# and the M72-audio sample ROMs remain incomplete public evidence.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "bj92"
+board       = "irem_m78"
+orientation = "vertical"
+players     = 1
+sound       = "ym2151+m72_audio_no_dump"
+
+[[region]]
+name = "maincpu"
+size = 0x010000
+
+[[region.file]]
+name   = "2.mp.ic29"
+offset = 0x000000
+size   = 0x010000
+crc32  = 0x783a9b77
+
+[[region]]
+name = "audiocpu"
+size = 0x010000
+
+[[region.file]]
+name   = "1.sp.ic23"
+offset = 0x000000
+size   = 0x010000
+crc32  = 0x860fbd4c
+
+[[region]]
+name = "tiles"
+size = 0x030000
+
+[[region.file]]
+name   = "7.c0.ic77"
+offset = 0x000000
+size   = 0x010000
+crc32  = 0x5f82fb7c
+
+[[region.file]]
+name   = "6.c1.ic76"
+offset = 0x010000
+size   = 0x010000
+crc32  = 0xfb2116a9
+
+[[region.file]]
+name   = "5.c2.ic75"
+offset = 0x020000
+size   = 0x010000
+crc32  = 0xc2a2ae52
+
+[[region]]
+name = "tiles2"
+size = 0x030000
+
+[[region.file]]
+name   = "8.c0.ic83"
+offset = 0x000000
+size   = 0x010000
+crc32  = 0x5f82fb7c
+
+[[region.file]]
+name   = "9.c1.ic84"
+offset = 0x010000
+size   = 0x010000
+crc32  = 0xfb2116a9
+
+[[region.file]]
+name   = "10.c2.ic85"
+offset = 0x020000
+size   = 0x010000
+crc32  = 0xc2a2ae52
+
+[[region]]
+name = "m72_audio"
+size = 0x040000
+fill = 0x00
+# Public metadata lists no-dump sample ROM placeholders:
+# 3.v0.ic46 at 0x00000, size 0x20000; 4.v1.ic47 at 0x20000, size 0x20000.
+
+[[region]]
+name = "proms"
+size = 0x000200
+
+[[region.file]]
+name   = "82s129.ic67"
+offset = 0x000000
+size   = 0x000100
+crc32  = 0x3e2128b6
+
+[[region.file]]
+name   = "82s129.ic69"
+offset = 0x000100
+size   = 0x000100
+crc32  = 0x6fdff4a5

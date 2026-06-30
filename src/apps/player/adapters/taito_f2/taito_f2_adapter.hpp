@@ -1,0 +1,92 @@
+#pragma once
+
+#include "introspection_views.hpp"
+#include "player_system.hpp"
+#include "save_state.hpp"
+#include "scheduler_factory.hpp"
+#include "taito_f2_system.hpp"
+
+#include <array>
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
+
+namespace mnemos::apps::player::adapters::taito_f2 {
+
+    void force_link() noexcept;
+
+    class taito_f2_adapter;
+
+    [[nodiscard]] runtime::save_target build_save_target(taito_f2_adapter& adapter);
+
+    class taito_f2_adapter final : public frontend_sdk::player_system {
+      public:
+        explicit taito_f2_adapter(std::vector<std::uint8_t> rom, std::string display_name = {},
+                                  frontend_sdk::scheduler_factory* scheduler_factory = nullptr,
+                                  std::optional<std::uint16_t> dip_override = {},
+                                  std::string rom_path = {});
+
+        [[nodiscard]] frontend_sdk::video_region region() const noexcept override {
+            return {.frames_per_second_x1000 = 60000U,
+                    .orientation = sys_->params.vertical
+                                       ? frontend_sdk::display_orientation::vertical
+                                       : frontend_sdk::display_orientation::horizontal};
+        }
+        [[nodiscard]] const std::vector<frontend_sdk::spec_field>&
+        system_spec() const noexcept override {
+            return spec_;
+        }
+        [[nodiscard]] chips::frame_buffer_view current_frame() const noexcept override {
+            return sys_->video.framebuffer();
+        }
+        void step_one_frame() override;
+        void apply_input(int port, const frontend_sdk::controller_state& state) noexcept override;
+        [[nodiscard]] const frontend_sdk::session_capability_info&
+        session_capabilities() const noexcept override {
+            return session_;
+        }
+        [[nodiscard]] const frontend_sdk::media_capability_info&
+        media_capabilities() const noexcept override {
+            return media_;
+        }
+        [[nodiscard]] frontend_sdk::audio_chunk drain_audio() noexcept override;
+        [[nodiscard]] std::span<chips::ichip* const> chips() const noexcept override {
+            return chip_view_;
+        }
+        [[nodiscard]] std::span<instrumentation::memory_view* const>
+        memory_views() const noexcept override {
+            return system_mem_view_;
+        }
+        bool run_debug_probe(std::string_view id) noexcept override;
+        [[nodiscard]] std::vector<std::uint8_t> save_state() override;
+        [[nodiscard]] runtime::load_result load_state(std::span<const std::uint8_t> data) override;
+
+        [[nodiscard]] std::uint64_t frames_stepped() const noexcept { return frames_stepped_; }
+        [[nodiscard]] manifests::taito_f2::taito_f2_system& machine() noexcept { return *sys_; }
+
+      private:
+        friend runtime::save_target build_save_target(taito_f2_adapter& adapter);
+
+        void refresh_inputs() noexcept;
+        void publish_memory_views();
+
+        frontend_sdk::session_capability_info session_{};
+        frontend_sdk::media_capability_info media_{};
+        std::unique_ptr<manifests::taito_f2::taito_f2_system> sys_;
+        std::vector<chips::ichip*> chip_view_{};
+        static constexpr std::size_t memory_view_count = 25U;
+        std::array<std::unique_ptr<instrumentation::span_memory_view>, memory_view_count>
+            memory_view_storage_{};
+        std::array<instrumentation::memory_view*, memory_view_count> system_mem_view_{};
+        std::array<frontend_sdk::controller_state, 4> ports_{};
+        std::uint8_t player_count_{2U};
+        std::uint64_t frames_stepped_{};
+        std::vector<frontend_sdk::spec_field> spec_{};
+        std::vector<std::int16_t> audio_buf_{};
+    };
+
+} // namespace mnemos::apps::player::adapters::taito_f2

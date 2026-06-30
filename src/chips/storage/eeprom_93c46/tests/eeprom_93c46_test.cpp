@@ -1,9 +1,12 @@
 #include "eeprom_93c46.hpp"
 
+#include "state.hpp"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
 #include <cstdint>
+#include <vector>
 
 namespace {
     using mnemos::chips::storage::eeprom_93c46;
@@ -170,4 +173,35 @@ TEST_CASE("eeprom_93c46 set_organization restraps a byte8 device to 16-bit (CP1B
     CHECK(h.read_word(7) == 0xC0DEU);
     CHECK(e.bytes()[14] == 0xDEU); // word 7 low byte
     CHECK(e.bytes()[15] == 0xC0U); // word 7 high byte
+}
+
+TEST_CASE("eeprom_93c46 save/load resumes an in-flight serial read") {
+    eeprom_93c46 e;
+    mw_host h{e};
+    h.ewen();
+    h.write_word(12, 0xA55AU);
+
+    h.start_cmd(0x80U | 12U);
+    std::uint16_t prefix = 0U;
+    for (int i = 0; i < 5; ++i) {
+        prefix = static_cast<std::uint16_t>((prefix << 1U) | (h.clk_out() ? 1U : 0U));
+    }
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    e.save_state(writer);
+
+    eeprom_93c46 restored;
+    mnemos::chips::state_reader reader(blob);
+    restored.load_state(reader);
+    REQUIRE(reader.ok());
+
+    mw_host h2{restored};
+    std::uint16_t suffix = 0U;
+    for (int i = 0; i < 11; ++i) {
+        suffix = static_cast<std::uint16_t>((suffix << 1U) | (h2.clk_out() ? 1U : 0U));
+    }
+    h2.cs_low();
+
+    CHECK(static_cast<std::uint16_t>((prefix << 11U) | suffix) == 0xA55AU);
 }

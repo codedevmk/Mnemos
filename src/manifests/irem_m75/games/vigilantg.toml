@@ -1,0 +1,24 @@
+# Vigilante (US Rev G) -- clone of the complete World Rev E parent.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "vigilantg"
+parent      = "vigilant"
+board       = "irem_m75"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x030000
+
+[[region.file]]
+name   = "vg_a-8h-g.ic55"
+offset = 0x000000
+size   = 0x08000
+crc32  = 0x9444c04e
+
+[[region.file]]
+name   = "vg_a-8l-.ic57"
+offset = 0x010000
+size   = 0x10000
+crc32  = 0x7f95799b

@@ -197,11 +197,227 @@ machines:
         ctest: mnemos_manifests_sms_runtime_parity_test
         data_gated: false
 
+  irem_m15:
+    module: src/manifests/irem_m15
+    golden:
+      - id: GLD-M15-CORPUS
+        ctest: mnemos_apps_player_irem_m15_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M15_SET_DIR
+        requires_apps: true
+
+  irem_m14:
+    module: src/manifests/irem_m14
+    golden:
+      - id: GLD-M14-CORPUS
+        ctest: mnemos_apps_player_irem_m14_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M14_SET_DIR
+        requires_apps: true
+
+  irem_m27:
+    module: src/manifests/irem_m27
+    golden:
+      - id: GLD-M27-CORPUS
+        ctest: mnemos_apps_player_irem_m27_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M27_SET_DIR
+        requires_apps: true
+
+  irem_m47:
+    module: src/manifests/irem_m47
+    golden:
+      - id: GLD-M47-CORPUS
+        ctest: mnemos_apps_player_irem_m47_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M47_SET_DIR
+        requires_apps: true
+      - id: GLD-M47-PARITY-HASH
+        ctest: mnemos_apps_player_irem_m47_parity_hash_golden_test
+        data_gated: true
+        data_env: MNEMOS_M47_PARITY_SET
+        requires_apps: true
+
+  irem_m52:
+    module: src/manifests/irem_m52
+    golden:
+      - id: GLD-M52-CORPUS
+        ctest: mnemos_apps_player_irem_m52_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M52_SET_DIR
+        requires_apps: true
+      - id: GLD-M52-PARITY-HASH
+        ctest: mnemos_apps_player_irem_m52_parity_hash_golden_test
+        data_gated: true
+        data_env: MNEMOS_M52_PARITY_SET
+        requires_apps: true
+
+  irem_m57:
+    module: src/manifests/irem_m57
+    golden:
+      - id: GLD-M57-CORPUS
+        ctest: mnemos_apps_player_irem_m57_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M57_SET_DIR
+        requires_apps: true
+
+  irem_m58:
+    module: src/manifests/irem_m58
+    golden:
+      - id: GLD-M58-CORPUS
+        ctest: mnemos_apps_player_irem_m58_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M58_SET_DIR
+        requires_apps: true
+      - id: GLD-M58-PARITY-HASH
+        ctest: mnemos_apps_player_irem_m58_parity_hash_golden_test
+        data_gated: true
+        data_env: MNEMOS_M58_PARITY_SET
+        requires_apps: true
+
+  irem_m62:
+    module: src/manifests/irem_m62
+    golden:
+      - id: GLD-M62-CORPUS
+        ctest: mnemos_apps_player_irem_m62_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M62_SET_DIR
+        requires_apps: true
+
+  irem_m63:
+    module: src/manifests/irem_m63
+    golden:
+      - id: GLD-M63-CORPUS
+        ctest: mnemos_apps_player_irem_m63_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M63_SET_DIR
+        requires_apps: true
+
+  irem_travrusa:
+    module: src/manifests/irem_travrusa
+    golden:
+      - id: GLD-TRAVRUSA-CORPUS
+        ctest: mnemos_apps_player_irem_travrusa_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_TRAVRUSA_SET_DIR
+        requires_apps: true
+      - id: GLD-TRAVRUSA-PARITY-HASH
+        ctest: mnemos_apps_player_irem_travrusa_parity_hash_golden_test
+        data_gated: true
+        data_env: MNEMOS_TRAVRUSA_PARITY_SET
+        requires_apps: true
+
   irem_m72:
     module: src/manifests/irem_m72
+    golden:
+      - id: GLD-M72-RTYPE
+        ctest: mnemos_apps_player_irem_m72_rtype_golden_test
+        data_gated: true
+        data_env: MNEMOS_M72_RTYPE_SET
+        requires_apps: true
+      - id: GLD-M72-PROTECTED
+        ctest: mnemos_apps_player_irem_m72_protected_golden_test
+        data_gated: true
+        data_env: MNEMOS_M72_PROTECTED_SET
+        requires_apps: true
+      - id: GLD-M72-PROTECTED-AUDIO
+        ctest: mnemos_apps_player_irem_m72_protected_audio_golden_test
+        data_gated: true
+        data_env: MNEMOS_M72_PROTECTED_AUDIO_SET
+        requires_apps: true
+      - id: GLD-M72-PROTECTED-MCU
+        ctest: mnemos_apps_player_irem_m72_protected_mcu_golden_test
+        data_gated: true
+        data_env: MNEMOS_M72_PROTECTED_MCU_SET
+        requires_apps: true
+      - id: GLD-M72-PARITY-HASH
+        ctest: mnemos_apps_player_irem_m72_parity_hash_golden_test
+        data_gated: true
+        data_env: MNEMOS_M72_PARITY_SET
+        requires_apps: true
+      - id: GLD-M72-VERTICAL
+        ctest: mnemos_apps_player_irem_m72_vertical_golden_test
+        data_gated: true
+        data_env: MNEMOS_M72_VERTICAL_SET
+        requires_apps: true
+      - id: GLD-M72-ROSTER
+        ctest: mnemos_apps_player_irem_m72_roster_golden_test
+        data_gated: true
+        data_env: MNEMOS_M72_SET_DIR
+        requires_apps: true
     parity:
       - id: ORC-M72-SYSTEM
         ctest: mnemos_manifests_irem_m72_test
         data_gated: false
-    # golden scenarios arrive with the M72 plan's later phases (boot to
-    # attract mode needs the sound/sprite increments); registered then.
+
+  irem_m75:
+    module: src/manifests/irem_m75
+    golden:
+      - id: GLD-M75-CORPUS
+        ctest: mnemos_apps_player_irem_m75_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M75_SET_DIR
+        requires_apps: true
+
+  irem_m81:
+    module: src/manifests/irem_m81
+    golden:
+      - id: GLD-M81-CORPUS
+        ctest: mnemos_apps_player_irem_m81_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M81_SET_DIR
+        requires_apps: true
+
+  irem_m82:
+    module: src/manifests/irem_m82
+    golden:
+      - id: GLD-M82-CORPUS
+        ctest: mnemos_apps_player_irem_m82_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M82_SET_DIR
+        requires_apps: true
+
+  irem_m84:
+    module: src/manifests/irem_m84
+    golden:
+      - id: GLD-M84-CORPUS
+        ctest: mnemos_apps_player_irem_m84_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M84_SET_DIR
+        requires_apps: true
+
+  irem_m85:
+    module: src/manifests/irem_m85
+    golden:
+      - id: GLD-M85-CORPUS
+        ctest: mnemos_apps_player_irem_m85_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M85_SET_DIR
+        requires_apps: true
+
+  irem_m90:
+    module: src/manifests/irem_m90
+    golden:
+      - id: GLD-M90-CORPUS
+        ctest: mnemos_apps_player_irem_m90_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M90_SET_DIR
+        requires_apps: true
+
+  irem_m92:
+    module: src/manifests/irem_m92
+    golden:
+      - id: GLD-M92-CORPUS
+        ctest: mnemos_apps_player_irem_m92_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M92_SET_DIR
+        requires_apps: true
+
+  irem_m107:
+    module: src/manifests/irem_m107
+    golden:
+      - id: GLD-M107-CORPUS
+        ctest: mnemos_apps_player_irem_m107_corpus_golden_test
+        data_gated: true
+        data_env: MNEMOS_M107_SET_DIR
+        requires_apps: true

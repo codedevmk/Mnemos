@@ -17,15 +17,21 @@ namespace mnemos::apps::player {
         bool autostart{true};
         adapters::region_override region_override{adapters::region_override::auto_detect};
         std::optional<std::string> mapper_override{};
+        std::optional<std::string> mapper2_override{};
         bool fm_unit{};
         bool light_gun{};
         bool four_score{};
+        bool rtc{};
+        bool msx2{};
         std::optional<std::uint16_t> dip_override{};
+        std::optional<std::string> keyboard_layout_override{};
+        std::optional<std::string> amiga_model_override{};
     };
 
     struct system_launch_outcome final {
         std::unique_ptr<frontend_sdk::player_system> system{};
         std::string primary_media_path{};
+        std::string battery_media_path{};
         int exit_code{};
     };
 

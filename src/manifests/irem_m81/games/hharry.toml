@@ -1,0 +1,173 @@
+# Hammerin' Harry (World) -- Irem M81 parent set.
+# Schema mnemos-romset/1; this is a ROM-contract manifest only. The executable
+# M81 board profile remains separate from M72 because the program/video wiring
+# is not a true-M72 variant.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "hharry"
+board       = "irem_m81"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "gen=m81=_a-h0-v.ic59"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0xc52802a5
+
+[[region.file]]
+name   = "gen=m81=_a-l0-v.ic68"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xf463074c
+
+[[region.file]]
+name   = "gen=m81=_a-h1-0.ic58"
+offset = 0x40001
+stride = 2
+size   = 0x10000
+crc32  = 0x3ae21335
+
+[[region.file]]
+name   = "gen=m81=_a-l1-0.ic67"
+offset = 0x40000
+stride = 2
+size   = 0x10000
+crc32  = 0xbc6ac5f9
+
+# Boot-chunk reload of the final program pair at the top of the 1 MiB V30 space.
+[[region.file]]
+name   = "gen=m81=_a-h1-0.ic58"
+offset = 0xE0001
+stride = 2
+size   = 0x10000
+crc32  = 0x3ae21335
+
+[[region.file]]
+name   = "gen=m81=_a-l1-0.ic67"
+offset = 0xE0000
+stride = 2
+size   = 0x10000
+crc32  = 0xbc6ac5f9
+
+[[region]]
+name = "soundcpu"
+size = 0x010000
+
+[[region.file]]
+name   = "gen=m81=_a-sp-0.ic14"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x80e210e7
+
+[[region]]
+name = "samples"
+size = 0x020000
+
+[[region.file]]
+name   = "gen=m81=_a-v0-0.ic11"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xfaaacaff
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "gen=m81=_00.ic3"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xec5127ef
+
+[[region.file]]
+name   = "gen=m81=_10.ic5"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0xdef65294
+
+[[region.file]]
+name   = "gen=m81=_20.ic12"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0xbb0d6ad4
+
+[[region.file]]
+name   = "gen=m81=_30.ic14"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x4351044e
+
+[[region]]
+name = "tiles"
+size = 0x080000
+
+[[region.file]]
+name   = "gen=m81=_a0.ic50"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xc577ba5f
+
+[[region.file]]
+name   = "gen=m81=_a1.ic49"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x429d12ab
+
+[[region.file]]
+name   = "gen=m81=_a2.ic51"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0xb5b163b0
+
+[[region.file]]
+name   = "gen=m81=_a3.ic52"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x8ef566a1
+
+[[region]]
+name = "proms"
+size = 0x065c
+
+[[region.file]]
+name   = "m81_a-9l-.ic72"
+offset = 0x0000
+size   = 0x0100
+crc32  = 0xb460c438
+
+[[region.file]]
+name   = "m81_a-9p-.ic74"
+offset = 0x0100
+size   = 0x0100
+crc32  = 0xa4f2c4bc
+
+[[region.file]]
+name   = "gen=81=_a-7d-a.ic48"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0x92fe9eff
+
+[[region.file]]
+name   = "m81_a-2h-.ic2"
+offset = 0x0317
+size   = 0x0117
+crc32  = 0x21ede612
+
+[[region.file]]
+name   = "m81_a-5l-.ic28"
+offset = 0x042e
+size   = 0x0117
+crc32  = 0x56c29834
+
+[[region.file]]
+name   = "m81_b-9h-.ic94"
+offset = 0x0545
+size   = 0x0117
+crc32  = 0x4bc1d393

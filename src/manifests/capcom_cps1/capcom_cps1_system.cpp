@@ -33,7 +33,7 @@ namespace mnemos::manifests::capcom_cps1 {
     cps1_board_params board_params_from_decl(const common::rom_set_decl& decl) {
         cps1_board_params params{
             .cps_b_profile_id = decl.cps_b_profile.value_or(std::uint16_t{0U}),
-            .vertical = decl.orientation == common::screen_orientation::vertical,
+            .vertical = decl.orientation != common::screen_orientation::horizontal,
             .descending_sprites = decl.sprite_order == common::sprite_draw_order::descending};
         if (decl.sound && *decl.sound == "qsound") {
             params.sound = sound_system::qsound;
@@ -704,6 +704,14 @@ namespace mnemos::manifests::capcom_cps1 {
             remaining -= slice;
 
             main_cpu.tick(slice);
+
+            qsound_dsp_cycle_accum_ +=
+                slice * static_cast<std::uint64_t>(chips::audio::qsound::master_clock_hz);
+            const std::uint64_t dsp_cycles = qsound_dsp_cycle_accum_ / m68k_clock_hz;
+            qsound_dsp_cycle_accum_ -= dsp_cycles * m68k_clock_hz;
+            if (dsp_cycles > 0U) {
+                qdsp.tick(dsp_cycles);
+            }
 
             cpu_cycle_accum_ += slice * qsound_z80_clock_hz;
             const std::uint64_t z80_cycles = cpu_cycle_accum_ / m68k_clock_hz;

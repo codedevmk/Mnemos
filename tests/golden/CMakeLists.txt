@@ -105,6 +105,26 @@ set_tests_properties(
     PROPERTIES SKIP_RETURN_CODE 4
 )
 
+# MSX / MSX2 boot coverage. Generated-BIOS cases always run; real firmware
+# cases self-skip unless MNEMOS_MSX_BIOS, packed MNEMOS_MSX2_FIRMWARE, packed
+# MNEMOS_MSX2_BIOS, or split MNEMOS_MSX2_BIOS+MNEMOS_MSX2_SUB_ROM points at
+# local copyrighted firmware images.
+mnemos_add_test(
+    mnemos_msx_boot_test
+    SOURCES msx_boot_test.cpp
+    LIBRARIES
+        mnemos::manifests::msx
+        mnemos::manifests::msx2
+        mnemos::runtime
+        mnemos::foundation
+        mnemos::security::cryptography
+        mnemos::tools::runtime_cli
+)
+set_tests_properties(
+    mnemos_msx_boot_test
+    PROPERTIES SKIP_RETURN_CODE 4
+)
+
 # Genesis golden boot. Self-skips unless MNEMOS_GENESIS_ROM points at a cartridge,
 # so it is safe in CI (reports "Skipped") and locally boots + hashes the frame.
 mnemos_add_test(

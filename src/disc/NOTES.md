@@ -16,7 +16,7 @@ emulator source consulted.
 |---|---|---|
 | `circ_ecc.{hpp,cpp}` | `chips/circ_ecc/circ_ecc.{h,c}` | CD-ROM Mode-1 EDC (CRC-32) + P/Q Reed-Solomon parity regeneration, clean-room per ECMA-130. CRC table is a compile-time `constexpr`. |
 | `disc_image.{hpp,cpp}` | `chips/disc_image/disc_image.{h,c}` | BIN/CUE/ISO loader + LBA sector read. Buffer-backed (one `std::vector` per track file, loaded via `mnemos::io::read_file`) so it is testable without the filesystem. Single-file and multi-track CUE unified through one track table. `.chd` images open through `chd_reader`. |
-| `chd_reader.{hpp,cpp}` | `chips/chd_image/…` | CHD v5 compressed-disc reader. Decodes the 124-byte header, the two-level canonical-Huffman hunk map, and the `cdzl` (DEFLATE) / `cdlz` (LZMA) / `cdfl` (FLAC) / `none` / `self` codecs into one flat raw-2352 buffer. Synthesises `tracks_` from CHTR/CHT2 metadata; reuses `compression::{inflate_raw,lzma1_decode}` + `circ_ecc_regen_sector`. |
+| `chd_reader.{hpp,cpp}` | `chips/chd_image/…` | CHD v5 compressed-media reader. Decodes the 124-byte header, the two-level canonical-Huffman hunk map, CD codecs (`cdzl` / `cdlz` / `cdfl` / `none` / `self`) into one flat raw-2352 buffer, and bounded block-device codecs (`lzma` / `zlib` / `huff` / `flac` / `none` / `self`) into a logical byte image. Synthesises CD `tracks_` from CHTR/CHT2 metadata; reuses `compression::{inflate_raw,lzma1_decode}` + `circ_ecc_regen_sector`. |
 | `flac_decoder.{hpp,cpp}` | `chips/chd_image/chd_cdfl.c` | Minimal FLAC frame-stream decoder for `cdfl` CD-DA audio (no `fLaC`/STREAMINFO; bare frames). Clean-room per RFC 9639: 16-bit-aligned frame header with CRC-8 validation, CONSTANT/VERBATIM/FIXED/LPC subframes, partitioned-Rice residual, L/R/mid-side decorrelation, CRC-16 footer validation. |
 
 ### Scoped to the Sega CD (deferred)
@@ -36,10 +36,11 @@ requires valid ECC.
   (sectors built with `circ_ecc`), format-validation rejections, a CUE
   integration test through real `open()` over temp files, and MSF/LBA helpers.
 - `tests/chd_reader_test.cpp` — CRC-16/CCITT-FALSE vectors, a hand-built
-  two-level Huffman compressed-map decode, a synthetic `none`-codec image opened
-  through `disc_image`, and env-gated (`MNEMOS_SEGACD_CHD`) real-corpus tests: a
-  data-track Mode-1 sync parse and a `cdfl` audio-track byte-order check (decoded
-  CD-DA is correct little-endian, confirmed by aggregate waveform smoothness).
+  two-level Huffman compressed-map decode, synthetic `none`/`huff` block-device
+  CHDs, a synthetic `none`-codec CD image opened through `disc_image`, and
+  env-gated (`MNEMOS_SEGACD_CHD`) real-corpus tests: a data-track Mode-1 sync
+  parse and a `cdfl` audio-track byte-order check (decoded CD-DA is correct
+  little-endian, confirmed by aggregate waveform smoothness).
 - `tests/flac_decoder_test.cpp` — hand-encoded CONSTANT FLAC frames (stereo +
   mono) decoded back, plus CRC-8 / CRC-16 rejection cases. Corpus-free, so it
   runs in CI where the real-disc tests skip.

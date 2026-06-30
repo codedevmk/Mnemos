@@ -1,0 +1,518 @@
+# Daiku no Gensan (Japan, M72 hardware) -- Irem M72 protected board.
+# Schema mnemos-romset/1; the adapter embeds this checked-in manifest and
+# resolves it from the standard set zip name, so no game.toml copy is required.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "dkgensanm72"
+board       = "irem_m72"
+orientation = "horizontal"
+
+[[dip]]
+bank = "SW1"
+name = "Lives"
+mask = 0x0003
+default = 0x0003
+
+[[dip.option]]
+label = "2"
+value = 0x0002
+
+[[dip.option]]
+label = "3"
+value = 0x0003
+
+[[dip.option]]
+label = "4"
+value = 0x0001
+
+[[dip.option]]
+label = "5"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Difficulty"
+mask = 0x000c
+default = 0x000c
+
+[[dip.option]]
+label = "Very Easy"
+value = 0x0000
+
+[[dip.option]]
+label = "Easy"
+value = 0x0008
+
+[[dip.option]]
+label = "Normal"
+value = 0x000c
+
+[[dip.option]]
+label = "Hard"
+value = 0x0004
+
+[[dip]]
+bank = "SW1"
+name = "Continue Limit"
+mask = 0x0010
+default = 0x0010
+
+[[dip.option]]
+label = "No"
+value = 0x0000
+
+[[dip.option]]
+label = "Yes"
+value = 0x0010
+
+[[dip]]
+bank = "SW1"
+name = "Allow Continue"
+mask = 0x0020
+default = 0x0020
+
+[[dip.option]]
+label = "No"
+value = 0x0000
+
+[[dip.option]]
+label = "Yes"
+value = 0x0020
+
+[[dip]]
+bank = "SW1"
+name = "Demo Sounds"
+mask = 0x0040
+default = 0x0000
+
+[[dip.option]]
+label = "Off"
+value = 0x0040
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Flip Screen"
+mask = 0x0100
+default = 0x0100
+
+[[dip.option]]
+label = "Off"
+value = 0x0100
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Cabinet"
+mask = 0x0600
+default = 0x0400
+
+[[dip.option]]
+label = "Upright"
+value = 0x0400
+
+[[dip.option]]
+label = "Upright (2P)"
+value = 0x0000
+
+[[dip.option]]
+label = "Cocktail"
+value = 0x0600
+
+[[dip]]
+bank = "SW2"
+name = "Coin Mode"
+mask = 0x0800
+default = 0x0800
+
+[[dip.option]]
+label = "Mode 1"
+value = 0x0800
+
+[[dip.option]]
+label = "Mode 2"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coinage"
+mask = 0xf000
+default = 0xf000
+condition_mask = 0x0800
+condition_value = 0x0800
+
+[[dip.option]]
+label = "6 Coins / 1 Credit"
+value = 0xa000
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0xb000
+
+[[dip.option]]
+label = "4 Coins / 1 Credit"
+value = 0xc000
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0xd000
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0xe000
+
+[[dip.option]]
+label = "2 Coins to Start/1 to Continue"
+value = 0x1000
+
+[[dip.option]]
+label = "3 Coins / 2 Credits"
+value = 0x3000
+
+[[dip.option]]
+label = "4 Coins / 3 Credits"
+value = 0x2000
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0xf000
+
+[[dip.option]]
+label = "2 Coins / 3 Credits"
+value = 0x4000
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0x9000
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x8000
+
+[[dip.option]]
+label = "1 Coin / 4 Credits"
+value = 0x7000
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x6000
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x5000
+
+[[dip.option]]
+label = "Free Play"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Coin A"
+mask = 0x3000
+default = 0x3000
+condition_mask = 0x0800
+condition_value = 0x0000
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0x0000
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0x1000
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0x2000
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0x3000
+
+[[dip]]
+bank = "SW2"
+name = "Coin B"
+mask = 0xc000
+default = 0xc000
+condition_mask = 0x0800
+condition_value = 0x0000
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0xc000
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x8000
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x4000
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x0000
+
+[[hle]]
+chip      = "mcu"
+profile   = "irem_m72.dkgensanm72_no_dump_mcu"
+rationale = "The set's i8751 dump is unavailable; this manifest declares the interim M72 no-dump protection profile rather than pretending a ROM exists."
+
+[[hle.sample_trigger]]
+trigger = 0
+start   = 0x00000
+
+[[hle.sample_trigger]]
+trigger = 1
+start   = 0x00020
+
+[[hle.sample_trigger]]
+trigger = 2
+start   = 0x01800
+
+[[hle.sample_trigger]]
+trigger = 3
+start   = 0x02da0
+
+[[hle.sample_trigger]]
+trigger = 4
+start   = 0x03be0
+
+[[hle.sample_trigger]]
+trigger = 5
+start   = 0x05ae0
+
+[[hle.sample_trigger]]
+trigger = 6
+start   = 0x06100
+
+[[hle.sample_trigger]]
+trigger = 7
+start   = 0x06de0
+
+[[hle.sample_trigger]]
+trigger = 8
+start   = 0x07260
+
+[[hle.sample_trigger]]
+trigger = 9
+start   = 0x07a60
+
+[[hle.sample_trigger]]
+trigger = 10
+start   = 0x08720
+
+[[hle.sample_trigger]]
+trigger = 11
+start   = 0x0a5c0
+
+[[hle.sample_trigger]]
+trigger = 12
+start   = 0x0c3c0
+
+[[hle.sample_trigger]]
+trigger = 13
+start   = 0x0c7a0
+
+[[hle.sample_trigger]]
+trigger = 14
+start   = 0x0e140
+
+[[hle.sample_trigger]]
+trigger = 15
+start   = 0x0fb00
+
+[[hle.sample_trigger]]
+trigger = 16
+start   = 0x10fa0
+
+[[hle.sample_trigger]]
+trigger = 17
+start   = 0x10fc0
+
+[[hle.sample_trigger]]
+trigger = 18
+start   = 0x10fe0
+
+[[hle.sample_trigger]]
+trigger = 19
+start   = 0x11f40
+
+[[hle.sample_trigger]]
+trigger = 20
+start   = 0x12b20
+
+[[hle.sample_trigger]]
+trigger = 21
+start   = 0x130a0
+
+[[hle.sample_trigger]]
+trigger = 22
+start   = 0x13c60
+
+[[hle.sample_trigger]]
+trigger = 23
+start   = 0x14740
+
+[[hle.sample_trigger]]
+trigger = 24
+start   = 0x153c0
+
+[[hle.sample_trigger]]
+trigger = 25
+start   = 0x197e0
+
+[[hle.sample_trigger]]
+trigger = 26
+start   = 0x1af40
+
+[[hle.sample_trigger]]
+trigger = 27
+start   = 0x1c080
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "ge72_h0-.ic40"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0xa0ad992c
+
+[[region.file]]
+name   = "ge72_l0-.ic37"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0x996396f0
+
+[[region.file]]
+name   = "ge72_h3-.ic43"
+offset = 0x60001
+stride = 2
+size   = 0x10000
+crc32  = 0xd8b86005
+
+[[region.file]]
+name   = "ge72_h3-.ic43"
+offset = 0xE0001
+stride = 2
+size   = 0x10000
+crc32  = 0xd8b86005
+
+[[region.file]]
+name   = "ge72_l3-.ic34"
+offset = 0x60000
+stride = 2
+size   = 0x10000
+crc32  = 0x23d303a5
+
+[[region.file]]
+name   = "ge72_l3-.ic34"
+offset = 0xE0000
+stride = 2
+size   = 0x10000
+crc32  = 0x23d303a5
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "hh_00.ic53"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xec5127ef
+
+[[region.file]]
+name   = "hh_10.ic51"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0xdef65294
+
+[[region.file]]
+name   = "hh_20.ic49"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0xbb0d6ad4
+
+[[region.file]]
+name   = "hh_30.ic47"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x4351044e
+
+[[region]]
+name = "tiles_a"
+size = 0x040000
+
+[[region.file]]
+name   = "ge72b-a0.ic21"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xf5f56b2a
+
+[[region.file]]
+name   = "ge72-a1.ic22"
+offset = 0x10000
+size   = 0x10000
+crc32  = 0xd194ea08
+
+[[region.file]]
+name   = "ge72-a2.ic20"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0x2b06bcc3
+
+[[region.file]]
+name   = "ge72-a3.ic23"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0x94b96bfa
+
+[[region]]
+name = "tiles_b"
+size = 0x040000
+
+[[region.file]]
+name   = "ge72-b0.ic26"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x208796b3
+
+[[region.file]]
+name   = "ge72-b1.ic27"
+offset = 0x10000
+size   = 0x10000
+crc32  = 0xb4a7f490
+
+[[region.file]]
+name   = "ge72b-b2.ic25"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0x34fe8f7f
+
+[[region.file]]
+name   = "ge72b-b3.ic24"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0x4b0e92f4
+
+[[region]]
+name = "samples"
+size = 0x20000
+
+[[region.file]]
+name   = "gen-v0.ic44"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xd8595c66

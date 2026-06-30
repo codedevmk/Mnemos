@@ -1,0 +1,116 @@
+# Quiz H.Q. (Japan) -- Taito F2 / C53.
+# This board uses the implemented TC0100SCN/TC0200OBJ path with a TC0110PCR
+# palette map and 1bpp text graphics stored in the 68000 program region.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "quizhq"
+board  = "taito_f2"
+orientation = "horizontal"
+taito_f2_map = "quizhq"
+taito_f2_input_profile = "standard"
+taito_f2_text_gfx_source = "program_1bpp"
+taito_f2_text_gfx_base = 0x80000
+taito_f2_tc0100scn_bg_x_offset = 16
+taito_f2_tc0100scn_text_x_offset = 23
+taito_f2_tc0480scp_profile = "none"
+taito_f2_io_profile = "tc0220ioc"
+taito_f2_palette_profile = "tc0110pcr_tc0070rgb"
+taito_f2_priority_profile = "tc0360pri"
+taito_f2_sprite_chip_pair = "tc0200obj_tc0210fbc"
+taito_f2_sound_comm_chip = "tc0140syt"
+taito_f2_video_profile = "tc0100scn"
+taito_f2_aux_profile = "none"
+taito_f2_vblank_irq_level = 5
+taito_f2_sprite_dma_irq_level = 6
+taito_f2_sprite_buffering = "partial_delayed"
+taito_f2_palette_format = "xbgr_555"
+
+[[region]]
+name = "maincpu"
+size = 0x0c0000
+
+[[region.file]]
+name   = "c53-05.bin"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xc798fc20
+
+[[region.file]]
+name   = "c53-01.bin"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0xbf44c93e
+
+[[region.file]]
+name   = "c53-52.bin"
+offset = 0x80000
+stride = 2
+size   = 0x20000
+crc32  = 0x12e14aca
+
+[[region.file]]
+name   = "c53-51.bin"
+offset = 0x80001
+stride = 2
+size   = 0x20000
+crc32  = 0xb3ef66f3
+
+[[region]]
+name = "tiles"
+size = 0x100000
+fill = 0xFF
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "c53-03.bin"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0x47596e70
+
+[[region.file]]
+name   = "c53-07.bin"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x4f9fa82f
+
+[[region.file]]
+name   = "c53-02.bin"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0xd704c6f4
+
+[[region.file]]
+name   = "c53-06.bin"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0xf77f63fc
+
+[[region]]
+name = "audiocpu"
+size = 0x10000
+
+[[region.file]]
+name   = "c53-08.bin"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x25187e81
+
+[[region]]
+name = "adpcma"
+size = 0x80000
+
+[[region.file]]
+name   = "c53-04.bin"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x99890ad4

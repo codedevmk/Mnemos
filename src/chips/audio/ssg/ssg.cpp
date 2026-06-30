@@ -230,8 +230,7 @@ namespace mnemos::chips::audio {
 
     void ssg::reset(reset_kind /*kind*/) {
         regs_ = {};
-        // Power-on / reset: the mixer comes up with $FF (all tone + noise inhibited,
-        // ports as inputs) per real hardware.
+        // Power-on / reset: the mixer comes up with $FF, inhibiting all tone/noise paths.
         regs_[reg_mixer] = 0xFFU;
         selected_reg_ = 0U;
         channels_ = {};

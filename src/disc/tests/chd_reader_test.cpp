@@ -46,6 +46,8 @@ namespace {
     constexpr std::uint32_t kFrameSize = 2448; // 2352 + 96 subcode
     constexpr std::uint32_t kFramesPerHunk = 8;
     constexpr std::uint32_t kHunkBytes = kFramesPerHunk * kFrameSize; // 19584
+    constexpr std::uint32_t kBlockUnitBytes = 512;
+    constexpr std::uint32_t kBlockHunkBytes = 4096;
 
     // Deterministic sector content for frame `f`: a valid Mode-1 sync header,
     // then user bytes derived from f. ECC left zeroed (the reader copies the
@@ -120,6 +122,33 @@ namespace {
         return v;
     }
 
+    std::vector<std::uint8_t> build_none_block_chd() {
+        const std::uint64_t hunk_data_offset = kBlockHunkBytes; // raw-map index 1
+        const std::uint64_t map_offset = hunk_data_offset + kBlockHunkBytes;
+        const std::uint64_t total = map_offset + 4;
+
+        std::vector<std::uint8_t> v(static_cast<std::size_t>(total), 0);
+        std::memcpy(v.data(), "MComprHD", 8);
+        put_be32(v, 8, 124);
+        put_be32(v, 12, 5);
+        put_be32(v, 16, 0);
+        put_be32(v, 20, 0);
+        put_be32(v, 24, 0);
+        put_be32(v, 28, 0);
+        put_be64(v, 32, kBlockHunkBytes);
+        put_be64(v, 40, map_offset);
+        put_be64(v, 48, 0);
+        put_be32(v, 56, kBlockHunkBytes);
+        put_be32(v, 60, kBlockUnitBytes);
+
+        for (std::uint32_t i = 0; i < kBlockHunkBytes; ++i) {
+            v[static_cast<std::size_t>(hunk_data_offset) + i] =
+                static_cast<std::uint8_t>((i * 37U) ^ (i >> 3U));
+        }
+        put_be32(v, static_cast<std::size_t>(map_offset), 1);
+        return v;
+    }
+
 } // namespace
 
 TEST_CASE("chd crc16/ccitt-false matches known vectors", "[disc][chd]") {
@@ -131,6 +160,49 @@ TEST_CASE("chd crc16/ccitt-false matches known vectors", "[disc][chd]") {
     // Single 0x00 byte: 0xFFFF -> table[0xFF] folded.
     const std::array<std::uint8_t, 1> z = {0x00};
     REQUIRE(chd::crc16_ccitt(std::span<const std::uint8_t>{z}) == 0xE1F0);
+}
+
+TEST_CASE("chd probe exposes v5 header metadata without decoding media", "[disc][chd]") {
+    const auto bytes = build_none_chd();
+    const auto info = chd::probe(std::span<const std::uint8_t>{bytes});
+    REQUIRE(info.has_value());
+    CHECK(info->version == 5U);
+    CHECK(info->header_bytes == 124U);
+    CHECK(info->codecs[0] == 0U);
+    CHECK(info->logical_bytes == kHunkBytes);
+    CHECK(info->hunk_bytes == kHunkBytes);
+    CHECK(info->unit_bytes == kFrameSize);
+    CHECK(info->hunk_count == 1U);
+    CHECK(info->has_cd_unit_layout);
+
+    auto block_device = bytes;
+    put_be32(block_device, 16, 0x6C7A6D61U); // "lzma"
+    put_be64(block_device, 32, 40960000ULL);
+    put_be32(block_device, 56, 4096U);
+    put_be32(block_device, 60, 512U);
+    const auto block_info = chd::probe(std::span<const std::uint8_t>{block_device});
+    REQUIRE(block_info.has_value());
+    CHECK(block_info->codecs[0] == 0x6C7A6D61U);
+    CHECK(block_info->hunk_count == 10000U);
+    CHECK_FALSE(block_info->has_cd_unit_layout);
+
+    auto corrupt = bytes;
+    corrupt[0] = 0U;
+    CHECK_FALSE(chd::probe(std::span<const std::uint8_t>{corrupt}).has_value());
+}
+
+TEST_CASE("chd decodes a synthetic none-codec block device image", "[disc][chd]") {
+    const auto bytes = build_none_block_chd();
+    CHECK_FALSE(chd::decode(std::span<const std::uint8_t>{bytes}).has_value());
+
+    const auto block = chd::decode_block_device(std::span<const std::uint8_t>{bytes});
+    REQUIRE(block.has_value());
+    CHECK(block->info.logical_bytes == kBlockHunkBytes);
+    CHECK(block->info.unit_bytes == kBlockUnitBytes);
+    REQUIRE(block->data.size() == kBlockHunkBytes);
+    for (std::uint32_t i = 0; i < kBlockHunkBytes; ++i) {
+        CHECK(block->data[i] == static_cast<std::uint8_t>((i * 37U) ^ (i >> 3U)));
+    }
 }
 
 namespace {
@@ -160,7 +232,93 @@ namespace {
         }
     };
 
+    std::vector<std::uint8_t> build_huff_block_chd() {
+        constexpr std::uint32_t hunk_bytes = 256U;
+        constexpr std::uint32_t unit_bytes = 1U;
+        constexpr std::uint32_t header_bytes = 124U;
+
+        bit_writer huff;
+        // The CHD 8-bit Huffman payload first imports a compact tree-of-tree.
+        // This stream makes every byte symbol use its natural 8-bit canonical code.
+        huff.put(1, 3); // small.numbits[0] = 1
+        huff.put(0, 3); // start = 1
+        for (int index = 1; index < 9; ++index) {
+            huff.put(0, 3);
+        }
+        huff.put(1, 3); // small.numbits[9] = 1
+        huff.put(7, 3); // stop importing remaining small-tree lengths
+        huff.put(1, 1); // symbol 9 => code length 8 for main-tree symbol 0
+        huff.put(0, 1); // symbol 0 => repeat previous length
+        huff.put(7, 3);
+        huff.put(246, 8); // 9 + 246 = 255 repeated lengths
+        for (std::uint32_t i = 0; i < hunk_bytes; ++i) {
+            huff.put(i, 8);
+        }
+        huff.flush();
+
+        bit_writer map;
+        map.put(1, 4);  // escape
+        map.put(1, 4);  // symbol 0 has one-bit code length
+        map.put(1, 4);  // escape
+        map.put(0, 4);  // repeat zero lengths
+        map.put(12, 4); // nodes 1..15
+        map.put(0, 1);  // hunk type 0, codec slot 0
+        map.put(static_cast<std::uint32_t>(huff.bytes.size()), 16);
+        map.put(0, 16); // per-hunk CRC field is stored in the raw map
+        map.flush();
+
+        std::vector<std::uint8_t> section(16, 0);
+        const std::uint64_t firstoffs = header_bytes + section.size() + map.bytes.size();
+        std::vector<std::uint8_t> rawmap(12, 0);
+        rawmap[0] = 0; // codec slot 0
+        rawmap[1] = static_cast<std::uint8_t>(huff.bytes.size() >> 16U);
+        rawmap[2] = static_cast<std::uint8_t>(huff.bytes.size() >> 8U);
+        rawmap[3] = static_cast<std::uint8_t>(huff.bytes.size());
+        for (int i = 5; i >= 0; --i) {
+            rawmap[4 + (5 - i)] = static_cast<std::uint8_t>(firstoffs >> (i * 8));
+        }
+        const std::uint16_t mapcrc = chd::crc16_ccitt(std::span<const std::uint8_t>{rawmap});
+
+        put_be32(section, 0, static_cast<std::uint32_t>(map.bytes.size()));
+        for (int i = 5; i >= 0; --i) {
+            section[4 + (5 - i)] = static_cast<std::uint8_t>(firstoffs >> (i * 8));
+        }
+        put_be16(section, 10, mapcrc);
+        section[12] = 16; // lengthbits
+        section[13] = 16; // selfbits
+        section[14] = 16; // parentbits
+        section.insert(section.end(), map.bytes.begin(), map.bytes.end());
+
+        std::vector<std::uint8_t> v;
+        v.resize(header_bytes, 0);
+        std::memcpy(v.data(), "MComprHD", 8);
+        put_be32(v, 8, header_bytes);
+        put_be32(v, 12, 5);
+        put_be32(v, 16, 0x68756666U); // "huff"
+        put_be64(v, 32, hunk_bytes);
+        put_be64(v, 40, header_bytes);
+        put_be64(v, 48, 0);
+        put_be32(v, 56, hunk_bytes);
+        put_be32(v, 60, unit_bytes);
+        v.insert(v.end(), section.begin(), section.end());
+        v.insert(v.end(), huff.bytes.begin(), huff.bytes.end());
+        return v;
+    }
+
 } // namespace
+
+TEST_CASE("chd decodes a synthetic huff-codec block device image", "[disc][chd]") {
+    const auto bytes = build_huff_block_chd();
+    const auto block = chd::decode_block_device(std::span<const std::uint8_t>{bytes});
+    REQUIRE(block.has_value());
+    CHECK(block->info.codecs[0] == 0x68756666U);
+    CHECK(block->info.logical_bytes == 256U);
+    CHECK(block->info.unit_bytes == 1U);
+    REQUIRE(block->data.size() == 256U);
+    for (std::uint32_t i = 0; i < 256U; ++i) {
+        CHECK(block->data[i] == static_cast<std::uint8_t>(i));
+    }
+}
 
 TEST_CASE("chd 2-level map huffman decodes a hand-built compressed map", "[disc][chd]") {
     // Hand-build the COMPRESSED MAP bitstream for a 3-hunk map where every hunk

@@ -369,6 +369,7 @@ namespace mnemos::debug {
                 return capability_state::unavailable;
             }
             if (media.full_hash.empty() || !media.revision_supported ||
+                !media.validation_issues.empty() ||
                 (media.residency == frontend_sdk::media_residency::paged &&
                  media.page_size == 0U)) {
                 return capability_state::degraded;
@@ -421,6 +422,15 @@ namespace mnemos::debug {
                                                   "paged media descriptors must publish a "
                                                   "non-zero page size"));
             }
+            for (std::size_t i = 0U; i < media.validation_issues.size(); ++i) {
+                const frontend_sdk::media_validation_issue& issue = media.validation_issues[i];
+                const std::string code =
+                    issue.code.empty() ? std::string{"media.validation.issue"} : issue.code;
+                attach_diagnostic(manifest, descriptor,
+                                  make_diagnostic("media.validation.issue." + std::to_string(i),
+                                                  diagnostic_severity::warning, descriptor.id,
+                                                  code, issue.detail));
+            }
         }
 
         void add_media_descriptors(capability_manifest& manifest,
@@ -450,6 +460,8 @@ namespace mnemos::debug {
                 add_payload(descriptor, "revision_supported",
                             bool_payload(media.revision_supported));
                 add_payload(descriptor, "cache_hint", media.cache_hint);
+                add_payload(descriptor, "validation_issue_count",
+                            std::to_string(media.validation_issues.size()));
                 add_page_hash_payloads(descriptor, media);
                 add_media_diagnostics(manifest, descriptor, media);
                 manifest.capabilities.push_back(std::move(descriptor));

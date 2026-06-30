@@ -1,0 +1,235 @@
+# Legend of Hero Tonma (Japan bootleg with i8751) -- Irem M72 protected clone of loht.
+# Schema mnemos-romset/1; the adapter embeds this checked-in manifest and
+# resolves it from the standard set zip name, so no game.toml copy is required.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "lohtb2"
+parent      = "loht"
+board       = "irem_m72"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "loht-a2.bin"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0xccc90e54
+
+[[region.file]]
+name   = "loht-a3.bin"
+offset = 0x20001
+stride = 2
+size   = 0x10000
+crc32  = 0xff8a98de
+
+[[region.file]]
+name   = "loht-a10.bin"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x3aa06730
+
+[[region.file]]
+name   = "loht-a11.bin"
+offset = 0x20000
+stride = 2
+size   = 0x10000
+crc32  = 0xeab1d7bc
+
+[[region.file]]
+name   = "loht-a5.bin"
+offset = 0x40001
+stride = 2
+size   = 0x10000
+crc32  = 0x79e007ec
+
+[[region.file]]
+name   = "loht-a5.bin"
+offset = 0xC0001
+stride = 2
+size   = 0x10000
+crc32  = 0x79e007ec
+
+[[region.file]]
+name   = "loht-a4.bin"
+offset = 0x60001
+stride = 2
+size   = 0x10000
+crc32  = 0x254ea4d5
+
+[[region.file]]
+name   = "loht-a4.bin"
+offset = 0xE0001
+stride = 2
+size   = 0x10000
+crc32  = 0x254ea4d5
+
+[[region.file]]
+name   = "loht-a13.bin"
+offset = 0x40000
+stride = 2
+size   = 0x10000
+crc32  = 0xb951346e
+
+[[region.file]]
+name   = "loht-a13.bin"
+offset = 0xC0000
+stride = 2
+size   = 0x10000
+crc32  = 0xb951346e
+
+[[region.file]]
+name   = "loht-a12.bin"
+offset = 0x60000
+stride = 2
+size   = 0x10000
+crc32  = 0xcfb0390d
+
+[[region.file]]
+name   = "loht-a12.bin"
+offset = 0xE0000
+stride = 2
+size   = 0x10000
+crc32  = 0xcfb0390d
+
+[[region]]
+name = "mcu"
+size = 0x2000
+
+[[region.file]]
+name   = "loht-a26.bin"
+offset = 0x0000
+size   = 0x2000
+crc32  = 0xac901e17
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "loht-a16.bin"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xdf5ac5ee
+
+[[region.file]]
+name   = "loht-a17.bin"
+offset = 0x10000
+size   = 0x10000
+crc32  = 0xd7ecf849
+
+[[region.file]]
+name   = "loht-a8.bin"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0x45220b01
+
+[[region.file]]
+name   = "loht-a9.bin"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0x4af9bb3c
+
+[[region.file]]
+name   = "loht-a14.bin"
+offset = 0x40000
+size   = 0x10000
+crc32  = 0x25b85cfc
+
+[[region.file]]
+name   = "loht-a15.bin"
+offset = 0x50000
+size   = 0x10000
+crc32  = 0x464d8579
+
+[[region.file]]
+name   = "loht-a6.bin"
+offset = 0x60000
+size   = 0x10000
+crc32  = 0x763fa4ec
+
+[[region.file]]
+name   = "loht-a7.bin"
+offset = 0x70000
+size   = 0x10000
+crc32  = 0xa73568c7
+
+[[region]]
+name = "tiles_a"
+size = 0x040000
+
+[[region.file]]
+name   = "loht-a19.bin"
+aliases = ["tom_m21.ic21"]
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x3ca3e771
+
+[[region.file]]
+name   = "loht-a20.bin"
+aliases = ["tom_m22.ic22"]
+offset = 0x10000
+size   = 0x10000
+crc32  = 0x7a05ee2f
+
+[[region.file]]
+name   = "loht-a18.bin"
+aliases = ["tom_m20.ic20"]
+offset = 0x20000
+size   = 0x10000
+crc32  = 0x79aa2335
+
+[[region.file]]
+name   = "loht-a21.bin"
+aliases = ["tom_m23.ic23"]
+offset = 0x30000
+size   = 0x10000
+crc32  = 0x789e8b24
+
+[[region]]
+name = "tiles_b"
+size = 0x040000
+
+[[region.file]]
+name   = "loht-a24.bin"
+aliases = ["tom_m26.ic26"]
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x44626bf6
+
+[[region.file]]
+name   = "loht-a25.bin"
+aliases = ["tom_m27.ic27"]
+offset = 0x10000
+size   = 0x10000
+crc32  = 0x464952cf
+
+[[region.file]]
+name   = "loht-a23.bin"
+aliases = ["tom_m25.ic25"]
+offset = 0x20000
+size   = 0x10000
+crc32  = 0x3db9b2c7
+
+[[region.file]]
+name   = "loht-a22.bin"
+aliases = ["tom_m24.ic24"]
+offset = 0x30000
+size   = 0x10000
+crc32  = 0xf01fe899
+
+[[region]]
+name = "samples"
+size = 0x10000
+
+[[region.file]]
+name   = "loht-a1.bin"
+aliases = ["tom_m44.ic44"]
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x3ed51d1f

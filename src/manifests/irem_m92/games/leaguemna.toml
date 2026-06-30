@@ -1,0 +1,159 @@
+# Yakyuu Kakutou League-Man (alternate M92-Z-C ROM board) -- Irem M92 clone of
+# nbbatman. The local alternate board carries its own split sprite layout and
+# Z-board PLDs while shared tiles, samples, and upper program pair resolve from
+# the Ninja Baseball Bat Man parent.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "leaguemna"
+parent      = "nbbatman"
+board       = "irem_m92"
+orientation = "horizontal"
+players     = 4
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "a1_-h0-.ic9"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x47c54204
+
+[[region.file]]
+name   = "a1_-l0-.ic11"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0x1d062c82
+
+[[region.file]]
+name    = "a1_-h1-.ic33"
+aliases = ["a1_-h1-.ic8"]
+offset  = 0x080001
+stride  = 2
+size    = 0x40000
+crc32   = 0x3ce2aab5
+
+[[region.file]]
+name    = "a1_-l1-.ic32"
+aliases = ["a1_-l1-.ic10"]
+offset  = 0x080000
+stride  = 2
+size    = 0x40000
+crc32   = 0x116d9bcc
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name   = "a1_-sh0-a.ic4"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0xc4aef83a
+
+[[region.file]]
+name   = "a1_-sl0-a.ic2"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0xe9ecbed2
+
+[[region]]
+name = "sprites"
+size = 0x400000
+
+[[region.file]]
+name   = "a1_-000-w.ic54"
+offset = 0x000001
+stride = 2
+size   = 0x80000
+crc32  = 0x437d3c0d
+
+[[region.file]]
+name   = "a1_-001-w.ic43"
+offset = 0x000000
+stride = 2
+size   = 0x80000
+crc32  = 0xc2ecd508
+
+[[region.file]]
+name   = "a1_-010-w.ic31"
+offset = 0x100001
+stride = 2
+size   = 0x80000
+crc32  = 0xd4184ccc
+
+[[region.file]]
+name   = "a1_-011-w.ic19"
+offset = 0x100000
+stride = 2
+size   = 0x80000
+crc32  = 0x7752fc95
+
+[[region.file]]
+name   = "a1_-020-w.ic56"
+offset = 0x200001
+stride = 2
+size   = 0x80000
+crc32  = 0x3008822e
+
+[[region.file]]
+name   = "a1_-021-w.ic45"
+offset = 0x200000
+stride = 2
+size   = 0x80000
+crc32  = 0x04272660
+
+[[region.file]]
+name   = "a1_-030-w.ic33"
+offset = 0x300001
+stride = 2
+size   = 0x80000
+crc32  = 0x0d5e744c
+
+[[region.file]]
+name   = "a1_-031-w.ic21"
+offset = 0x300000
+stride = 2
+size   = 0x80000
+crc32  = 0x4aa9994e
+
+[[region]]
+name = "plds"
+size = 0x000C00
+
+[[region.file]]
+name   = "m92_a-3m-.ic11"
+offset = 0x0000
+size   = 0x0117
+crc32  = 0xfc718efe
+
+[[region.file]]
+name   = "m92_a-7j-.ic41"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0x5730b25a
+
+[[region.file]]
+name   = "m92_a-9j-.ic51"
+offset = 0x0400
+size   = 0x0117
+crc32  = 0x92d477cf
+
+[[region.file]]
+name   = "m92_z-2k-.ic15"
+offset = 0x0600
+size   = 0x0117
+crc32  = 0x0646be21
+
+[[region.file]]
+name   = "m92_z-2l-.ic16"
+offset = 0x0800
+size   = 0x0117
+crc32  = 0xa09df0ee

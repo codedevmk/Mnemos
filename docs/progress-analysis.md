@@ -75,7 +75,7 @@ depth **≈ 92%** · total weighted portfolio (breadth × depth) **≈ 37%**.
 | **Genesis / Mega Drive** | yes | **88%** | ⬆ ahead | Leads on VDP FIFO/DMA timing; missing S&K lock-on, SVP, J-Cart, whole-system savestate, 68K address-error |
 | **SMS + Game Gear** | yes | **95%** | ⬆⬆ far ahead | +7 mappers, YM2413 FM, real GG video, 93C46 saves, PAL switch; remaining misses are pause→NMI + deeper cart-header validation |
 | **C64** | yes | **95% (HW)** | ⬌ even (HW) / ⬇ (tooling) | Every chip present + more cart types; Emu wins on dev tooling (disasm/debug/SID/sprite/movie) |
-| **Sega CD** | yes | **95%** | ⬆ ahead | Real stamp-rotation ASIC, 1M word-RAM, font expander; missing CHD disc format |
+| **Sega CD** | yes | **95%** | ⬆ ahead | Real stamp-rotation ASIC, 1M word-RAM, font expander; CHD v5 disc format now supported |
 | **Sega 32X** | yes | **88%** | ⬆ ahead | Threaded dual-SH2, PWM DC-block; missing addr-error, SCI, full INTC delivery, cycle-true timing |
 | **Irem M72** | yes | **~100%** | ⬆⬆⬆ vastly ahead | Emu is a non-rendering scaffold; Mnemos renders R-Type with video/IRQ/sound/inputs |
 | NES | no | 0% | ⬇ | Needs ppu2c02 + 2A03 APU — MEDIUM |
@@ -85,8 +85,68 @@ depth **≈ 92%** · total weighted portfolio (breadth × depth) **≈ 37%**.
 | Spectrum | no | 0% | ⬇ | Z80 reused, ULA inline — LOW (easiest win) |
 | NeoGeo | no | 0% | ⬇ | Needs YM2610+LSPC — HIGH (Emu scaffold) |
 | CPS1 | no | 0% | ⬇ | Needs MSM6295+CPS-A/B GFX+QSound — MEDIUM |
-| CPS2 | no | 0% | ⬇ | Needs QSound+CPS2 opcode-crypto — MEDIUM-HIGH |
-| Taito F2 | no | 0% | ⬇ | Needs YM2610+TC0100SCN/TC0200OBJ — HIGH (Emu scaffold) |
+| CPS2 | yes | ~92% | ⬆ | Keyed opcode crypto, CPS-2 video, QSound PCM/ADPCM/echo HLE, EEPROM, MAME-matched per-game digital/ticket/analog input profiles, coin output latches, ZIP manifest loading, player adapter, player save/load, and a data-gated CPS2 corpus smoke runner are wired; local proof covers the committed 37-set CPS2 frame/audio/QSound-register/EEPROM baseline, with 9/37 sets producing nonzero rendered audio and 28/37 carrying default-gate QSound-programmed-silent evidence for follow-up. The gate runs 35 sets at 600 frames, `armwar.zip` at 700 frames, and `dstlk.zip` at 1200 frames because Armored Warriors and Darkstalkers both remain black at the 600-frame checkpoint under the current Emu/Mnemos oracle behavior. The runner can now use an Emu-style gameplay input cadence plus a longer audio-only window; `1944_mn.zip` becomes audible by the 2500-frame proof window (first nonzero rendered-audio sample frame 147949, about CPS2 frame 367), and a 25-row 700-frame silent-set sweep converts 11/25 rows to audible evidence. Emu comparison lifted two concrete fixes into Mnemos: zero-filled expansion of partial QSound Z80 ROM regions and the 32 KiB alternate object-RAM mirror; with repeated gameplay input, `1944.zip`, `1944_mn.zip`, `armwar.zip`, `avsp.zip`, `choko.zip`, `cybots.zip`, `ddtod.zip`, `dimahoo.zip`, `dstlk.zip`, `gigawing.zip`, `sfa3.zip`, and `xmcota.zip` now produce rendered audio by 2500 frames, and `ecofghtr.zip` is audible with a new thresholded first-significant-audio metric separating tiny echo residue from gameplay audio. Remaining default-silent rows still need one-at-a-time Emu comparison before broad corpus expansion |
+| Taito F2 | partial | 96% | ⬆ | Mnemos now has a first-pass F2 board, YM2610 path, TC0100SCN/TC0200OBJ video, dual-TC0100SCN Thunder Fox rendering, board-selectable TC0100SCN program-region 1bpp text glyphs for quiz maps, TC0280GRD + TC0430GRW ROZ tilemap rendering/control wiring, TC0480SCP four-BG-plane + RAM-text rendering/control wiring with rowscroll, layer zoom, BG2/BG3 row-zoom first-pass sampling, and synthetic golden coverage for board BG/text offsets plus BG2/BG3 row zoom, real 16-byte sprite records, board-configurable palette formats, board-configurable TC0200OBJ sprite-extension RAM windows, board-configurable active-area marker source including Footchmp-style Y-bit routing, board-specific TC0200OBJ hide-pixel offsets, board-configurable TC0200OBJ immediate/full/partial-delayed buffering policies including qzchikyu partial-word overlay, TC0200OBJ zoom/continuation chaining, marker disable/flip-screen handling, X bias + master/extra/absolute sprite scroll markers, frame-persistent active-area/disable/flip/master-scroll state, TC0360PRI-style tile/text/ROZ/sprite priority register routing and sprite/tile blend modes with ROZ-selector and all sprite-priority-group synthetic coverage, TC0200OBJ sprite-extension code policies, Gun Frontier bank-register routing, TC0190FMC-style sprite-bank register-window routing, board-selectable TC0480SCP priority decoding, player adapter with frame-exact save/load, Gun Frontier World/Japan, Liquid Kids parent/clone, Quiz HQ, Quiz Torimon, Quiz Chikyu, Quiz Quest, Dondoko Don, Pulirula, Metal Black, Football Champ, Dead Connection, Dino Rex, Thunder Fox, Growl, Ninja Kids, and Solitary Fighter ROM profiles, clone-parent zip fallback loading, real F2 map/data-gated boot coverage, and a data-gated Taito F2 corpus smoke runner that accepts plain set zips or one-level title-wrapper zips, synthesizes self-describing zips under `build/scratch`, and supports optional screenshot SHA-256 pins; local proof covers the recursive `D:\emu\arcade\Taito` F2 candidates (`dinorex`, `gunfront`, `gunfrontj`, `growl`) with save/load/nonblank restore 4/4 passing, while the broad Taito inventory reports 4/25 local packages runnable by Mnemos today; still needs non-F2 board families/media paths, corpus proof beyond that local F2 set, real-board TC0360PRI priority proof, remaining TC0190FMC board-family profiles, and populated real-ROM visual/audio golden evidence |
+
+**Taito F2 update 2026-06-24:** the player adapter now resolves checked-in
+Taito F2 manifests directly from plain set zips and from one-level title-wrapper
+zips such as `Gun-Frontier_Arcade_EN.zip` -> `gunfront.zip`. Local proof used
+`D:\emu\arcade\Taito` as a recursive corpus root; the runner recognized
+`dinorex`, `gunfront`, `gunfrontj`, and `growl`, synthesized self-describing
+zips under `build/scratch`, and passed save-state restore plus nonblank
+screenshot checks for all 4/4 candidates. Gun Frontier World/Japan still share
+the screenshot SHA-256
+`e5d013cf630a8e9737408d673453ce022252505ea0553b3aacd6b05f665854de`; Dino Rex
+now boots visibly through the player path after the D39 IRQ/palette/sprite
+corrections. `D:\emu\arcade\Taito\Type X` and other non-F2 Taito boards are not
+counted as Taito F2 coverage.
+
+**Taito arcade corpus inventory 2026-06-24:** `scripts/taito/inventory-corpus.ps1`
+now records broad local Taito coverage from a single corpus root. Against
+`D:\emu\arcade\Taito -Recurse`, current output is **4/25 packages runnable by
+Mnemos today**: the four F2 candidates above. The uncovered local packages are
+5 G-NET/ZN-2 CHD wrapper zips, 1 Type X2 CHD wrapper, 1 Type Zero CHD wrapper,
+1 Namco System 246 Taito-published title, 8 `Type X` RAR packages, and 5
+non-Taito Irem M92 wrappers under the local `F2` folder. This is an executable
+gap report, not an emulation claim: closing "100% Taito arcade" still requires
+distinct non-F2 board implementations and media/container support.
+
+**Taito G-NET prerequisite update 2026-06-24:** Mnemos now has a native
+`sony.r3000a` CPU library for the PlayStation-derived Taito G-NET / Sony ZN-2
+workstream. The first slice covers little-endian MIPS I integer execution,
+branch delay slots, load delays, HI/LO multiply-divide paths, CP0 status/cause/
+EPC basics, COP2/GTE register-transfer and command-latch shell, exceptions,
+register/trace introspection, and save-state round-tripping. Follow-up slices add
+`src/manifests/taito_gnet/`, which inspects
+ZIP-wrapped G-NET packages, decodes bounded CHD v5 flash-card block-device
+images from local corpus packages such as `chaoshea.zip`, and assembles a first
+R3000A board shell with caller-provided BIOS ROM, 2 MiB main RAM, mounted
+flash-card images, FC-board flash bank selection/control registers, a direct
+PCMCIA data aperture, BIOS/firm/zoom/wave flash windows, a minimal
+RF5C296-style index/data IO register pair with reset-bit tracking and card-byte
+proxying, 1 KiB scratchpad RAM, first BIOS-facing memory/cache control latches,
+a GPU register/VRAM latch shell, COP2/GTE register-transfer and command-latch shell,
+limited GPU command and OTC DMA execution, interrupt status/mask delivery into
+the R3000A IRQ line, DMA channel/control/interrupt register latches, root-timer
+counter/mode/target latches with first-pass target/overflow IRQ delivery,
+board-shell save/load coverage, and a data-gated BIOS+CHD assembly smoke behind
+`MNEMOS_TAITO_GNET_BIOS`/`MNEMOS_TAITO_GNET_PACKAGE`.
+The player now has a `--system taito_gnet`/`gnet` board-smoke adapter that
+requires `MNEMOS_TAITO_GNET_BIOS`, preserves the package ZIP as the primary
+media, assembles the native board shell, exposes CPU/RAM/flash/card metadata,
+and round-trips adapter save state. This still does not make G-NET packages
+playable: the local packages contain CHDs plus `readme.txt`, not BIOS ROMs,
+and the remaining work is the locked-card command/security protocol, BIOS
+sourcing, GPU renderer/SPU/real GTE command math, full DMA transfer timing beyond GPU/OTC,
+exact root-timer sync/clock-source modes, JVS/I/O,
+playable video/audio/input presentation, and real boot proof.
+
+**Taito F2 input update 2026-06-24:** the player adapter now exposes four
+arcade-panel ports for the multi-player Growl and Ninja Kids board profiles,
+routes P3/P4 active-low panel bytes into the existing board latches, maps
+P3/P4 START/COIN onto the shared system byte, and preserves those frontend
+controller snapshots in adapter save states. Solitary Fighter stays advertised
+as a two-player panel despite sharing the split-input board map.
 
 ---
 
@@ -238,8 +298,8 @@ input record/replay movies + per-frame rewind ring.
 | **Graphics ASIC (stamp/rotation/scaling)** | `stamp_renderer_run`: naive nearest-neighbor; **no stamp-map indirection, no size modes, no HFLIP/rotation, no 4bpp, no priority** (header admits it doesn't really perform the rotation) | `segacd_stamp.cpp` 218: 4 size modes, stamp masking, HFLIP+ROT LUTs, 4bpp packing, PM priority, 13.3→13.11 trace vectors | **EXCEEDS** | Emu is a placeholder sampler; Mnemos is a real Super-GFX renderer |
 | **Font expander ($4C-$57)** | **MISSING** | `gate_write_sub` $50-$57 1bpp→4bpp glyph expansion | **EXCEEDS** | Emu has no font expander at all |
 | CD-ROM ECC/EDC (circ_ecc) | `chips/circ_ecc/circ_ecc.c` 187; EDC CRC-32 + P/Q, ECMA-130 | `disc/circ_ecc.cpp`; direct port — same EDC table + P/Q regen | FULL | Faithful port |
-| Disc image formats | `chips/disc_image/disc_image.c` 1097: CUE (5 modes), BIN, ISO, IMG + **Saturn IP.BIN parser + ISO 9660 file walker + CHD** | `disc/disc_image.cpp`: CUE (same 5 modes), BIN/IMG, ISO; **no IP.BIN, no ISO9660 walker, no CHD** | PARTIAL | Emu broader; CUE/BIN/ISO at parity |
-| **CHD (compressed disc)** | `chips/chd_image/` 2541 across 6 files (cdfl/cdlz/cdzl/huff) — full CHD v5 reader | **MISSING** — `open()` returns `std::nullopt` for `.chd`; NOTES.md: "CHD deferred" | **MISSING** | Largest single gap: Emu has full CHD codec stack |
+| Disc image formats | `chips/disc_image/disc_image.c` 1097: CUE (5 modes), BIN, ISO, IMG + **Saturn IP.BIN parser + ISO 9660 file walker + CHD** | `disc/disc_image.cpp`: CUE (same 5 modes), BIN/IMG, ISO, CHD; **no IP.BIN, no ISO9660 walker** | PARTIAL | Emu still broader on Saturn-oriented helpers; Mnemos now has CHD disc and block-device media support |
+| **CHD (compressed disc/block media)** | `chips/chd_image/` 2541 across 6 files (cdfl/cdlz/cdzl/huff) — full CHD v5 reader | `disc/chd_reader.*`: v5 CD `cdzl`/`cdlz`/`cdfl` plus block-device `lzma`/`zlib`/`huff`/`flac`/`none`/`self` | FULL | Mnemos covers the common CHD v5 codec stack used by Sega CD and local G-NET flash-card packages |
 | BIOS handling | `sys_segacd_attach_bios`; CD-BIOS at $000000-$01FFFF + $020000 | BIOS loaded main-side as the Genesis "cartridge"; sub boots from PRG-RAM (no separate sub-BIOS image) | FULL | Different placement, functionally equivalent boot path |
 | Main↔sub comm protocol | comm flags $0E/$0F + words $10-$1F flat; IFL2 via $00→L2 | $0E/$0F lane-merge + $10-$1F; IFL2 as held level; per-access timeline fence | FULL | Mnemos corrects an Emu IRQ-bit off-by-one and models IFL2 as a held level |
 | Interrupt routing | `segacd_sub_irq_raise/update`; levels 1-6; pending = `bit N-1` | `raise/update/acknowledge`; same 6 levels; pending = `bit N` (aligned with BIOS $33 mask) | FULL | Mnemos fixed the bit-convention mismatch, retires pending per-level on IACK |
@@ -248,18 +308,17 @@ input record/replay movies + per-frame rewind ring.
 **Parity justification (95%):** every core Sega CD subsystem is at full functional
 parity or better, and Mnemos additionally implements three things Emu only stubs or
 omits — the real stamp/rotation GFX ASIC, the 1M word-RAM cell/dot/bank model, and
-the font expander. Emu leads only in the disc-media layer: CHD compressed images (a
-full codec stack Mnemos stubs out) and the Saturn IP.BIN + ISO 9660 walker (Saturn-
-oriented). Net: Mnemos exceeds on console hardware; Emu exceeds on disc-container
-breadth.
+the font expander. Emu leads only in the Saturn-oriented disc helpers (IP.BIN +
+ISO 9660 walker); Mnemos now covers the CHD v5 codec stack for compressed CD
+images and bounded block-device media. Net: Mnemos exceeds on console hardware;
+Emu still has broader legacy disc-container helpers.
 
 **Mnemos EXCEEDS Emu in:** real Super-GFX stamp renderer; 1M word-RAM mode; font
 expander; 1M-bank-aware CDC DMA; protocol/timing correctness fixes (per-gate fence,
 corrected IRQ bit convention, IFL2-as-held-level, RS1-RS8 TOC + PLAY warmup).
 
-**Gaps (Emu has, Mnemos lacks):** **CHD** (biggest single gap — `.chd` files do not
-load); Saturn IP.BIN parser; ISO 9660 file-system walker. (Mnemos `disc/NOTES.md`
-explicitly lists all three as "not yet ported.")
+**Gaps (Emu has, Mnemos lacks):** Saturn IP.BIN parser and ISO 9660 file-system
+walker. CHD v5 compressed CD and bounded block-device decode are implemented.
 
 > Open frontiers from the differential-trace work (not strictly Emu parity): license-
 > screen artifacts and the intro freeze (main spins $FFA2F8) — tracked separately;
@@ -370,17 +429,17 @@ advantage): no Z80 `$8000` ROM banking, and both expose only one game (R-Type).
 | **sinclair/spectrum** | spectrum.c 901; ~1,022. Real (48K contention/floating-bus timing, Timex TC2048/TS2068/TC2068, AY, palettes; ULA inline) | z80, (ULA inline), AY-3-8910 | **z80** | none as separate cores; AY-3-8910 PSG (Mnemos has sn76489, not AY) | LOW |
 | **snk/neogeo** | neogeo.c 253; ~378. Explicit scaffold (LSPC regs return 0; YM2610 only latched) | m68k, z80, ym2610 (ssg+adpcm_a+adpcm_b) | **m68000, z80** | ym2610 (shell over ssg 198 / adpcm_a 178 / adpcm_b 186), **LSPC video (does not exist anywhere)** | HIGH |
 | **capcom/cps1** | cps1.c 4216; ~4,431. NOT a scaffold — full tile/sprite/palette video + inline QSound + inline OKI MSM6295 | m68k, z80, ym2151, msm6295 (CPS-A/B bespoke inline) | **m68000, z80, ym2151** | msm6295 (Emu 225-line core, here inlined) + inline CPS-A/B GFX + QSound | MEDIUM |
-| **capcom/cps2** | cps2.c 3667 + cps2_crypto.cpp 696; ~3,948. NOT a scaffold — keyed 68000 opcode decryption, ZIP loading, video, inline QSound | m68k, z80, QSound (inline) | **m68000, z80** | QSound (inline) + CPS-2 crypto; reuses CPS-1 video | MEDIUM (HIGH if cycle-accurate QSound/crypto) |
-| **taito/f2** | taito_f2.c 197; ~282. Explicit scaffold (bare RAM + comm latch, no video, no sound) | m68k, z80, ym2610 (+TC0100SCN/TC0200OBJ) | **m68000, z80** | ym2610 + **TC0100SCN tilemap + TC0200OBJ sprite customs (do not exist)** | HIGH |
+| **capcom/cps2** | cps2.c 3667 + cps2_crypto.cpp 696; ~3,948. NOT a scaffold — keyed 68000 opcode decryption, ZIP loading, video, inline QSound | m68k, z80, QSound (inline) | **m68000, z80, cps2_video, qsound PCM/ADPCM/echo HLE, eeprom_93c46, CPS-2 crypto, player adapter, CPS2 corpus smoke runner, 37-set frame/audio/QSound-register/EEPROM baseline** | Corpus evidence now distinguishes rendered audio from QSound command activity: 28/37 selected rows have programmed-silent QSound at the default visibility gate, the runner supports Emu-style gameplay inputs plus a separate longer audio window, and it records ADPCM trigger/configuration categories plus thresholded first-significant-audio timing. `1944.zip`, `1944_mn.zip`, `armwar.zip`, `avsp.zip`, `choko.zip`, `ddtod.zip`, `dimahoo.zip`, `dstlk.zip`, and `gigawing.zip` were checked one-at-a-time against Emu at the comparable repeated auto-start probe and reach nonzero rendered audio plus QSound volume writes in Mnemos. Emu comparison resolved `sfa3.zip` through zero-filled partial expanded QSound Z80 ROM regions and resolved `cybots.zip` through the 32 KiB alternate object-RAM mirror plus the repeated input cadence; `xmcota.zip` also becomes audible under repeated gameplay input. `ecofghtr.zip` reaches rendered audio too, but its raw first-nonzero timing is dominated by Mnemos's echo path while the thresholded signal lands in the same gameplay window, so it remains an echo-HLE fidelity follow-up rather than a silent-row blocker. Remaining default-silent rows need per-title late-audio/input or sound-driver triage before being treated as QSound core failures. DSP16-level QSound and/or command-timing fidelity remains a real audio follow-up, while game-specific EEPROM seed defaults remain conditional on real-set self-init failures | LOW follow-up |
+| **taito/f2 + local Taito corpus** | taito_f2.c 197; ~282. Explicit scaffold (bare RAM + comm latch, no video, no sound) | m68k, z80, ym2610 (+TC0100SCN/TC0200OBJ); local non-F2 corpus also needs R3000A/ZN-2, PowerPC Type Zero, x86 Type X, flash/HDD media presentation | **m68000, z80, ym2610, TC0100SCN/TC0200OBJ first pass including board-selectable program-region 1bpp text glyphs for quiz maps, TC0280GRD + TC0430GRW ROZ first pass, TC0480SCP first pass with rowscroll/layer-zoom/BG2-BG3 row-zoom sampling and BG/text offset synthetic golden coverage, player frame-exact save/load, Gun Frontier World/Japan + Liquid Kids parent/clone + Quiz HQ + Quiz Torimon + Quiz Chikyu + Quiz Quest + Dondoko Don + Pulirula + Metal Black + Football Champ + Dead Connection + Dino Rex + Thunder Fox + Growl + Ninja Kids + Solitary Fighter profiles, real F2 map, clone-parent zip fallback loading, Taito F2 corpus smoke runner with wrapper-zip staging and optional screenshot SHA-256 pins, local recursive `D:\emu\arcade\Taito` F2 proof (`dinorex`, `gunfront`, `gunfrontj`, `growl`) 4/4, broad Taito inventory showing 4/25 local packages runnable today, `sony.r3000a` CPU bootstrap for the G-NET/ZN-2 workstream, G-NET ZIP/CHD flash-card package decode and boot-ROM/main-RAM/scratchpad/flash-bank/PCMCIA-aperture/RF5C296-proxy shell with first BIOS-facing memory/cache-control, GPU register/VRAM latch shell, COP2/GTE register-transfer and command-latch shell, limited GPU command and OTC DMA execution, and IRQ/root-timer latches with first-pass target/overflow IRQ delivery, optional BIOS+CHD assembly smoke, and a board-smoke player adapter, banked TC0200OBJ records, TC0190FMC-style sprite-bank register-window routing, board-configurable palette formats, board-configurable TC0200OBJ sprite-extension RAM windows, board-configurable active-area marker source including Footchmp-style Y-bit routing, board-specific TC0200OBJ hide-pixel offsets, board-configurable TC0200OBJ immediate/full/partial-delayed buffering policies including qzchikyu partial-word overlay, TC0200OBJ zoom/continuation chaining, marker disable/flip-screen handling, X bias + master/extra/absolute sprite scroll markers, frame-persistent active-area/disable/flip/master-scroll state, TC0360PRI-style tile/text/ROZ/sprite priority register routing and sprite/tile blend modes with ROZ-selector and all sprite-priority-group synthetic coverage, TC0200OBJ sprite-extension code policies, board-selectable TC0480SCP priority decoding** | G-NET/ZN-2 BIOS sourcing, locked-card PCMCIA command/security protocol beyond the minimal RF5C296-style proxy, GPU renderer/SPU/real GTE command math, full DMA timing/exact timer sync/JVS I/O beyond GPU/OTC, Type Zero PowerPC/3D/ATA, Type X x86/Windows/JVS/HDD/container support, non-F2 playable board adapters, broader F2 corpus proof beyond the local F2 set, real-board TC0360PRI priority proof, remaining TC0190FMC board-family profiles, and populated visual/audio golden compatibility evidence | HIGH |
 
 **Easiest → hardest to port next:**
 1. **Spectrum (LOW)** — Z80 done; ULA inline (no separate core); only gap is AY-3-8910. Cleanest win.
 2. **CPS1 (MEDIUM)** — 3 of 4 chips present; only MSM6295 + already-inline CPS-A/B GFX + QSound. High payoff (fighting library).
 3. **NES (MEDIUM)** — real, working; needs ppu2c02 + 2A03 APU + proper 2A03 CPU variant + real mappers.
-4. **CPS2 (MEDIUM→HIGH)** — reuses CPS1 video; adds CPS-2 opcode-crypto + QSound DSP.
+4. **CPS2 follow-up (LOW)** — keep the 37-set frame/audio/QSound-register/EEPROM corpus gate refreshed only for intentional video/audio/NVRAM changes, continue triaging remaining silent QSound rows with `-AudioFrames` plus audio-only `-GameplayInput`, use the ADPCM trigger/configuration columns to separate trigger-only driver state from real mixer failures, fill game-specific EEPROM defaults only if a real set fails to self-initialize, and pursue DSP16-level QSound if cycle-grade audio fidelity is required.
 5. **Amiga (HIGH)** — only m68000 reused; port Agnus/Denise/Paula/CIA8520 (shallow OCS/ECS shells need completion).
 6. **NeoGeo (HIGH)** — scaffold; needs YM2610 + from-scratch LSPC.
-7. **Taito F2 (HIGH)** — scaffold; needs YM2610 + TC0100SCN/TC0200OBJ customs (don't exist). Little Emu code to lift (197 LOC).
+7. **Taito F2 / Taito corpus (HIGH)** — first-pass F2 implementation exists, including Gun Frontier World/Japan + Liquid Kids parent/clone + Quiz HQ + Quiz Torimon + Quiz Chikyu + Quiz Quest + Dondoko Don + Pulirula + Metal Black + Football Champ + Dead Connection + Dino Rex + Thunder Fox + Growl + Ninja Kids + Solitary Fighter real-set profiles, clone-parent zip fallback loading, real F2 map coverage, player frame-exact save/load, a data-gated Taito F2 corpus smoke runner with wrapper-zip staging and optional screenshot SHA-256 pins, local recursive `D:\emu\arcade\Taito` F2 proof (`dinorex`, `gunfront`, `gunfrontj`, `growl`) 4/4, broad Taito inventory showing 4/25 local packages runnable today, `sony.r3000a` CPU bootstrap for the G-NET/ZN-2 path, G-NET ZIP/CHD flash-card package decode, a boot-ROM/main-RAM/scratchpad/flash-bank/PCMCIA-aperture/RF5C296-proxy shell, first BIOS-facing memory/cache-control, a GPU register/VRAM latch shell, COP2/GTE register-transfer and command-latch shell, limited GPU command and OTC DMA execution, IRQ/root-timer latches with first-pass target/overflow IRQ delivery, and a board-smoke player adapter with optional BIOS+CHD assembly smoke; next work is BIOS sourcing, locked-card PCMCIA command/security protocol, GPU renderer/SPU/real GTE command math integration, full DMA timing/exact timer sync/JVS I/O beyond GPU/OTC, Type Zero, Type X, non-F2 playable board adapters, broader F2 corpus proof beyond the local F2 set, real-board TC0360PRI priority proof, remaining TC0190FMC board-family profiles, and populated real-ROM visual/audio golden evidence. Little Emu code to lift (197 LOC).
 8. **SNES (VERY HIGH)** — four new complex cores; CPU IRQ still a scaffold; DMA/HDMA/HiROM missing.
 9. **Saturn (VERY HIGH)** — biggest, but most LOC is CD/MPEG/trace; still needs VDP1+VDP2+SCSP+SCU-DSP + dual-SH2 + SCU/SMPC/CD-block. Multi-month.
 
@@ -416,7 +475,7 @@ likely impact on game compatibility / development if relied upon.
 | R14 | SMS | **Pause button not wired (no pause→NMI)** | MEDIUM | Z80 supports NMI but the SMS manifest exposes no pause entry point — the pause button does nothing |
 | R15 | SMS | **Shallow cart-header validation; cart-RAM mapper detail unverified** | MEDIUM | Only region nibble parsed (no checksum/product-code/size); Sega-mapper `$8000-$BFFF` cart-RAM bank-select not separately verified |
 | R16 | Sega CD | **No ISO 9660 walker / Saturn IP.BIN** | LOW-MED | Mostly Saturn-relevant; some CD tooling/inspection paths unavailable |
-| R17 | C64 / all | **Dev-tooling axis is a broad gap** (the C64 suite ~4,400 LOC is just the visible part) | LOW (scope) | Out of *hardware* scope but real: no GUI debugger, no disassemblers, scripting is README-stubs, save-states wired C64-only. Full inventory + T#/N# checklist in [`tooling-gap-inventory.md`](tooling-gap-inventory.md) |
+| R17 | C64 / all | **Dev-tooling axis is a broad gap** (the C64 suite ~4,400 LOC is just the visible part) | LOW (scope) | Out of *hardware* scope but real: no GUI debugger, no disassemblers, scripting is README-stubs, and save-state/rewind player coverage is still uneven outside the new CPS2 path. Full inventory + T#/N# checklist in [`tooling-gap-inventory.md`](tooling-gap-inventory.md) |
 | R18 | Sega CD / Genesis | **CD-DA & sub-BIOS placement differ from Emu** | LOW (architectural) | CD-DA lives in segacd subsystem (not Genesis core); sub-BIOS runs as main cart (not a dedicated sub image). Functionally equivalent — note before "comparing to Emu" |
 | R19 | Multiple | **Emu is NOT a trustworthy oracle for its scaffolds/stubs** | META | Emu's M72, NeoGeo, Taito F2, SNES are scaffolds; its SVP DSP, Sega CD 1M mode + stamp ASIC are stubs. "Match Emu" is wrong for these — use GPGX/MAME/hardware. Do not regress Mnemos's superior implementations toward Emu |
 

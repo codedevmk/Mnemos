@@ -1,0 +1,65 @@
+# Image Fight (Japan) -- Irem M72 protected clone of imgfight.
+# Requires the parent imgfight.zip set beside the clone for inherited graphics/sample declarations.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "imgfightj"
+parent      = "imgfight"
+board       = "irem_m72"
+orientation = "vertical"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "if_c-h0-.ic40"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0x592d2d80
+
+[[region.file]]
+name   = "if_c-l0-.ic37"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x61f89056
+
+[[region.file]]
+name   = "if_c-h3-.ic43"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0xea030541
+
+[[region.file]]
+name   = "if_c-l3-.ic34"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0xc66ae348
+
+[[region.file]]
+name   = "if_c-h3-.ic43"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0xea030541
+
+[[region.file]]
+name   = "if_c-l3-.ic34"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0xc66ae348
+
+[[region]]
+name = "mcu"
+size = 0x1000
+
+[[region.file]]
+name   = "if_c-pr-.ic1"
+offset = 0x0000
+size   = 0x1000
+crc32  = 0xef0d5098

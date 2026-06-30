@@ -16,11 +16,16 @@
 namespace {
 
     using mnemos::manifests::common::load_rom_set;
+    using mnemos::manifests::common::inherit_parent_regions;
     using mnemos::manifests::common::make_directory_rom_provider;
     using mnemos::manifests::common::make_fallback_rom_provider;
     using mnemos::manifests::common::make_zip_rom_provider;
     using mnemos::manifests::common::rom_file_provider;
     using mnemos::manifests::common::rom_set_decl;
+    using mnemos::manifests::common::rom_set_dip_option;
+    using mnemos::manifests::common::rom_set_dip_switch;
+    using mnemos::manifests::common::rom_set_hle_decl;
+    using mnemos::manifests::common::screen_orientation;
     using mnemos::security::cryptography::crc32;
 
     // Provider over an in-memory name -> bytes map.
@@ -162,6 +167,27 @@ TEST_CASE("rom_set fills uncovered bytes and keeps loading past bad files", "[ro
     const std::vector<std::uint8_t> expected{0x01U, 0x02U, 0xAAU, 0xAAU,
                                              0x03U, 0x04U, 0xAAU, 0xAAU};
     CHECK(*region == expected);
+}
+
+TEST_CASE("rom_set accepts an alias name for CRC-equivalent dump files", "[rom_set]") {
+    const std::vector<std::uint8_t> data{0x41U, 0x42U, 0x43U, 0x44U};
+
+    rom_set_decl decl;
+    decl.name = "alias";
+    decl.regions.push_back({.name = "gfx",
+                            .size = 4U,
+                            .files = {{.name = "standalone.gfx",
+                                       .aliases = {"split-parent.gfx"},
+                                       .offset = 0U,
+                                       .size = data.size(),
+                                       .crc32 = crc32(data)}}});
+
+    const auto image = load_rom_set(decl, map_provider({{"split-parent.gfx", data}}));
+
+    REQUIRE(image.ok());
+    const auto* region = image.region("gfx");
+    REQUIRE(region != nullptr);
+    CHECK(*region == data);
 }
 
 TEST_CASE("rom_set reports a file overflowing its region", "[rom_set]") {
@@ -432,6 +458,138 @@ TEST_CASE("rom_set fallback provider tolerates a null sub-provider", "[rom_set]"
     auto p2 = make_fallback_rom_provider(map_provider({{"a", only}}), {});
     CHECK(p2("a") == only);
     CHECK_FALSE(p2("b").has_value());
+}
+
+TEST_CASE("rom_set inherits parent regions into a clone declaration", "[rom_set]") {
+    rom_set_decl parent;
+    parent.name = "parent";
+    parent.board = "board";
+    parent.dips.push_back(rom_set_dip_switch{
+        .bank = "SW1",
+        .name = "Parent Lives",
+        .mask = 0x0003U,
+        .default_value = 0x0003U,
+        .options = {rom_set_dip_option{.label = "3", .value = 0x0003U}}});
+    parent.hle.push_back(rom_set_hle_decl{
+        .chip = "mcu", .profile = "parent.profile", .rationale = "parent-only substitution"});
+    parent.regions.push_back({.name = "maincpu",
+                              .size = 2U,
+                              .files = {{.name = "parent.prg", .offset = 0U, .size = 2U}}});
+    parent.regions.push_back({.name = "gfx",
+                              .size = 4U,
+                              .files = {{.name = "shared.gfx", .offset = 0U, .size = 4U}}});
+
+    rom_set_decl clone;
+    clone.name = "clone";
+    clone.parent = "parent";
+    clone.board = "board";
+    clone.orientation = screen_orientation::vertical;
+    clone.dips.push_back(rom_set_dip_switch{
+        .bank = "SW1",
+        .name = "Clone Lives",
+        .mask = 0x0003U,
+        .default_value = 0x0002U,
+        .options = {rom_set_dip_option{.label = "2", .value = 0x0002U}}});
+    clone.hle.push_back(rom_set_hle_decl{
+        .chip = "mcu", .profile = "clone.profile", .rationale = "clone-specific substitution"});
+    clone.regions.push_back({.name = "maincpu",
+                             .size = 2U,
+                             .files = {{.name = "clone.prg", .offset = 0U, .size = 2U}}});
+    clone.regions.push_back({.name = "mcu",
+                             .size = 1U,
+                             .files = {{.name = "clone.mcu", .offset = 0U, .size = 1U}}});
+
+    const rom_set_decl merged = inherit_parent_regions(parent, std::move(clone));
+    CHECK(merged.name == "clone");
+    REQUIRE(merged.parent.has_value());
+    CHECK(*merged.parent == "parent");
+    CHECK(merged.orientation == screen_orientation::vertical);
+    REQUIRE(merged.dips.size() == 1U);
+    CHECK(merged.dips[0].name == "Clone Lives");
+    REQUIRE(merged.hle.size() == 1U);
+    CHECK(merged.hle[0].profile == "clone.profile");
+    REQUIRE(merged.regions.size() == 3U);
+    CHECK(merged.regions[0].name == "maincpu");
+    REQUIRE_FALSE(merged.regions[0].files.empty());
+    CHECK(merged.regions[0].files[0].name == "clone.prg");
+    CHECK(merged.regions[1].name == "gfx");
+    REQUIRE_FALSE(merged.regions[1].files.empty());
+    CHECK(merged.regions[1].files[0].name == "shared.gfx");
+    CHECK(merged.regions[2].name == "mcu");
+}
+
+TEST_CASE("rom_set inherits parent metadata when the clone omits replacements", "[rom_set]") {
+    rom_set_decl parent;
+    parent.name = "parent";
+    parent.board = "board";
+    parent.dips.push_back(rom_set_dip_switch{
+        .bank = "SW1",
+        .name = "Parent Lives",
+        .mask = 0x0003U,
+        .default_value = 0x0003U,
+        .options = {rom_set_dip_option{.label = "3", .value = 0x0003U}}});
+    parent.hle.push_back(rom_set_hle_decl{
+        .chip = "mcu", .profile = "parent.profile", .rationale = "parent-only substitution"});
+    parent.regions.push_back({.name = "maincpu",
+                              .size = 2U,
+                              .files = {{.name = "parent.prg", .offset = 0U, .size = 2U}}});
+
+    rom_set_decl clone;
+    clone.name = "clone";
+    clone.parent = "parent";
+    clone.board = "board";
+    clone.regions.push_back({.name = "maincpu",
+                             .size = 2U,
+                             .files = {{.name = "clone.prg", .offset = 0U, .size = 2U}}});
+
+    const rom_set_decl merged = inherit_parent_regions(parent, std::move(clone));
+
+    REQUIRE(merged.dips.size() == 1U);
+    CHECK(merged.dips[0].name == "Parent Lives");
+    REQUIRE(merged.hle.size() == 1U);
+    CHECK(merged.hle[0].profile == "parent.profile");
+    REQUIRE(merged.regions.size() == 1U);
+    CHECK(merged.regions[0].files[0].name == "clone.prg");
+}
+
+TEST_CASE("rom_set does not inherit parent HLE for a chip the clone owns", "[rom_set]") {
+    rom_set_decl parent;
+    parent.name = "parent";
+    parent.board = "board";
+    parent.hle.push_back(rom_set_hle_decl{
+        .chip = "mcu", .profile = "parent.mcu_hle", .rationale = "parent-only MCU HLE"});
+    parent.hle.push_back(rom_set_hle_decl{
+        .chip = "audio_dsp",
+        .profile = "parent.audio_hle",
+        .rationale = "parent-only audio HLE"});
+    parent.regions.push_back({.name = "maincpu",
+                              .size = 2U,
+                              .files = {{.name = "parent.prg", .offset = 0U, .size = 2U}}});
+    parent.regions.push_back({.name = "gfx",
+                              .size = 4U,
+                              .files = {{.name = "shared.gfx", .offset = 0U, .size = 4U}}});
+
+    rom_set_decl clone;
+    clone.name = "clone";
+    clone.parent = "parent";
+    clone.board = "board";
+    clone.regions.push_back({.name = "maincpu",
+                             .size = 2U,
+                             .files = {{.name = "clone.prg", .offset = 0U, .size = 2U}}});
+    clone.regions.push_back({.name = "mcu",
+                             .size = 1U,
+                             .files = {{.name = "clone.mcu", .offset = 0U, .size = 1U}}});
+
+    const rom_set_decl merged = inherit_parent_regions(parent, std::move(clone));
+
+    REQUIRE(merged.hle.size() == 1U);
+    CHECK(merged.hle[0].chip == "audio_dsp");
+    CHECK(merged.hle[0].profile == "parent.audio_hle");
+    REQUIRE(merged.regions.size() == 3U);
+    CHECK(merged.regions[1].name == "gfx");
+    REQUIRE_FALSE(merged.regions[1].files.empty());
+    CHECK(merged.regions[1].files[0].name == "shared.gfx");
+    CHECK(merged.regions[2].name == "mcu");
 }
 
 TEST_CASE("rom_set merges a clone's unique ROM with a parent's shared ROM", "[rom_set]") {

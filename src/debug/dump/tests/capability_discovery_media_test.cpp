@@ -22,6 +22,7 @@ namespace {
     using mnemos::frontend_sdk::media_image_info;
     using mnemos::frontend_sdk::media_page_hash;
     using mnemos::frontend_sdk::media_residency;
+    using mnemos::frontend_sdk::media_validation_issue;
     using mnemos::frontend_sdk::player_system;
     using mnemos::frontend_sdk::spec_field;
     using mnemos::frontend_sdk::video_region;
@@ -140,7 +141,7 @@ TEST_CASE("media capability discovery reports resident paged and streamed metada
     CHECK(payload_value(*stream, "hash_algorithm") == "crc32");
 }
 
-TEST_CASE("media capability discovery diagnoses missing hashes provider outages and revisions",
+TEST_CASE("media capability discovery diagnoses missing hashes provider outages revisions and validation issues",
           "[capability_discovery][media]") {
     media_capability_info media{};
     media.media.push_back(media_image_info{.id = "no_hash",
@@ -178,6 +179,18 @@ TEST_CASE("media capability discovery diagnoses missing hashes provider outages 
                                            .full_hash = "sha1-paged",
                                            .provider_id = "disc.cache",
                                            .revision = "rev-ok"});
+    media.media.push_back(media_image_info{
+        .id = "bad_load",
+        .label = "CRC-damaged ROM set",
+        .residency = media_residency::resident,
+        .byte_count = 0x100000U,
+        .hash_algorithm = media_hash_algorithm::crc32,
+        .full_hash = "12345678",
+        .provider_id = "arcade.loader",
+        .revision = "loaded",
+        .cache_hint = "resident",
+        .validation_issues = {media_validation_issue{.code = "media.rom_set.load_issue",
+                                                     .detail = "program.rom: crc32 mismatch"}}});
 
     media_system sys{std::move(media)};
     const auto manifest = discover_dump_capabilities(sys);
@@ -203,4 +216,10 @@ TEST_CASE("media capability discovery diagnoses missing hashes provider outages 
     REQUIRE(bad_page != nullptr);
     CHECK(bad_page->state == capability_state::degraded);
     CHECK(has_diagnostic(manifest, "media.page_size.missing"));
+
+    const auto* bad_load = find_descriptor(manifest, "media.bad_load");
+    REQUIRE(bad_load != nullptr);
+    CHECK(bad_load->state == capability_state::degraded);
+    CHECK(payload_value(*bad_load, "validation_issue_count") == "1");
+    CHECK(has_diagnostic(manifest, "media.rom_set.load_issue"));
 }

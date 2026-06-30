@@ -22,6 +22,7 @@ if(BUILD_TESTING)
         mnemos_chips_cpu_sh2_test
         SOURCES
             tests/sh2_test.cpp
+            tests/sh2_dmac_test.cpp
             tests/sh2_exception_test.cpp
             tests/sh2_divu_test.cpp
         LIBRARIES mnemos::chips::cpu::sh2 mnemos::topology

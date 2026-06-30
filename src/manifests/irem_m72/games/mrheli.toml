@@ -1,0 +1,176 @@
+# Mr. HELI no Daibouken (Japan) -- Irem M72 protected clone of bchopper.
+# Schema mnemos-romset/1; the adapter embeds this checked-in manifest and
+# resolves it from the standard set zip name, so no game.toml copy is required. Shared graphics/sample dumps may
+# be resolved from bchopper.zip through the declarative parent fallback.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "mrheli"
+parent      = "bchopper"
+board       = "irem_m72"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "mh_c-h0-.ic40"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0xe2ca5646
+
+[[region.file]]
+name   = "mh_c-l0-.ic37"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x643e23cd
+
+[[region.file]]
+name   = "mh_c-h1-.ic41"
+offset = 0x20001
+stride = 2
+size   = 0x10000
+crc32  = 0x8974e84d
+
+[[region.file]]
+name   = "mh_c-l1-.ic36"
+offset = 0x20000
+stride = 2
+size   = 0x10000
+crc32  = 0x5f8bda69
+
+[[region.file]]
+name   = "mh_c-h3-.ic43"
+offset = 0x60001
+stride = 2
+size   = 0x10000
+crc32  = 0x143f596e
+
+[[region.file]]
+name   = "mh_c-l3-.ic34"
+offset = 0x60000
+stride = 2
+size   = 0x10000
+crc32  = 0xc0982536
+
+# Boot-chunk reload of the final program pair at the top of the region.
+[[region.file]]
+name   = "mh_c-h3-.ic43"
+offset = 0xE0001
+stride = 2
+size   = 0x10000
+crc32  = 0x143f596e
+
+[[region.file]]
+name   = "mh_c-l3-.ic34"
+offset = 0xE0000
+stride = 2
+size   = 0x10000
+crc32  = 0xc0982536
+
+[[region]]
+name = "mcu"
+size = 0x1000
+
+[[region.file]]
+name   = "mh_c-pr-.ic1"
+offset = 0x0000
+size   = 0x1000
+crc32  = 0x897dc4ee
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "mh_c-00.ic53"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xdec4e121
+
+[[region.file]]
+name   = "mh_c-10.ic51"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x7aaa151e
+
+[[region.file]]
+name   = "mh_c-20.ic49"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0xeae0de74
+
+[[region.file]]
+name   = "mh_c-30.ic47"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x01d5052f
+
+[[region]]
+name = "tiles_a"
+size = 0x040000
+
+[[region.file]]
+name   = "mh_b-a0.ic21"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x6a0db256
+
+[[region.file]]
+name   = "mh_b-a1.ic22"
+offset = 0x10000
+size   = 0x10000
+crc32  = 0x14ec9795
+
+[[region.file]]
+name   = "mh_b-a2.ic20"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0xdfcb510e
+
+[[region.file]]
+name   = "mh_b-a3.ic23"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0x957e329b
+
+[[region]]
+name = "tiles_b"
+size = 0x040000
+
+[[region.file]]
+name   = "mh_b-b0-.ic26"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xb5b95776
+
+[[region.file]]
+name   = "mh_b-b1-.ic27"
+offset = 0x10000
+size   = 0x10000
+crc32  = 0x74ca16ee
+
+[[region.file]]
+name   = "mh_b-b2-.ic25"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0xb82cca04
+
+[[region.file]]
+name   = "mh_b-b3-.ic24"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0xa7afc920
+
+[[region]]
+name = "samples"
+size = 0x10000
+
+[[region.file]]
+name   = "mh_c-v0-b.ic44"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xd0c27e58

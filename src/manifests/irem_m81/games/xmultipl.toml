@@ -1,0 +1,221 @@
+# X Multiply (Japan) -- Irem M81 parent set.
+# Schema mnemos-romset/1; this is a ROM-contract manifest only. The executable
+# M81 board profile remains separate from M72 because the program/video wiring
+# is not a true-M72 variant.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "xmultipl"
+board       = "irem_m81"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "xm_a-h0-.ic59"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0x509bc970
+
+[[region.file]]
+name   = "xm_a-l0-.ic68"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x490a9ebc
+
+[[region.file]]
+name   = "xm_a-h1-.ic58"
+offset = 0x20001
+stride = 2
+size   = 0x20000
+crc32  = 0x449048cf
+
+[[region.file]]
+name   = "xm_a-l1-.ic67"
+offset = 0x20000
+stride = 2
+size   = 0x20000
+crc32  = 0x26ce39b0
+
+# Boot-chunk reload of the final program pair at the top of the 1 MiB V30 space.
+[[region.file]]
+name   = "xm_a-h1-.ic58"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0x449048cf
+
+[[region.file]]
+name   = "xm_a-l1-.ic67"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0x26ce39b0
+
+[[region]]
+name = "soundcpu"
+size = 0x010000
+
+[[region.file]]
+name   = "xm_a-sp-.ic14"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x006eef56
+
+[[region]]
+name = "samples"
+size = 0x020000
+
+[[region.file]]
+name   = "t52.v0.ic11"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x2db1bd80
+
+[[region]]
+name = "sprites"
+size = 0x100000
+
+[[region.file]]
+name   = "t44.00.ic3"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xdb45186e
+
+[[region.file]]
+name   = "t45.01.ic2"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x4d0764d4
+
+[[region.file]]
+name   = "t46.10.ic5"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0xf0c465a4
+
+[[region.file]]
+name   = "t47.11.ic4"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x1263b24b
+
+[[region.file]]
+name   = "t48.20.ic12"
+offset = 0x80000
+size   = 0x20000
+crc32  = 0x4129944f
+
+[[region.file]]
+name   = "t49.21.ic11"
+offset = 0xA0000
+size   = 0x20000
+crc32  = 0x2346e6f9
+
+[[region.file]]
+name   = "t50.30.ic14"
+offset = 0xC0000
+size   = 0x20000
+crc32  = 0xe322543e
+
+[[region.file]]
+name   = "t51.31.ic13"
+offset = 0xE0000
+size   = 0x20000
+crc32  = 0x229bf7b1
+
+[[region]]
+name = "tiles"
+size = 0x100000
+
+[[region.file]]
+name   = "t53.a0.ic50"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x1a082494
+
+[[region.file]]
+name   = "t54.a1.ic49"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x076c16c5
+
+[[region.file]]
+name   = "t55.a2.ic51"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0x25d877a5
+
+[[region.file]]
+name   = "t56.a3.ic52"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x5b1213f5
+
+[[region.file]]
+name   = "t57.b0.ic47"
+offset = 0x80000
+size   = 0x20000
+crc32  = 0x0a84e0c7
+
+[[region.file]]
+name   = "t58.b1.ic48"
+offset = 0xA0000
+size   = 0x20000
+crc32  = 0xa874121d
+
+[[region.file]]
+name   = "t59.b2.ic46"
+offset = 0xC0000
+size   = 0x20000
+crc32  = 0x69deb990
+
+[[region.file]]
+name   = "t60.b3.ic45"
+offset = 0xE0000
+size   = 0x20000
+crc32  = 0x14c69f99
+
+[[region]]
+name = "proms"
+size = 0x065c
+
+[[region.file]]
+name   = "m81_a-9l-.ic72"
+offset = 0x0000
+size   = 0x0100
+crc32  = 0xb460c438
+
+[[region.file]]
+name   = "m81_a-9p-.ic74"
+offset = 0x0100
+size   = 0x0100
+crc32  = 0xa4f2c4bc
+
+[[region.file]]
+name   = "xm_a-7d-.ic48"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0x2ef7ad4e
+
+[[region.file]]
+name   = "m81_a-2h-.ic2"
+offset = 0x0317
+size   = 0x0117
+crc32  = 0x21ede612
+
+[[region.file]]
+name   = "m81_a-5l-.ic28"
+offset = 0x042e
+size   = 0x0117
+crc32  = 0x56c29834
+
+[[region.file]]
+name   = "m81_b-9h-.ic94"
+offset = 0x0545
+size   = 0x0117
+crc32  = 0x4bc1d393

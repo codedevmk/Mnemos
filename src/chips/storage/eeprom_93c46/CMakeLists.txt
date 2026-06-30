@@ -11,6 +11,9 @@ target_include_directories(
         "$<INSTALL_INTERFACE:include>"
 )
 
+# state.hpp (state_writer / state_reader) for save_state / load_state.
+target_link_libraries(mnemos_chips_storage_eeprom_93c46 PUBLIC mnemos::chips::shared)
+
 mnemos_apply_common_target_options(mnemos_chips_storage_eeprom_93c46 PUBLIC)
 mnemos_declare_tier(NAME mnemos_chips_storage_eeprom_93c46 TIER 2 DEPENDS mnemos_foundation)
 

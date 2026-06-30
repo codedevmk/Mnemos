@@ -24,9 +24,11 @@ id           = "cpu"
 type         = "motorola.68000"
 attached_bus = "main"
 [chip.config]
-z80_bus_latency  = true
-irq_ack_callback = "genesis.irq_ack"
-tas_callback     = "genesis.tas_drop"
+z80_bus_latency      = true
+genesis_dram_refresh = true
+genesis_interrupt_phase_timing = true
+irq_ack_callback     = "genesis.irq_ack"
+tas_callback         = "genesis.tas_drop"
 
 [[chip]]
 id           = "z80"

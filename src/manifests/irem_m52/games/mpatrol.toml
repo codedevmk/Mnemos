@@ -1,0 +1,408 @@
+# Moon Patrol -- local Irem M52 corpus set.
+# Schema mnemos-romset/1. This is a ROM-contract manifest; the board profile is
+# a first-pass M52 route and does not yet certify AY/MSM audio or parallax parity.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "mpatrol"
+board       = "irem_m52"
+orientation = "horizontal"
+
+[[dip]]
+bank = "SW1"
+name = "Patrol Cars"
+mask = 0x0003
+default = 0x0001
+
+[[dip.option]]
+label = "5"
+value = 0x0000
+
+[[dip.option]]
+label = "4"
+value = 0x0001
+
+[[dip.option]]
+label = "3"
+value = 0x0002
+
+[[dip.option]]
+label = "2"
+value = 0x0003
+
+[[dip]]
+bank = "SW1"
+name = "Additional Car"
+mask = 0x000c
+default = 0x0000
+
+[[dip.option]]
+label = "10000 / 30000 / 50000"
+value = 0x0000
+
+[[dip.option]]
+label = "20000 / 40000 / 60000"
+value = 0x0004
+
+[[dip.option]]
+label = "10000 Only"
+value = 0x0008
+
+[[dip.option]]
+label = "No Extended Play"
+value = 0x000c
+
+[[dip]]
+bank = "SW1"
+name = "Coinage"
+mask = 0x00f0
+default = 0x0000
+condition_mask = 0x0400
+condition_value = 0x0000
+
+[[dip.option]]
+label = "2 Plays / 1 Coin"
+value = 0x0080
+
+[[dip.option]]
+label = "3 Plays / 1 Coin"
+value = 0x0090
+
+[[dip.option]]
+label = "4 Plays / 1 Coin"
+value = 0x00a0
+
+[[dip.option]]
+label = "5 Plays / 1 Coin"
+value = 0x00b0
+
+[[dip.option]]
+label = "6 Plays / 1 Coin"
+value = 0x00c0
+
+[[dip.option]]
+label = "1 Play / 1 Coin"
+value = 0x0000
+
+[[dip.option]]
+label = "1 Play / 2 Coins"
+value = 0x0010
+
+[[dip.option]]
+label = "1 Play / 3 Coins"
+value = 0x0020
+
+[[dip.option]]
+label = "1 Play / 4 Coins"
+value = 0x0030
+
+[[dip.option]]
+label = "1 Play / 5 Coins"
+value = 0x0040
+
+[[dip.option]]
+label = "1 Play / 6 Coins"
+value = 0x0050
+
+[[dip.option]]
+label = "Free Play"
+value = 0x00f0
+
+[[dip]]
+bank = "SW1"
+name = "Coin 1"
+mask = 0x0030
+default = 0x0000
+condition_mask = 0x0400
+condition_value = 0x0400
+
+[[dip.option]]
+label = "1 Play / 1 Coin"
+value = 0x0000
+
+[[dip.option]]
+label = "1 Play / 2 Coins"
+value = 0x0010
+
+[[dip.option]]
+label = "1 Play / 3 Coins"
+value = 0x0020
+
+[[dip.option]]
+label = "Free Play"
+value = 0x0030
+
+[[dip]]
+bank = "SW1"
+name = "Coin 2"
+mask = 0x00c0
+default = 0x0000
+condition_mask = 0x0400
+condition_value = 0x0400
+
+[[dip.option]]
+label = "2 Plays / 1 Coin"
+value = 0x0000
+
+[[dip.option]]
+label = "3 Plays / 1 Coin"
+value = 0x0040
+
+[[dip.option]]
+label = "5 Plays / 1 Coin"
+value = 0x0080
+
+[[dip.option]]
+label = "6 Plays / 1 Coin"
+value = 0x00c0
+
+[[dip]]
+bank = "SW2"
+name = "Flip Picture"
+mask = 0x0100
+default = 0x0000
+
+[[dip.option]]
+label = "No"
+value = 0x0000
+
+[[dip.option]]
+label = "Yes"
+value = 0x0100
+
+[[dip]]
+bank = "SW2"
+name = "Cabinet Type"
+mask = 0x0200
+default = 0x0200
+
+[[dip.option]]
+label = "Table"
+value = 0x0000
+
+[[dip.option]]
+label = "Upright"
+value = 0x0200
+
+[[dip]]
+bank = "SW2"
+name = "Coin Mode"
+mask = 0x0400
+default = 0x0000
+
+[[dip.option]]
+label = "Mode 1"
+value = 0x0000
+
+[[dip.option]]
+label = "Mode 2"
+value = 0x0400
+
+[[dip]]
+bank = "SW2"
+name = "Switch 4"
+mask = 0x0800
+default = 0x0000
+
+[[dip.option]]
+label = "Off"
+value = 0x0000
+
+[[dip.option]]
+label = "On"
+value = 0x0800
+
+[[dip]]
+bank = "SW2"
+name = "Freeze Screen"
+mask = 0x1000
+default = 0x0000
+
+[[dip.option]]
+label = "No"
+value = 0x0000
+
+[[dip.option]]
+label = "Yes"
+value = 0x1000
+
+[[dip]]
+bank = "SW2"
+name = "Sector Selection"
+mask = 0x2000
+default = 0x0000
+
+[[dip.option]]
+label = "No"
+value = 0x0000
+
+[[dip.option]]
+label = "Yes"
+value = 0x2000
+
+[[dip]]
+bank = "SW2"
+name = "Demo Mode"
+mask = 0x4000
+default = 0x0000
+
+[[dip.option]]
+label = "No"
+value = 0x0000
+
+[[dip.option]]
+label = "Yes"
+value = 0x4000
+
+[[dip]]
+bank = "SW2"
+name = "Test Mode"
+mask = 0x8000
+default = 0x0000
+
+[[dip.option]]
+label = "No"
+value = 0x0000
+
+[[dip.option]]
+label = "Yes"
+value = 0x8000
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name    = "mpa-1.3m"
+aliases = ["mpatrol/mpa-1.3m"]
+offset  = 0x0000
+size    = 0x1000
+crc32   = 0x5873a860
+
+[[region.file]]
+name    = "mpa-2.3l"
+aliases = ["mpatrol/mpa-2.3l"]
+offset  = 0x1000
+size    = 0x1000
+crc32   = 0xf4b85974
+
+[[region.file]]
+name    = "mpa-3.3k"
+aliases = ["mpatrol/mpa-3.3k"]
+offset  = 0x2000
+size    = 0x1000
+crc32   = 0x2e1a598c
+
+[[region.file]]
+name    = "mpa-4.3j"
+aliases = ["mpatrol/mpa-4.3j"]
+offset  = 0x3000
+size    = 0x1000
+crc32   = 0xdd05b587
+
+[[region]]
+name = "soundcpu"
+size = 0x10000
+
+[[region.file]]
+name    = "mpe-1.3l"
+aliases = ["mpatrol/mpe-1.3l"]
+offset  = 0x0000
+size    = 0x1000
+crc32   = 0xc46a7f72
+
+[[region.file]]
+name    = "mpe-2.3k"
+aliases = ["mpatrol/mpe-2.3k"]
+offset  = 0x1000
+size    = 0x1000
+crc32   = 0xc7aa1fb0
+
+[[region.file]]
+name    = "mpe-3.3h"
+aliases = ["mpatrol/mpe-3.3h"]
+offset  = 0x2000
+size    = 0x1000
+crc32   = 0xa0919392
+
+[[region.file]]
+name    = "mpe-4.3f"
+aliases = ["mpatrol/mpe-4.3f"]
+offset  = 0x3000
+size    = 0x1000
+crc32   = 0xcca6d023
+
+[[region.file]]
+name    = "mpe-5.3e"
+aliases = ["mpatrol/mpe-5.3e"]
+offset  = 0x4000
+size    = 0x1000
+crc32   = 0xe3ee7f75
+
+[[region]]
+name = "tx_gfx"
+size = 0x2000
+
+[[region.file]]
+name    = "mpb-1.3n"
+aliases = ["mpatrol/mpb-1.3n"]
+offset  = 0x0000
+size    = 0x1000
+crc32   = 0x9b72133a
+
+[[region.file]]
+name    = "mpb-2.3m"
+aliases = ["mpatrol/mpb-2.3m"]
+offset  = 0x1000
+size    = 0x1000
+crc32   = 0x707ace5e
+
+[[region]]
+name = "sprite_gfx"
+size = 0x1000
+
+[[region.file]]
+name    = "mp-s1.1a"
+aliases = ["mpatrol/mp-s1.1a"]
+offset  = 0x0000
+size    = 0x1000
+crc32   = 0x561d3108
+
+[[region]]
+name = "proms"
+size = 0x0540
+
+[[region.file]]
+name    = "mpc-1.1f"
+aliases = ["mpatrol/mpc-1.1f"]
+offset  = 0x0000
+size    = 0x0020
+crc32   = 0x26979b13
+
+[[region.file]]
+name    = "mpc-3.1m"
+aliases = ["mpatrol/mpc-3.1m"]
+offset  = 0x0020
+size    = 0x0020
+crc32   = 0x6a57eff2
+
+[[region.file]]
+name    = "mpc-2.2h"
+aliases = ["mpatrol/mpc-2.2h"]
+offset  = 0x0040
+size    = 0x0100
+crc32   = 0x7ae4cd97
+
+[[region.file]]
+name    = "mpc-4.2a"
+aliases = ["mpatrol/mpc-4.2a"]
+offset  = 0x0140
+size    = 0x0200
+crc32   = 0x07f99284
+
+[[region.file]]
+name    = "mp_7621-5.7h"
+aliases = ["mpatrol/mp_7621-5.7h"]
+offset  = 0x0340
+size    = 0x0200
+crc32   = 0xcf1fd9d0

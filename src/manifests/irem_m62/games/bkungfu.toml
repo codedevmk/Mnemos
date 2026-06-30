@@ -1,0 +1,194 @@
+# bkungfu -- Irem M62 raw-media contract.
+# Local wrapper: D:\emu\irem\M62\bkungfu.zip.
+# Region placement is a contiguous artifact contract only; exact M62 bus
+# mapping, video priority, and M6803/AY/MSM5205 behavior remain gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "bkungfu"
+board       = "irem_m62"
+orientation = "horizontal"
+
+[[region]]
+name = "raw_media"
+size = 0x68720
+
+[[region.file]]
+name   = "km-a.3a"
+offset = 0x0
+size   = 0x4000
+crc32  = 0xbb709dd6
+
+[[region.file]]
+name   = "km-a.3d"
+offset = 0x4000
+size   = 0x4000
+crc32  = 0xef8551cb
+
+[[region.file]]
+name   = "km-a.3f"
+offset = 0x8000
+size   = 0x4000
+crc32  = 0xbec93bdc
+
+[[region.file]]
+name   = "km-a.4d"
+offset = 0xc000
+size   = 0x4000
+crc32  = 0x08b14684
+
+[[region.file]]
+name   = "km-a.4e"
+offset = 0x10000
+size   = 0x4000
+crc32  = 0x083632aa
+
+[[region.file]]
+name   = "km-b.1l"
+offset = 0x14000
+size   = 0x100
+crc32  = 0x4f44ef5c
+
+[[region.file]]
+name   = "km-b.1m"
+offset = 0x14100
+size   = 0x100
+crc32  = 0x73638418
+
+[[region.file]]
+name   = "km-b.1n"
+offset = 0x14200
+size   = 0x100
+crc32  = 0x7967dfdf
+
+[[region.file]]
+name   = "km-b.3m"
+offset = 0x14300
+size   = 0x4000
+crc32  = 0x1d1ec6f2
+
+[[region.file]]
+name   = "km-b.3n"
+offset = 0x18300
+size   = 0x4000
+crc32  = 0xb88a4d16
+
+[[region.file]]
+name   = "km-b.4a"
+offset = 0x1c300
+size   = 0x4000
+crc32  = 0x018509c2
+
+[[region.file]]
+name   = "km-b.4c"
+offset = 0x20300
+size   = 0x4000
+crc32  = 0x31cb5b98
+
+[[region.file]]
+name   = "km-b.4d"
+offset = 0x24300
+size   = 0x4000
+crc32  = 0x90a03502
+
+[[region.file]]
+name   = "km-b.4e"
+offset = 0x28300
+size   = 0x4000
+crc32  = 0x942e60fc
+
+[[region.file]]
+name   = "km-b.4f"
+offset = 0x2c300
+size   = 0x4000
+crc32  = 0x3a75305b
+
+[[region.file]]
+name   = "km-b.4h"
+offset = 0x30300
+size   = 0x4000
+crc32  = 0xf322c5dd
+
+[[region.file]]
+name   = "km-b.4k"
+offset = 0x34300
+size   = 0x4000
+crc32  = 0x7e8bec97
+
+[[region.file]]
+name   = "km-b.4l"
+offset = 0x38300
+size   = 0x4000
+crc32  = 0xfe746127
+
+[[region.file]]
+name   = "km-b.4m"
+offset = 0x3c300
+size   = 0x4000
+crc32  = 0x53623913
+
+[[region.file]]
+name   = "km-b.4n"
+offset = 0x40300
+size   = 0x4000
+crc32  = 0xf92be992
+
+[[region.file]]
+name   = "km-b.5p"
+offset = 0x44300
+size   = 0x20
+crc32  = 0x33409e90
+
+[[region.file]]
+name   = "km-b.6f"
+offset = 0x44320
+size   = 0x100
+crc32  = 0x82c20d12
+
+[[region.file]]
+name   = "km-z-1f"
+offset = 0x44420
+size   = 0x100
+crc32  = 0xec9df4f2
+
+[[region.file]]
+name   = "km-z-1h"
+offset = 0x44520
+size   = 0x100
+crc32  = 0x23a217c0
+
+[[region.file]]
+name   = "km-z-1j"
+offset = 0x44620
+size   = 0x100
+crc32  = 0x1da0ad7f
+
+[[region.file]]
+name   = "km-z.3a"
+offset = 0x44720
+size   = 0x8000
+crc32  = 0x0bb7fda0
+
+[[region.file]]
+name   = "km-z.3c"
+offset = 0x4c720
+size   = 0x8000
+crc32  = 0xa99be837
+
+[[region.file]]
+name   = "km-z.3d"
+offset = 0x54720
+size   = 0x8000
+crc32  = 0xa8007429
+
+[[region.file]]
+name   = "km-z.4h"
+offset = 0x5c720
+size   = 0x8000
+crc32  = 0x252bb4a9
+
+[[region.file]]
+name   = "km-z.7j"
+offset = 0x64720
+size   = 0x4000
+crc32  = 0x2bd2aa83

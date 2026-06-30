@@ -1,0 +1,116 @@
+# Traverse USA / Zippy Race -- Irem travrusa ROM contract.
+# Local usable parent dump: D:\emu\irem\M52\travrusa (1).zip.
+# Note: D:\emu\irem\M52\travrusa.zip is artwork/layout, not a ROM set.
+# Region placement follows public irem/travrusa.cpp metadata. Mnemos has a
+# first-pass executable route; exact video priority, scroll, input/DIP behavior,
+# Irem Audio timing, and parity remain open.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "travrusa"
+board       = "irem_travrusa"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name   = "zr1-0.m3"
+offset = 0x0000
+size   = 0x2000
+crc32  = 0xbe066c0a
+
+[[region.file]]
+name   = "zr1-5.l3"
+offset = 0x2000
+size   = 0x2000
+crc32  = 0x145d6b34
+
+[[region.file]]
+name   = "zr1-6a.k3"
+offset = 0x4000
+size   = 0x2000
+crc32  = 0xe1b51383
+
+[[region.file]]
+name   = "zr1-7.j3"
+offset = 0x6000
+size   = 0x2000
+crc32  = 0x85cd1a51
+
+[[region]]
+name = "soundcpu"
+size = 0x8000
+
+[[region.file]]
+name   = "mr10.1a"
+offset = 0x7000
+size   = 0x1000
+crc32  = 0xa02ad8a0
+
+[[region]]
+name = "tiles"
+size = 0x6000
+
+[[region.file]]
+name   = "zippyrac.001"
+offset = 0x0000
+size   = 0x2000
+crc32  = 0xaa8994dd
+
+[[region.file]]
+name   = "mr8.3c"
+offset = 0x2000
+size   = 0x2000
+crc32  = 0x3a046dd1
+
+[[region.file]]
+name   = "mr9.3a"
+offset = 0x4000
+size   = 0x2000
+crc32  = 0x1cc3d3f4
+
+[[region]]
+name = "sprites"
+size = 0x6000
+
+[[region.file]]
+name   = "zr1-8.n3"
+offset = 0x0000
+size   = 0x2000
+crc32  = 0x3e2c7a6b
+
+[[region.file]]
+name   = "zr1-9.l3"
+offset = 0x2000
+size   = 0x2000
+crc32  = 0x13be6a14
+
+[[region.file]]
+name   = "zr1-10.k3"
+offset = 0x4000
+size   = 0x2000
+crc32  = 0x6fcc9fdb
+
+[[region]]
+name = "proms"
+size = 0x0320
+
+[[region.file]]
+name   = "mmi6349.ij"
+offset = 0x0000
+size   = 0x0200
+crc32  = 0xc9724350
+
+[[region.file]]
+name   = "tbp18s.2"
+offset = 0x0200
+size   = 0x0020
+crc32  = 0xa1130007
+
+[[region.file]]
+name   = "tbp24s10.3"
+offset = 0x0220
+size   = 0x0100
+crc32  = 0x76062638

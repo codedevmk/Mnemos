@@ -1,0 +1,218 @@
+# Kid Niki -- Irem M62 raw-media contract.
+# Local wrapper: D:\emu\irem\M62\kidniki.zip.
+# Region placement is a contiguous artifact contract only; exact M62 bus
+# mapping, video priority, and M6803/AY/MSM5205 behavior remain gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "kidniki"
+board       = "irem_m62"
+orientation = "horizontal"
+
+[[region]]
+name = "raw_media"
+size = 0x80920
+
+[[region.file]]
+name   = "dr00.3a"
+offset = 0x0
+size   = 0x4000
+crc32  = 0x458309f7
+
+[[region.file]]
+name   = "dr01.3cd"
+offset = 0x4000
+size   = 0x4000
+crc32  = 0xe66897bd
+
+[[region.file]]
+name   = "dr02.3f"
+offset = 0x8000
+size   = 0x4000
+crc32  = 0xf9e31e26
+
+[[region.file]]
+name   = "dr03.4cd"
+offset = 0xc000
+size   = 0x4000
+crc32  = 0xdba20934
+
+[[region.file]]
+name   = "dr05.2a"
+offset = 0x10000
+size   = 0x8000
+crc32  = 0x2e6dad0c
+
+[[region.file]]
+name   = "dr06.2b"
+offset = 0x18000
+size   = 0x8000
+crc32  = 0x4d9a970f
+
+[[region.file]]
+name   = "dr07.2dc"
+offset = 0x20000
+size   = 0x8000
+crc32  = 0xab59a4c4
+
+[[region.file]]
+name   = "dr08.4l"
+offset = 0x28000
+size   = 0x4000
+crc32  = 0x32d50643
+
+[[region.file]]
+name   = "dr09.4m"
+offset = 0x2c000
+size   = 0x4000
+crc32  = 0x17df6f95
+
+[[region.file]]
+name   = "dr10.4n"
+offset = 0x30000
+size   = 0x4000
+crc32  = 0x820ce252
+
+[[region.file]]
+name   = "dr12.8l"
+offset = 0x34000
+size   = 0x10000
+crc32  = 0xc0b255fd
+
+[[region.file]]
+name   = "dr13.3nm"
+offset = 0x44000
+size   = 0x4000
+crc32  = 0xd5c3dfe0
+
+[[region.file]]
+name   = "dr14.3p"
+offset = 0x48000
+size   = 0x4000
+crc32  = 0x76cfbcbc
+
+[[region.file]]
+name   = "dr15.4a"
+offset = 0x4c000
+size   = 0x4000
+crc32  = 0xe0b88de5
+
+[[region.file]]
+name   = "dr16.4cb"
+offset = 0x50000
+size   = 0x4000
+crc32  = 0xf1d1bb93
+
+[[region.file]]
+name   = "dr17.4dc"
+offset = 0x54000
+size   = 0x4000
+crc32  = 0x4fb87868
+
+[[region.file]]
+name   = "dr18.4e"
+offset = 0x58000
+size   = 0x4000
+crc32  = 0xedb7f25b
+
+[[region.file]]
+name   = "dr19.4f"
+offset = 0x5c000
+size   = 0x4000
+crc32  = 0xb34605ad
+
+[[region.file]]
+name   = "dr20.4jh"
+offset = 0x60000
+size   = 0x4000
+crc32  = 0x5fbe6f61
+
+[[region.file]]
+name   = "dr21.4k"
+offset = 0x64000
+size   = 0x4000
+crc32  = 0xa06cea9a
+
+[[region.file]]
+name   = "dr22.4l"
+offset = 0x68000
+size   = 0x4000
+crc32  = 0x41303de8
+
+[[region.file]]
+name   = "dr23.4nm"
+offset = 0x6c000
+size   = 0x4000
+crc32  = 0x03469df8
+
+[[region.file]]
+name   = "dr24.4p"
+offset = 0x70000
+size   = 0x4000
+crc32  = 0xd51c8db5
+
+[[region.file]]
+name   = "dr25.3f"
+offset = 0x74000
+size   = 0x100
+crc32  = 0x8e91430b
+
+[[region.file]]
+name   = "dr26.3h"
+offset = 0x74100
+size   = 0x100
+crc32  = 0xb563b93f
+
+[[region.file]]
+name   = "dr27.3j"
+offset = 0x74200
+size   = 0x100
+crc32  = 0x70d668ef
+
+[[region.file]]
+name   = "dr28.8f"
+offset = 0x74300
+size   = 0x200
+crc32  = 0x6cef0fbd
+
+[[region.file]]
+name   = "dr29.1l"
+offset = 0x74500
+size   = 0x100
+crc32  = 0x1173a754
+
+[[region.file]]
+name   = "dr30.1m"
+offset = 0x74600
+size   = 0x100
+crc32  = 0x28c73263
+
+[[region.file]]
+name   = "dr31.1n"
+offset = 0x74700
+size   = 0x100
+crc32  = 0x3529210e
+
+[[region.file]]
+name   = "dr32.5p"
+offset = 0x74800
+size   = 0x20
+crc32  = 0x11cd1f2e
+
+[[region.file]]
+name   = "dr33.6f"
+offset = 0x74820
+size   = 0x100
+crc32  = 0x34d88d3c
+
+[[region.file]]
+name   = "ky_a-4e-g.bin"
+offset = 0x74920
+size   = 0x4000
+crc32  = 0x2edcbcd7
+
+[[region.file]]
+name   = "ky_t-8k-g.bin"
+offset = 0x78920
+size   = 0x8000
+crc32  = 0xdbc42f31

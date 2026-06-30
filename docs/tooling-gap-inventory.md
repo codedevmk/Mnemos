@@ -37,7 +37,7 @@ hardware audit explicitly excluded tooling, which hid an entire axis.
 
 ## Progress
 
-- **Tooling parity items (T, vs Emu): 0 / 11** — 5 HIGH · 5 MED · 1 LOW
+- **Tooling parity items (T, vs Emu): 1 / 11** — remaining open: 4 HIGH · 5 MED · 1 LOW
 - **Next-gen items (N): 0 / 9** — 1 HIGH · 5 MED · 3 LOW
 
 ---
@@ -52,18 +52,18 @@ hardware audit explicitly excluded tooling, which hid an entire axis.
 | Tracing / logging | devkit event-bus + Saturn 38-file tracer | inst-trace CSV + PSG→VGM + **APM sidecar** | Even |
 | Video debug viewers | Studio **live** plane/sprite viewer | rich **offline** PNG export | Emu ahead (live) |
 | Audio tooling | Studio channels + **FFT/THD A/B** + 5-fmt WAV + C64 SID player/scope/MIDI | WAV export + PSG VGM | Emu ahead |
-| Save-state / rewind / TAS | C64/SMS/Genesis save; **rewind + TAS movie** (C64) | generic container solid, **wired C64-only**; rewind unwired | Emu ahead |
+| Save-state / rewind / TAS | C64/SMS/Genesis save; **rewind + TAS movie** (C64) | generic container solid, C64/Genesis lower-level targets plus **CPS2 player save/load**; rewind unwired | Emu ahead |
 | Asset tools | asset_codec + dumps + **C64 inject** | best-structured **export** (PNG+JSON), **no import** | Even |
 | Scripting / automation | devkit C-API + Python-over-CLI harness | **README stubs only** | Emu ahead |
 | Frontends / UX | CLI + **Studio: ImGui GUI, DX11/12/Vulkan, 11 widgets** | SDL player + CLI; **no GUI**; apps/dev vapor | Emu ahead |
 | Conformance / differential | TomHarte/Lorenz + ref-capture + 96-file unit + Python sweep + Saturn cross-emu ledger | m6510/m68000/z80 corpora + golden + **GPGX A/B** + oracle registry | Even |
 | Cheats / patches | none | none | Both lack |
-| Archive / containers | ZIP + **CHD** + LHA/LNX | ZIP + cue/bin/iso; **no CHD** | Emu ahead |
+| Archive / containers | ZIP + **CHD** + LHA/LNX | ZIP + cue/bin/iso + **CHD**; no LHA/LNX | Mnemos catches CHD; Emu broader |
 | Profiling | none dedicated | bus microbench + APM cycle metering | Even |
 
 ---
 
-## Tooling parity gaps — Emu has, Mnemos lacks (T-series) — 0 / 11
+## Tooling parity gaps — Emu has, Mnemos lacks (T-series) — 1 / 11
 
 #### Debugger & disassembly
 - [ ] **T2** CPU disassemblers (M68k, SH-2, Z80, 6510) — none in-tree; capstone is external-CLI-only, not in the build · MISSING · HIGH · M/CPU · vs Emu
@@ -75,7 +75,7 @@ hardware audit explicitly excluded tooling, which hid an entire axis.
 - [ ] **T1** GUI dev-suite — Emu's `frontends/studio` is a ~17k-LOC ImGui app (DX11/DX12/Vulkan) with 11 dockable widgets (CPU snapshot, disasm, memory lens, watch debugger, event timeline, video layers, audio channels). Mnemos has **no GUI** (`apps/dev` is a README stub). Brings live tile/sprite/palette/layer viewers with it · MISSING · HIGH · XL · vs Emu
 
 #### Save-state / rewind / movie
-- [ ] **T4** Whole-system save-state aggregators — generic container + 79 per-chip serializers exist, but only the C64 builds a `save_target`; wire SMS, Genesis, Sega CD, 32X, M72 + expose save/load in the SDL player · PARTIAL · HIGH · M · vs Emu · ⇄ hardware G7
+- [ ] **T4** Whole-system save-state aggregators — generic container + 79 per-chip serializers exist; Genesis has a deterministic runtime target, CPS2 now exposes a frontend save/load path (`--save-state`, `--load-state`, F5/F9), but SMS, Sega CD, 32X, M72, CPS1, and broader rewind/TAS player wiring remain · PARTIAL · HIGH · M · vs Emu · ⇄ hardware G7
 - [ ] **T5** Wire rewind ring + deterministic input-movie/TAS into the player — both exist (`runtime/rewind`, `runtime/input`) but are C64-CLI-only and unwired to `mnemos_player` · PARTIAL · MED · M · vs Emu
 
 #### Audio tooling
@@ -85,7 +85,7 @@ hardware audit explicitly excluded tooling, which hid an entire axis.
 - [ ] **T8** Asset injection / import (round-trip) — Mnemos `asset_export` is one-way; add re-injection (Emu C64 does Koala/charset/sprite bidirectional) · MISSING · MED · M · vs Emu
 
 #### Disc / container formats
-- [ ] **T7** CHD compressed disc support (v5 codec stack) — `.chd` currently rejected · MISSING · HIGH · L · vs Emu · ⇄ hardware D1
+- [x] **T7** CHD compressed disc support (v5 codec stack) — CD `cdzl`/`cdlz`/`cdfl` and bounded block-device `lzma`/`zlib`/`huff`/`flac`/`none`/`self` decode are implemented; remaining archive/container gaps are LHA/LNX and system-specific media presentation · DONE · HIGH · L · vs Emu · ⇄ hardware D1
 
 #### Per-system dev suites
 - [ ] **T9** C64 developer suite (~4,400 LOC in Emu) — 6510 disassembler + 777-LOC debugger + symbols, SID player/scope/MIDI, sprite IO+mux, charset/image IO, LHA/LNX archive loaders · MISSING · MED · HIGH · vs Emu
@@ -141,7 +141,6 @@ thinner — the deficit is tools-on-top, not foundation:
 1. **T2 disassemblers + T3 wire the debugger** — unlocks every interactive-debug workflow; prerequisite for a usable debugger UX. Reuse the `introspection_views` contract.
 2. **T4 save-state wiring** (⇄ G7) + **T5 rewind/movie in the player** — high daily-use value; the primitives already exist, this is wiring.
 3. **N1 embedded scripting** — the biggest next-gen multiplier (test automation, romhacking, conditional debugging); replaces the stub dirs.
-4. **T7 CHD** (⇄ D1) — shared with the hardware backlog.
-5. **T6 audio A/B** + **T8 asset import** — round out the analysis/asset pipeline.
-6. **T1 Studio GUI** — highest payoff for dev UX but XL effort; do it once the headless tooling (T2/T3/T4) gives it something to render. Brings live viewers + N3/N6 surfaces with it.
-7. **T9 C64 suite, N2 cheats, N4 source-level, N5 TAS, N7–N9** — as the platform matures.
+4. **T6 audio A/B** + **T8 asset import** — round out the analysis/asset pipeline.
+5. **T1 Studio GUI** — highest payoff for dev UX but XL effort; do it once the headless tooling (T2/T3/T4) gives it something to render. Brings live viewers + N3/N6 surfaces with it.
+6. **T9 C64 suite, N2 cheats, N4 source-level, N5 TAS, N7–N9** — as the platform matures.

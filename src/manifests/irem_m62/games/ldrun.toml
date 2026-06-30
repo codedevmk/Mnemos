@@ -1,0 +1,162 @@
+# Lode Runner -- Irem M62 region contract.
+# Local wrapper: D:\emu\irem\Lode-Runner_Arcade_EN.zip -> ldrun.zip.
+# Region placement records the public dump-to-board-region contract for the
+# parent set; exact video priority and M6803/AY/MSM5205 timing remain gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "ldrun"
+board       = "irem_m62"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name   = "lr-a-4e"
+offset = 0x0
+size   = 0x2000
+crc32  = 0x5d7e2a4d
+
+[[region.file]]
+name   = "lr-a-4d"
+offset = 0x2000
+size   = 0x2000
+crc32  = 0x96f20473
+
+[[region.file]]
+name   = "lr-a-4b"
+offset = 0x4000
+size   = 0x2000
+crc32  = 0xb041c4a9
+
+[[region.file]]
+name   = "lr-a-4a"
+offset = 0x6000
+size   = 0x2000
+crc32  = 0x645e42aa
+
+[[region]]
+name = "soundcpu"
+size = 0x10000
+
+[[region.file]]
+name   = "lr-a-3f"
+offset = 0xc000
+size   = 0x2000
+crc32  = 0x7a96accd
+
+[[region.file]]
+name   = "lr-a-3h"
+offset = 0xe000
+size   = 0x2000
+crc32  = 0x3f7f3939
+
+[[region]]
+name = "gfx1"
+size = 0x6000
+
+[[region.file]]
+name   = "lr-e-2d"
+offset = 0x0000
+size   = 0x2000
+crc32  = 0x24f9b58d
+
+[[region.file]]
+name   = "lr-e-2j"
+offset = 0x2000
+size   = 0x2000
+crc32  = 0x43175e08
+
+[[region.file]]
+name   = "lr-e-2f"
+offset = 0x4000
+size   = 0x2000
+crc32  = 0xe0317124
+
+[[region]]
+name = "gfx2"
+size = 0x6000
+
+[[region.file]]
+name   = "lr-b-4k"
+offset = 0x0000
+size   = 0x2000
+crc32  = 0x8141403e
+
+[[region.file]]
+name   = "lr-b-3n"
+offset = 0x2000
+size   = 0x2000
+crc32  = 0x55154154
+
+[[region.file]]
+name   = "lr-b-4c"
+offset = 0x4000
+size   = 0x2000
+crc32  = 0x924e34d0
+
+[[region]]
+name = "spr_height_prom"
+size = 0x20
+
+[[region.file]]
+name   = "lr-b-5p"
+offset = 0x00
+size   = 0x20
+crc32  = 0xe01f69e2
+
+[[region]]
+name = "spr_color_proms"
+size = 0x300
+
+[[region.file]]
+name   = "lr-b-1m"
+offset = 0x0000
+size   = 0x100
+crc32  = 0x4bae1c25
+
+[[region.file]]
+name   = "lr-b-1n"
+offset = 0x0100
+size   = 0x100
+crc32  = 0x9cd3db94
+
+[[region.file]]
+name   = "lr-b-1l"
+offset = 0x0200
+size   = 0x100
+crc32  = 0x08d8cf9a
+
+[[region]]
+name = "chr_color_proms"
+size = 0x300
+
+[[region.file]]
+name   = "lr-e-3m"
+offset = 0x0000
+size   = 0x100
+crc32  = 0x53040416
+
+[[region.file]]
+name   = "lr-e-3l"
+offset = 0x0100
+size   = 0x100
+crc32  = 0x67786037
+
+[[region.file]]
+name   = "lr-e-3n"
+offset = 0x0200
+size   = 0x100
+crc32  = 0x5b716837
+
+[[region]]
+name = "timing"
+size = 0x100
+
+[[region.file]]
+name   = "lr-b-6f"
+offset = 0x000
+size   = 0x100
+crc32  = 0x34d88d3c

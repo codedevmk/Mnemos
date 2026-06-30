@@ -8,6 +8,7 @@
 
 #include <array>
 #include <cstdint>
+#include <span>
 
 namespace {
 
@@ -78,11 +79,18 @@ TEST_CASE("player_system stub fulfils the interface contract") {
     controller_state st{};
     st.start = true;
     st.a = true;
+    st.set_key(0x04U, true);
     p.apply_input(0, st);
     CHECK(p.last_port() == 0);
     CHECK(p.last_input().start);
     CHECK(p.last_input().a);
     CHECK_FALSE(p.last_input().up);
+    CHECK(p.last_input().key_down(0x04U));
+    st.set_key(0x04U, false);
+    CHECK_FALSE(st.key_down(0x04U));
+    st.set_key(static_cast<std::uint16_t>(mnemos::peripheral::keyboard_usage_count), true);
+    CHECK_FALSE(st.key_down(static_cast<std::uint16_t>(
+        mnemos::peripheral::keyboard_usage_count)));
 
     const auto audio = p.drain_audio();
     REQUIRE(audio.samples != nullptr);
@@ -90,6 +98,10 @@ TEST_CASE("player_system stub fulfils the interface contract") {
     CHECK(audio.sample_rate == 44100U);
     CHECK(audio.samples[0] == 1234);
     CHECK(audio.samples[1] == -1234);
+
+    CHECK(p.save_state().empty());
+    CHECK(p.load_state(std::span<const std::uint8_t>{}).status ==
+          mnemos::runtime::load_status::unsupported_version);
 
     // The spec publisher hands back a borrowed view of the cached vector;
     // its contents stay stable across calls.

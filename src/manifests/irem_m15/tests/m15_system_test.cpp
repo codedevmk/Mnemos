@@ -1,0 +1,763 @@
+#include "file.hpp"
+#include "m15_game_manifests.hpp"
+#include "m15_system.hpp"
+#include "rom_set_toml.hpp"
+#include "zip_archive.hpp"
+
+#include <catch2/catch_test_macros.hpp>
+
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <map>
+#include <optional>
+#include <set>
+#include <span>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <utility>
+#include <vector>
+
+#ifndef MNEMOS_IREM_M15_GAMES_DIR
+#define MNEMOS_IREM_M15_GAMES_DIR ""
+#endif
+
+namespace {
+
+    using mnemos::manifests::common::rom_set_decl;
+    using mnemos::manifests::common::rom_set_image;
+    using mnemos::manifests::common::rom_set_region;
+
+    constexpr std::uint16_t visible_probe_tile_index = 1021U;
+    constexpr std::uint16_t flipped_probe_tile_index = 2U;
+
+    [[nodiscard]] std::string read_text_file(const std::filesystem::path& path) {
+        std::ifstream in(path, std::ios::binary);
+        REQUIRE(in.good());
+        std::ostringstream text;
+        text << in.rdbuf();
+        return text.str();
+    }
+
+    [[nodiscard]] const rom_set_region* find_region(const rom_set_decl& decl,
+                                                    std::string_view name) noexcept {
+        const auto it =
+            std::find_if(decl.regions.begin(), decl.regions.end(),
+                         [name](const rom_set_region& region) { return region.name == name; });
+        return it == decl.regions.end() ? nullptr : &*it;
+    }
+
+    [[nodiscard]] std::size_t expected_main_file_count(std::string_view set_name) noexcept {
+        if (set_name == "greenber") {
+            return 10U;
+        }
+        if (set_name == "headoni" || set_name == "spacbeam") {
+            return 7U;
+        }
+        return 0U;
+    }
+
+    void require_region_contract(const rom_set_region& region) {
+        CHECK(region.size > 0U);
+        REQUIRE_FALSE(region.files.empty());
+        for (const auto& file : region.files) {
+            INFO("region=" << region.name << " file=" << file.name);
+            CHECK_FALSE(file.name.empty());
+            CHECK(file.offset < region.size);
+            CHECK(file.stride >= 1U);
+            CHECK(file.unit >= 1U);
+            CHECK(file.size > 0U);
+            CHECK(file.crc32.has_value());
+            const std::size_t source_bytes = file.length == 0U ? file.size : file.length;
+            REQUIRE(source_bytes > 0U);
+            const std::size_t chunks = (source_bytes + file.unit - 1U) / file.unit;
+            const std::size_t last_start = file.offset + (chunks - 1U) * file.stride;
+            CHECK(last_start < region.size);
+        }
+    }
+
+    [[nodiscard]] bool ends_with_zip(std::string_view name) {
+        constexpr std::string_view suffix = ".zip";
+        if (name.size() < suffix.size()) {
+            return false;
+        }
+        return std::equal(suffix.rbegin(), suffix.rend(), name.rbegin(), [](char lhs, char rhs) {
+            const auto l = static_cast<unsigned char>(lhs);
+            const auto r = static_cast<unsigned char>(rhs);
+            return std::tolower(l) == std::tolower(r);
+        });
+    }
+
+    [[nodiscard]] bool zip_entry_is_file(const mnemos::compression::zip_entry& entry) noexcept {
+        return !entry.name.empty() && entry.name.back() != '/' && entry.name.back() != '\\';
+    }
+
+    [[nodiscard]] std::set<std::string, std::less<>> embedded_set_names() {
+        std::set<std::string, std::less<>> names;
+        for (const auto& [set_name, _] : mnemos::manifests::irem_m15::embedded::game_manifests) {
+            names.emplace(std::string{set_name});
+        }
+        return names;
+    }
+
+    [[nodiscard]] std::optional<std::string>
+    single_nested_zip_set_id(std::span<const std::uint8_t> bytes) {
+        auto archive = mnemos::compression::zip_archive::open(bytes);
+        if (!archive.has_value()) {
+            return std::nullopt;
+        }
+
+        const mnemos::compression::zip_entry* nested = nullptr;
+        std::size_t file_count = 0U;
+        for (const auto& entry : archive->entries()) {
+            if (!zip_entry_is_file(entry)) {
+                continue;
+            }
+            ++file_count;
+            if (ends_with_zip(entry.name)) {
+                nested = &entry;
+            }
+        }
+        if (file_count != 1U || nested == nullptr) {
+            return std::nullopt;
+        }
+        return std::filesystem::path{nested->name}.stem().string();
+    }
+
+    [[nodiscard]] std::optional<std::vector<std::uint8_t>>
+    extract_single_nested_zip(std::span<const std::uint8_t> bytes) {
+        auto archive = mnemos::compression::zip_archive::open(bytes);
+        if (!archive.has_value()) {
+            return std::nullopt;
+        }
+
+        const mnemos::compression::zip_entry* nested = nullptr;
+        std::size_t file_count = 0U;
+        for (const auto& entry : archive->entries()) {
+            if (!zip_entry_is_file(entry)) {
+                continue;
+            }
+            ++file_count;
+            if (ends_with_zip(entry.name)) {
+                nested = &entry;
+            }
+        }
+        if (file_count != 1U || nested == nullptr) {
+            return std::nullopt;
+        }
+        return archive->extract(*nested);
+    }
+
+    [[nodiscard]] std::vector<std::filesystem::path> source_roots(const char* env_value) {
+        std::vector<std::filesystem::path> roots;
+        if (env_value == nullptr || *env_value == '\0') {
+            return roots;
+        }
+#if defined(_WIN32)
+        constexpr char separator = ';';
+#else
+        constexpr char separator = ':';
+#endif
+        std::string_view text{env_value};
+        std::size_t start = 0U;
+        while (start <= text.size()) {
+            const std::size_t end = text.find(separator, start);
+            const std::string_view part = text.substr(
+                start, end == std::string_view::npos ? std::string_view::npos : end - start);
+            if (!part.empty()) {
+                roots.emplace_back(std::string{part});
+            }
+            if (end == std::string_view::npos) {
+                break;
+            }
+            start = end + 1U;
+        }
+        return roots;
+    }
+
+    [[nodiscard]] std::optional<std::string> environment_value(const char* name) {
+#if defined(_WIN32)
+        char* raw = nullptr;
+        std::size_t size = 0U;
+        if (_dupenv_s(&raw, &size, name) != 0 || raw == nullptr) {
+            return std::nullopt;
+        }
+        std::string value{raw, size > 0U ? size - 1U : 0U};
+        std::free(raw);
+        return value;
+#else
+        const char* raw = std::getenv(name);
+        return raw != nullptr ? std::optional<std::string>{raw} : std::nullopt;
+#endif
+    }
+
+    [[nodiscard]] std::optional<std::string>
+    identify_source(const std::filesystem::path& path,
+                    const std::set<std::string, std::less<>>& known) {
+        std::error_code ec;
+        if (std::filesystem::is_directory(path, ec)) {
+            const std::string set_id = path.filename().string();
+            return known.contains(set_id) ? std::optional<std::string>{set_id} : std::nullopt;
+        }
+        if (!std::filesystem::is_regular_file(path, ec) ||
+            !ends_with_zip(path.filename().string())) {
+            return std::nullopt;
+        }
+
+        const std::string stem = path.stem().string();
+        if (known.contains(stem)) {
+            return stem;
+        }
+
+        auto bytes = mnemos::io::read_file(path.string());
+        if (!bytes.has_value()) {
+            return std::nullopt;
+        }
+        auto nested = single_nested_zip_set_id(*bytes);
+        if (!nested.has_value() || !known.contains(*nested)) {
+            return std::nullopt;
+        }
+        return nested;
+    }
+
+    [[nodiscard]] std::map<std::string, std::filesystem::path, std::less<>>
+    index_source_roots(const std::vector<std::filesystem::path>& roots) {
+        const auto known = embedded_set_names();
+        std::map<std::string, std::filesystem::path, std::less<>> sources;
+
+        auto maybe_add = [&](const std::filesystem::path& path) {
+            auto set_id = identify_source(path, known);
+            if (set_id.has_value() && sources.find(*set_id) == sources.end()) {
+                sources.emplace(std::move(*set_id), path);
+            }
+        };
+
+        for (const auto& root : roots) {
+            std::error_code ec;
+            if (std::filesystem::is_regular_file(root, ec)) {
+                maybe_add(root);
+                continue;
+            }
+            if (!std::filesystem::is_directory(root, ec)) {
+                continue;
+            }
+
+            maybe_add(root);
+            std::vector<std::filesystem::path> candidates;
+            for (std::filesystem::recursive_directory_iterator it{root, ec}, end; !ec && it != end;
+                 it.increment(ec)) {
+                const auto candidate_path = it->path();
+                std::error_code entry_ec;
+                if (it->is_directory(entry_ec) &&
+                    candidate_path.filename().string() == "name-collisions") {
+                    it.disable_recursion_pending();
+                    continue;
+                }
+                candidates.push_back(candidate_path);
+            }
+            std::sort(candidates.begin(), candidates.end());
+            for (const auto& path : candidates) {
+                maybe_add(path);
+            }
+        }
+
+        return sources;
+    }
+
+    [[nodiscard]] rom_set_decl require_embedded_decl(std::string_view set_name) {
+        const std::string_view text = mnemos::manifests::irem_m15::game_manifest_toml(set_name);
+        REQUIRE_FALSE(text.empty());
+        auto parsed = mnemos::manifests::common::parse_rom_set_decl(text, std::string{set_name});
+        for (const auto& error : parsed.errors) {
+            INFO(error.source << ":" << error.line << ":" << error.column << ": " << error.message);
+        }
+        REQUIRE(parsed.ok());
+        return std::move(*parsed.value);
+    }
+
+    [[nodiscard]] mnemos::manifests::common::rom_file_provider
+    require_provider(const std::filesystem::path& path) {
+        std::error_code ec;
+        if (std::filesystem::is_directory(path, ec)) {
+            return mnemos::manifests::common::make_directory_rom_provider(path.string());
+        }
+
+        auto bytes = mnemos::io::read_file(path.string());
+        REQUIRE(bytes.has_value());
+        if (auto nested = extract_single_nested_zip(*bytes)) {
+            bytes = std::move(*nested);
+        }
+
+        auto provider = mnemos::manifests::common::make_zip_rom_provider(std::move(*bytes));
+        REQUIRE(provider.has_value());
+        return std::move(*provider);
+    }
+
+    [[nodiscard]] bool has_non_fill_byte(const std::vector<std::uint8_t>& bytes,
+                                         std::uint8_t fill = 0xFFU) {
+        return std::any_of(bytes.begin(), bytes.end(),
+                           [fill](std::uint8_t byte) { return byte != fill; });
+    }
+
+    void require_loaded_region(const rom_set_image& image, std::string_view name,
+                               std::size_t expected_size) {
+        const auto* region = image.region(name);
+        REQUIRE(region != nullptr);
+        CHECK(region->size() == expected_size);
+        CHECK(has_non_fill_byte(*region));
+    }
+
+    void poke16(std::vector<std::uint8_t>& bytes, std::size_t offset, std::uint16_t value) {
+        REQUIRE(offset + 1U < bytes.size());
+        bytes[offset] = static_cast<std::uint8_t>(value);
+        bytes[offset + 1U] = static_cast<std::uint8_t>(value >> 8U);
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t>
+    make_m15_program(std::uint16_t origin, const std::vector<std::uint8_t>& program,
+                     std::uint16_t irq_vector = 0x1000U,
+                     std::uint16_t nmi_vector = 0x1000U) {
+        std::vector<std::uint8_t> rom(mnemos::manifests::irem_m15::main_rom_size, 0xFFU);
+        REQUIRE(static_cast<std::size_t>(origin) + program.size() <= rom.size());
+        std::copy(program.begin(), program.end(), rom.begin() + origin);
+        poke16(rom, 0xFFFAU, nmi_vector);
+        poke16(rom, 0xFFFCU, origin);
+        poke16(rom, 0xFFFEU, irq_vector);
+        return rom;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> synthetic_m15_program() {
+        return make_m15_program(0x1000U,
+                                {0xA9U, 0x42U, 0x8DU, 0x00U, 0x00U, // LDA #$42 ; STA $0000
+                                 0xA9U, 0x01U, 0x8DU, 0xFDU, 0x43U, // LDA #$01 ; STA $43FD
+                                 0xA9U, 0x00U, 0x8DU, 0xFDU, 0x4BU, // LDA #$00 ; STA $4BFD
+                                 0xA9U, 0x80U, 0x8DU, 0x0FU, 0x50U, // LDA #$80 ; STA $500F
+                                 0xA9U, 0x5AU, 0x8DU, 0x00U, 0xA1U, // LDA #$5A ; STA $A100
+                                 0xA9U, 0x04U, 0x8DU, 0x00U, 0xA4U, // LDA #$04 ; STA $A400
+                                 0x4CU, 0x1EU, 0x10U},             // JMP $101E
+                                0x101EU);
+    }
+
+    [[nodiscard]] rom_set_image synthetic_m15_image() {
+        rom_set_image image;
+        image.regions.emplace("maincpu", synthetic_m15_program());
+        return image;
+    }
+
+    [[nodiscard]] rom_set_image irq_m15_image() {
+        std::vector<std::uint8_t> program(0x30U, 0xEAU);
+        program[0x00U] = 0x58U; // CLI
+        program[0x01U] = 0xEAU; // NOP
+        program[0x02U] = 0x4CU; // JMP $1001
+        program[0x03U] = 0x01U;
+        program[0x04U] = 0x10U;
+        program[0x20U] = 0xA9U; // IRQ: LDA #$77
+        program[0x21U] = 0x77U;
+        program[0x22U] = 0x8DU; // STA $0002
+        program[0x23U] = 0x02U;
+        program[0x24U] = 0x00U;
+        program[0x25U] = 0x40U; // RTI
+
+        rom_set_image image;
+        image.regions.emplace("maincpu", make_m15_program(0x1000U, program, 0x1020U));
+        return image;
+    }
+
+    [[nodiscard]] rom_set_image nmi_m15_image() {
+        std::vector<std::uint8_t> program(0x50U, 0xEAU);
+        program[0x00U] = 0xEAU; // NOP
+        program[0x01U] = 0x4CU; // JMP $1000
+        program[0x02U] = 0x00U;
+        program[0x03U] = 0x10U;
+        program[0x20U] = 0xA9U; // NMI: LDA #$99
+        program[0x21U] = 0x99U;
+        program[0x22U] = 0x8DU; // STA $0004
+        program[0x23U] = 0x04U;
+        program[0x24U] = 0x00U;
+        program[0x25U] = 0x40U; // RTI
+
+        rom_set_image image;
+        image.regions.emplace("maincpu", make_m15_program(0x1000U, program, 0x1000U, 0x1020U));
+        return image;
+    }
+
+    [[nodiscard]] std::uint16_t visible_tile_index_at(std::uint32_t x,
+                                                      std::uint32_t y) noexcept {
+        const std::uint32_t raw_x = y;
+        const std::uint32_t raw_y = 239U - x;
+        const std::uint32_t col = (raw_x >> 3U) & 0x1FU;
+        const std::uint32_t row = (raw_y >> 3U) & 0x1FU;
+        return static_cast<std::uint16_t>(((31U - col) * 32U + row) & 0x03FFU);
+    }
+
+    [[nodiscard]] rom_set_image raster_irq_m15_image(std::uint16_t color_address) {
+        std::vector<std::uint8_t> program(0x30U, 0xEAU);
+        program[0x00U] = 0x58U; // CLI
+        program[0x01U] = 0x4CU; // JMP $1001
+        program[0x02U] = 0x01U;
+        program[0x03U] = 0x10U;
+        program[0x20U] = 0xA9U; // IRQ: LDA #$05
+        program[0x21U] = 0x05U;
+        program[0x22U] = 0x8DU; // STA color_address
+        program[0x23U] = static_cast<std::uint8_t>(color_address);
+        program[0x24U] = static_cast<std::uint8_t>(color_address >> 8U);
+        program[0x25U] = 0x40U; // RTI
+
+        rom_set_image image;
+        image.regions.emplace("maincpu", make_m15_program(0x1000U, program, 0x1020U));
+        return image;
+    }
+
+    [[nodiscard]] bool framebuffer_has_nonblack(const mnemos::chips::frame_buffer_view& frame) {
+        REQUIRE(frame.pixels != nullptr);
+        REQUIRE(frame.width > 0U);
+        REQUIRE(frame.height > 0U);
+        const std::uint32_t stride = frame.effective_stride();
+        for (std::uint32_t y = 0; y < frame.height; ++y) {
+            for (std::uint32_t x = 0; x < frame.width; ++x) {
+                if (frame.pixels[static_cast<std::size_t>(y) * stride + x] != 0U) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+} // namespace
+
+TEST_CASE("m15 checked-in game manifests parse and cover local candidate corpus",
+          "[m15][romset]") {
+    namespace fs = std::filesystem;
+    namespace m15 = mnemos::manifests::irem_m15;
+
+    const fs::path games_dir{MNEMOS_IREM_M15_GAMES_DIR};
+    REQUIRE_FALSE(games_dir.empty());
+    REQUIRE(fs::exists(games_dir));
+
+    std::map<std::string, rom_set_decl, std::less<>> declarations;
+    for (const fs::directory_entry& entry : fs::directory_iterator(games_dir)) {
+        if (!entry.is_regular_file() || entry.path().extension() != ".toml") {
+            continue;
+        }
+        const std::string text = read_text_file(entry.path());
+        auto parsed =
+            mnemos::manifests::common::parse_rom_set_decl(text, entry.path().filename().string());
+        for (const auto& error : parsed.errors) {
+            INFO(error.source << ":" << error.line << ":" << error.column << ": " << error.message);
+        }
+        REQUIRE(parsed.ok());
+
+        const rom_set_decl& decl = *parsed.value;
+        INFO("set=" << decl.name);
+        declarations.emplace(decl.name, std::move(*parsed.value));
+    }
+
+    const std::set<std::string, std::less<>> expected_names{"greenber", "headoni", "spacbeam"};
+    std::set<std::string, std::less<>> names;
+    for (const auto& [set_name, decl] : declarations) {
+        INFO("set=" << set_name);
+        names.insert(decl.name);
+        CHECK(decl.board == "irem_m15");
+        CHECK(decl.orientation == mnemos::manifests::common::screen_orientation::vertical);
+
+        const rom_set_region* maincpu = find_region(decl, "maincpu");
+        REQUIRE(maincpu != nullptr);
+        CHECK(maincpu->size == m15::main_rom_size);
+        REQUIRE(maincpu->files.size() == expected_main_file_count(set_name));
+        require_region_contract(*maincpu);
+
+        const std::array<std::size_t, 10U> expected_offsets{
+            0x1000U, 0x1400U, 0x1800U, 0x1C00U, 0xFC00U,
+            0x2000U, 0x2400U, 0x2800U, 0x2C00U, 0x3000U};
+        for (std::size_t i = 0U; i < maincpu->files.size() && i < expected_offsets.size(); ++i) {
+            CHECK(maincpu->files[i].offset == expected_offsets[i]);
+        }
+        CHECK(maincpu->files[3].name == maincpu->files[4].name);
+    }
+
+    CHECK(names == expected_names);
+    const auto params = m15::board_params_for("headoni");
+    CHECK(params.cpu_clock_hz == m15::cpu_clock_hz);
+    CHECK(params.rom_layout == "m15_headon_6502");
+    CHECK(params.dip_default == m15::headoni_dip_default);
+    CHECK(m15::board_params_for("greenber").rom_layout == "m15_headon_6502");
+    CHECK(m15::board_params_for("spacbeam").rom_layout == "m15_headon_6502");
+}
+
+TEST_CASE("m15 embedded game manifests mirror the checked-in roster", "[m15][romset]") {
+    using mnemos::manifests::irem_m15::embedded::game_manifests;
+
+    CHECK(game_manifests.size() == 3U);
+    CHECK_FALSE(mnemos::manifests::irem_m15::game_manifest_toml("greenber").empty());
+    CHECK_FALSE(mnemos::manifests::irem_m15::game_manifest_toml("headoni").empty());
+    CHECK_FALSE(mnemos::manifests::irem_m15::game_manifest_toml("spacbeam").empty());
+    CHECK(mnemos::manifests::irem_m15::game_manifest_toml("rtype").empty());
+}
+
+TEST_CASE("m15 local artifacts load CRC-clean through embedded manifests",
+          "[m15][romset][data]") {
+    namespace m15 = mnemos::manifests::irem_m15;
+
+    const auto dir_env = environment_value("MNEMOS_M15_SET_DIR");
+    if (!dir_env.has_value() || dir_env->empty()) {
+        SKIP("set MNEMOS_M15_SET_DIR to directories containing the M15 zip/folder corpus");
+    }
+
+    const auto roots = source_roots(dir_env->c_str());
+    REQUIRE_FALSE(roots.empty());
+    for (const auto& root : roots) {
+        INFO("root=" << root.string());
+        REQUIRE(std::filesystem::exists(root));
+    }
+
+    const auto indexed_sources = index_source_roots(roots);
+    const auto expected_sets = embedded_set_names();
+    std::vector<std::string> missing_sets;
+    for (const auto& set_name : expected_sets) {
+        if (indexed_sources.find(set_name) == indexed_sources.end()) {
+            missing_sets.push_back(set_name);
+        }
+    }
+    if (!missing_sets.empty()) {
+        std::ostringstream missing;
+        for (std::size_t i = 0; i < missing_sets.size(); ++i) {
+            if (i != 0U) {
+                missing << ", ";
+            }
+            missing << missing_sets[i];
+        }
+        FAIL("missing M15 artifacts: " << missing.str());
+    }
+
+    for (const auto& set_name : expected_sets) {
+        INFO("set=" << set_name);
+        const auto decl = require_embedded_decl(set_name);
+        const auto source_it = indexed_sources.find(set_name);
+        REQUIRE(source_it != indexed_sources.end());
+        INFO("source=" << source_it->second.string());
+
+        const auto image =
+            mnemos::manifests::common::load_rom_set(decl, require_provider(source_it->second));
+        for (const auto& issue : image.issues) {
+            INFO(issue.file << ": " << issue.message);
+        }
+        CHECK(image.issues.empty());
+        require_loaded_region(image, "maincpu", m15::main_rom_size);
+    }
+}
+
+TEST_CASE("m15 executable board runs MOS 6502 memory video and sound path", "[m15][board]") {
+    namespace m15 = mnemos::manifests::irem_m15;
+
+    auto system = m15::assemble_m15(synthetic_m15_image(), m15::board_params_for("headoni"));
+    REQUIRE(system != nullptr);
+
+    const auto cpu_meta = system->main_cpu.metadata();
+    CHECK(cpu_meta.manufacturer == "MOS Technology");
+    CHECK(cpu_meta.part_number == "6502");
+    CHECK(cpu_meta.family == "6502");
+    CHECK(system->main_cpu.cpu_registers().pc == m15::program_rom_base);
+
+    system->run_frame();
+
+    CHECK(system->scratch_ram[0] == 0x42U);
+    CHECK(system->video_ram[visible_probe_tile_index] == 0x01U);
+    CHECK(system->color_ram[visible_probe_tile_index] == 0x00U);
+    CHECK(system->chargen_ram[0x0FU] == 0x80U);
+    CHECK(system->speaker_latch == 0x5AU);
+    CHECK(system->sound_latch_write_count == 1U);
+    CHECK(system->sound_bit_rise_count[1] == 1U);
+    CHECK(system->sound_bit_rise_count[3] == 1U);
+    CHECK(system->sound_bit_rise_count[4] == 1U);
+    CHECK(system->sound_bit_rise_count[6] == 1U);
+    CHECK(system->speaker_output_edge_count == 1U);
+    CHECK_FALSE(system->speaker_output_high);
+    CHECK(system->control_register == 0x04U);
+    CHECK_FALSE(system->flip_screen);
+    CHECK(system->video.framebuffer().width == m15::visible_width);
+    CHECK(system->video.framebuffer().height == m15::visible_height);
+    system->run_frame();
+    CHECK(framebuffer_has_nonblack(system->video.framebuffer()));
+}
+
+TEST_CASE("m15 sound latch records discrete bit and speaker edges", "[m15][board][sound]") {
+    namespace m15 = mnemos::manifests::irem_m15;
+
+    auto system = m15::assemble_m15(synthetic_m15_image(), m15::board_params_for("headoni"));
+    REQUIRE(system != nullptr);
+
+    CHECK(system->speaker_output_high);
+    system->main_bus.write8(m15::sound_latch_address, 0x00U);
+    CHECK(system->speaker_latch == 0x00U);
+    CHECK(system->sound_latch_write_count == 1U);
+    CHECK(system->speaker_output_edge_count == 0U);
+
+    system->main_bus.write8(m15::sound_latch_address, m15::sound_speaker_active_low_bit);
+    CHECK(system->speaker_latch == m15::sound_speaker_active_low_bit);
+    CHECK(system->sound_latch_write_count == 2U);
+    CHECK(system->sound_bit_rise_count[6] == 1U);
+    CHECK(system->sound_bit_fall_count[6] == 0U);
+    CHECK(system->speaker_output_edge_count == 1U);
+    CHECK_FALSE(system->speaker_output_high);
+
+    system->main_bus.write8(m15::sound_latch_address, 0x5AU);
+    CHECK(system->sound_latch_write_count == 3U);
+    CHECK(system->sound_bit_rise_count[1] == 1U);
+    CHECK(system->sound_bit_rise_count[3] == 1U);
+    CHECK(system->sound_bit_rise_count[4] == 1U);
+    CHECK(system->sound_bit_rise_count[6] == 1U);
+    CHECK(system->speaker_output_edge_count == 1U);
+    CHECK_FALSE(system->speaker_output_high);
+
+    system->main_bus.write8(m15::sound_latch_address, 0x1AU);
+    CHECK(system->speaker_latch == 0x1AU);
+    CHECK(system->sound_latch_write_count == 4U);
+    CHECK(system->sound_bit_fall_count[6] == 1U);
+    CHECK(system->speaker_output_edge_count == 2U);
+    CHECK(system->speaker_output_high);
+
+    system->main_bus.write8(m15::sound_latch_address, 0x1AU);
+    CHECK(system->sound_latch_write_count == 5U);
+    CHECK(system->sound_bit_fall_count[6] == 1U);
+    CHECK(system->speaker_output_edge_count == 2U);
+}
+
+TEST_CASE("m15 input ports are active high and coin pulses NMI", "[m15][board]") {
+    namespace m15 = mnemos::manifests::irem_m15;
+
+    auto system = m15::assemble_m15(nmi_m15_image(), m15::board_params_for("headoni"));
+    REQUIRE(system != nullptr);
+
+    CHECK(system->main_bus.read8(m15::input_p1_address) == 0x00U);
+    CHECK(system->main_bus.read8(m15::input_p2_address) == 0x00U);
+    CHECK(system->main_bus.read8(m15::dip_switch_address) == m15::headoni_dip_default);
+
+    const std::uint8_t p1 = m15::p1_start1_bit | m15::panel_button1_bit | m15::panel_left_bit;
+    const std::uint8_t p2 = m15::panel_button1_bit | m15::panel_right_bit;
+    system->set_inputs(p1, p2, 0x00U);
+    CHECK(system->main_bus.read8(m15::input_p1_address) == p1);
+    CHECK(system->main_bus.read8(m15::input_p2_address) == p2);
+
+    system->set_inputs(p1, p2, m15::coin1_bit);
+    system->main_cpu.tick(96U);
+    CHECK(system->scratch_ram[4] == 0x99U);
+}
+
+TEST_CASE("m15 video uses tile scan order palette and active-low flip control", "[m15][video]") {
+    namespace m15 = mnemos::manifests::irem_m15;
+
+    auto system = m15::assemble_m15(synthetic_m15_image(), m15::board_params_for("headoni"));
+    REQUIRE(system != nullptr);
+
+    system->video_ram[visible_probe_tile_index] = 1U;
+    system->color_ram[visible_probe_tile_index] = 0U;
+    system->chargen_ram[0x0FU] = 0x80U;
+    system->video.compose(system->video_ram, system->color_ram, system->chargen_ram, false);
+    auto frame = system->video.framebuffer();
+    REQUIRE(frame.pixels != nullptr);
+    CHECK(frame.pixels[0] == 0xFFFFFFU);
+
+    std::fill(system->video_ram.begin(), system->video_ram.end(), std::uint8_t{0});
+    std::fill(system->color_ram.begin(), system->color_ram.end(), std::uint8_t{0});
+    std::fill(system->chargen_ram.begin(), system->chargen_ram.end(), std::uint8_t{0});
+    system->video_ram[flipped_probe_tile_index] = 2U;
+    system->color_ram[flipped_probe_tile_index] = 5U;
+    system->chargen_ram[0x10U] = 0x01U;
+    system->main_bus.write8(m15::control_register_address, 0x00U);
+    CHECK(system->flip_screen);
+    system->video.compose(system->video_ram, system->color_ram, system->chargen_ram,
+                          system->flip_screen);
+    frame = system->video.framebuffer();
+    CHECK(frame.pixels[0] == 0x00FF00U);
+}
+
+TEST_CASE("m15 frame tick pulses the 6502 IRQ vector", "[m15][board]") {
+    namespace m15 = mnemos::manifests::irem_m15;
+
+    auto system = m15::assemble_m15(irq_m15_image(), m15::board_params_for("headoni"));
+    REQUIRE(system != nullptr);
+
+    system->run_frame();
+
+    CHECK(system->scratch_ram[2] == 0x77U);
+    CHECK(system->main_cpu.elapsed_cycles() >= m15::cpu_cycles_per_frame);
+}
+
+TEST_CASE("m15 composes visible scanlines before frame IRQ writes", "[m15][video][raster]") {
+    namespace m15 = mnemos::manifests::irem_m15;
+
+    constexpr std::uint32_t before_irq_line = m15::visible_height - 17U;
+    constexpr std::uint32_t after_irq_line = m15::visible_height - 9U;
+    const std::uint16_t before_index = visible_tile_index_at(0U, before_irq_line);
+    const std::uint16_t after_index = visible_tile_index_at(0U, after_irq_line);
+
+    auto system = m15::assemble_m15(
+        raster_irq_m15_image(static_cast<std::uint16_t>(m15::color_ram_base + after_index)),
+        m15::board_params_for("headoni"));
+    REQUIRE(system != nullptr);
+
+    system->video_ram[before_index] = 1U;
+    system->video_ram[after_index] = 1U;
+    system->color_ram[before_index] = 0U;
+    system->color_ram[after_index] = 0U;
+    system->chargen_ram[0x0FU] = 0xFFU;
+
+    system->run_frame();
+
+    const auto frame = system->video.framebuffer();
+    const std::uint32_t stride = frame.effective_stride();
+    CHECK(frame.pixels[before_irq_line * stride] == 0xFFFFFFU);
+    CHECK(frame.pixels[after_irq_line * stride] == 0x00FF00U);
+    CHECK(system->color_ram[before_index] == 0U);
+    CHECK(system->color_ram[after_index] == 5U);
+}
+
+TEST_CASE("m15 save state preserves board identity and runtime state", "[m15][board]") {
+    namespace m15 = mnemos::manifests::irem_m15;
+
+    auto source = m15::assemble_m15(synthetic_m15_image(), m15::board_params_for("headoni"));
+    REQUIRE(source != nullptr);
+    source->set_inputs(0xEEU, 0xDDU, 0xCCU);
+    source->run_frame();
+    source->scratch_ram[3] = 0x5AU;
+
+    std::vector<std::uint8_t> state;
+    mnemos::chips::state_writer writer(state);
+    source->save_state(writer);
+    REQUIRE_FALSE(state.empty());
+
+    auto restored = m15::assemble_m15(synthetic_m15_image(), m15::board_params_for("headoni"));
+    REQUIRE(restored != nullptr);
+    mnemos::chips::state_reader reader(state);
+    restored->load_state(reader);
+    CHECK(reader.ok());
+    CHECK(restored->scratch_ram[0] == 0x42U);
+    CHECK(restored->scratch_ram[3] == 0x5AU);
+    CHECK(restored->video_ram[visible_probe_tile_index] == 0x01U);
+    CHECK(restored->color_ram[visible_probe_tile_index] == 0x00U);
+    CHECK(restored->chargen_ram[0x0FU] == 0x80U);
+    CHECK(restored->speaker_latch == 0x5AU);
+    CHECK(restored->sound_latch_write_count == 1U);
+    CHECK(restored->sound_bit_rise_count[1] == 1U);
+    CHECK(restored->sound_bit_rise_count[3] == 1U);
+    CHECK(restored->sound_bit_rise_count[4] == 1U);
+    CHECK(restored->sound_bit_rise_count[6] == 1U);
+    CHECK(restored->speaker_output_edge_count == 1U);
+    CHECK_FALSE(restored->speaker_output_high);
+    CHECK(restored->input_p1 == 0xEEU);
+    CHECK(restored->input_p2 == 0xDDU);
+    CHECK(restored->input_system == 0xCCU);
+    CHECK_FALSE(restored->flip_screen);
+
+    auto incompatible =
+        m15::assemble_m15(synthetic_m15_image(), m15::m15_board_params{.dip_default = 0x7FU});
+    REQUIRE(incompatible != nullptr);
+    mnemos::chips::state_reader rejected(state);
+    incompatible->load_state(rejected);
+    CHECK_FALSE(rejected.ok());
+}

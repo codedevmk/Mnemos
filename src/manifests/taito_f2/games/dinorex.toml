@@ -1,0 +1,137 @@
+# Dino Rex (World) -- Taito F2 / D39 with TC0100SCN tilemaps and
+# TC0200OBJ object codes carried in the object words.
+# Schema mnemos-romset/1; drop a copy of this file into the set zip as
+# "game.toml" next to the dump files it names.
+#
+# Region names are the Mnemos board regions: "tiles" maps the TC0100SCN SCR
+# graphics, "sprites" maps TC0200OBJ object graphics, "adpcma" maps YM2610
+# ADPCM-A, and "adpcmb" maps YM2610 Delta-T samples.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "dinorex"
+board  = "taito_f2"
+orientation = "horizontal"
+taito_f2_map = "dinorex"
+taito_f2_input_profile = "standard"
+taito_f2_text_gfx_source = "tc0100scn_ram_2bpp"
+taito_f2_tc0100scn_bg_x_offset = 16
+taito_f2_tc0100scn_text_x_offset = 23
+taito_f2_tc0480scp_profile = "none"
+taito_f2_io_profile = "tc0510nio"
+taito_f2_palette_profile = "tc0260dar"
+taito_f2_priority_profile = "tc0360pri"
+taito_f2_sprite_chip_pair = "tc0200obj_tc0210fbc"
+taito_f2_sound_comm_chip = "tc0140syt"
+taito_f2_video_profile = "tc0100scn"
+taito_f2_aux_profile = "none"
+taito_f2_vblank_irq_level = 5
+taito_f2_sprite_dma_irq_level = 6
+taito_f2_palette_format = "rrrr_gggg_bbbb_rgbx"
+taito_f2_sprite_policy = "extension_3"
+taito_f2_sprite_buffering = "immediate"
+taito_f2_sprite_extension_base = 0x400000
+taito_f2_sprite_extension_size = 0x1000
+taito_f2_sprite_hide_pixels = 3
+taito_f2_sprite_flip_hide_pixels = 3
+
+[[region]]
+name = "maincpu"
+size = 0x300000
+
+[[region.file]]
+name   = "d39-14.9"
+offset = 0x000000
+stride = 2
+size   = 0x080000
+crc32  = 0xe6aafdac
+
+[[region.file]]
+name   = "d39-16.8"
+offset = 0x000001
+stride = 2
+size   = 0x080000
+crc32  = 0xcedc8537
+
+[[region.file]]
+name   = "d39-04.6"
+offset = 0x100000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x100000
+crc32  = 0x3800506d
+
+[[region.file]]
+name   = "d39-05.7"
+offset = 0x200000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x100000
+crc32  = 0xe2ec3b5d
+
+[[region]]
+name = "tiles"
+size = 0x100000
+
+[[region.file]]
+name   = "d39-06.2"
+offset = 0x000000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x100000
+crc32  = 0x52f62835
+
+[[region]]
+name = "sprites"
+size = 0x600000
+
+[[region.file]]
+name   = "d39-01.29"
+offset = 0x000000
+size   = 0x200000
+crc32  = 0xd10e9c7d
+
+[[region.file]]
+name   = "d39-02.28"
+offset = 0x200000
+size   = 0x200000
+crc32  = 0x6c304403
+
+[[region.file]]
+name   = "d39-03.27"
+offset = 0x400000
+size   = 0x200000
+crc32  = 0xfc9cdab4
+
+[[region]]
+name = "audiocpu"
+size = 0x10000
+
+[[region.file]]
+name   = "d39-12.5"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x8292c7c1
+
+[[region]]
+name = "adpcma"
+size = 0x100000
+
+[[region.file]]
+name   = "d39-07.10"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0x28262816
+
+[[region]]
+name = "adpcmb"
+size = 0x080000
+
+[[region.file]]
+name   = "d39-08.4"
+offset = 0x000000
+size   = 0x080000
+crc32  = 0x377b8b7b

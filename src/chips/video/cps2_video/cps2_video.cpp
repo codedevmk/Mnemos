@@ -44,11 +44,13 @@ namespace mnemos::chips::video {
         std::fill(pixel_group_.begin(), pixel_group_.end(), std::uint8_t{0U});
         std::fill(pixel_priority_.begin(), pixel_priority_.end(), std::uint8_t{0U});
         std::fill(pixel_sprite_priority_.begin(), pixel_sprite_priority_.end(), std::uint8_t{0U});
+        std::fill(object_render_ram_.begin(), object_render_ram_.end(), std::uint8_t{0xFFU});
         palette_ram_.fill(0U);
         cps_b_regs_.fill(0U);
         sprite_x_base_ = 0U;
         sprite_y_base_ = 0U;
         object_priority_ = 0U;
+        object_priority_latch_ = 0U;
         scroll1_x_ = scroll1_y_ = scroll2_x_ = scroll2_y_ = scroll3_x_ = scroll3_y_ = 0U;
         scroll1_base_ = scroll2_base_ = scroll3_base_ = 0U;
         object_base_ = 0U;
@@ -58,6 +60,18 @@ namespace mnemos::chips::video {
         video_control_ = 0U;
         display_enabled_ = true;
         frame_index_ = 0U;
+    }
+
+    void cps2_video::latch_objects() noexcept {
+        std::fill(object_render_ram_.begin(), object_render_ram_.end(), std::uint8_t{0xFFU});
+        object_priority_latch_ = object_priority_;
+        if (object_ram_.empty() || object_base_ >= object_ram_.size()) {
+            return;
+        }
+
+        const std::size_t available = object_ram_.size() - object_base_;
+        const std::size_t count = std::min<std::size_t>(object_render_ram_.size(), available);
+        std::copy_n(object_ram_.data() + object_base_, count, object_render_ram_.data());
     }
 
     std::uint32_t cps2_video::decode_color(std::uint16_t value) noexcept {
@@ -140,9 +154,11 @@ namespace mnemos::chips::video {
         if (gfx_.empty() || offset + 3U >= gfx_.size()) {
             return transparent_pen;
         }
+        // After CPS-2 bank unshuffle, each packed byte contributes the same-numbered
+        // pen bit; reversing this order puts real logo art into the wrong palette pens.
         return static_cast<std::uint8_t>(
-            (((gfx_[offset + 3U] >> bit) & 1U) << 0U) | (((gfx_[offset + 2U] >> bit) & 1U) << 1U) |
-            (((gfx_[offset + 1U] >> bit) & 1U) << 2U) | (((gfx_[offset + 0U] >> bit) & 1U) << 3U));
+            (((gfx_[offset + 0U] >> bit) & 1U) << 0U) | (((gfx_[offset + 1U] >> bit) & 1U) << 1U) |
+            (((gfx_[offset + 2U] >> bit) & 1U) << 2U) | (((gfx_[offset + 3U] >> bit) & 1U) << 3U));
     }
 
     std::uint8_t cps2_video::tile_pixel(gfx_type type, std::uint32_t code, int x, int y,
@@ -333,12 +349,12 @@ namespace mnemos::chips::video {
     }
 
     std::uint16_t cps2_video::object_read16(std::uint32_t offset) const noexcept {
-        const std::uint32_t addr = object_base_ + offset;
-        if (addr + 1U >= object_ram_.size()) {
+        if (offset + 1U >= object_render_ram_.size()) {
             return 0xFFFFU;
         }
-        return static_cast<std::uint16_t>((static_cast<std::uint16_t>(object_ram_[addr]) << 8U) |
-                                          object_ram_[addr + 1U]);
+        return static_cast<std::uint16_t>((static_cast<std::uint16_t>(object_render_ram_[offset])
+                                           << 8U) |
+                                          object_render_ram_[offset + 1U]);
     }
 
     std::uint32_t cps2_video::find_sprite_count() const noexcept {
@@ -466,8 +482,9 @@ namespace mnemos::chips::video {
     }
 
     void cps2_video::decode_layer_control(std::uint16_t layer_control,
-                                          std::array<int, 4>& raw_layers) noexcept {
-        if (layer_control == 0U) {
+                                          std::array<int, 4>& raw_layers,
+                                          bool default_when_zero) noexcept {
+        if (layer_control == 0U && default_when_zero) {
             raw_layers = {3, 2, 0, 1}; // default order when no control word is set
             return;
         }
@@ -542,27 +559,25 @@ namespace mnemos::chips::video {
     }
 
     bool cps2_video::scroll_layer_enabled(int layer, std::uint16_t layer_control) const noexcept {
-        if (layer_control == 0U) {
+        if (layer_control == 0U && zero_layer_control_defaults_) {
             return true; // no control word yet -> the default all-enabled order
         }
-        // The CPS-B layer-control bits are the primary per-scroll enable. (The
-        // reference also AND-gates scroll2/3 with a CPS-A video-select bit, but its
-        // register placement is unverified here; the layer-control bits alone match
-        // the real sets observed so far.)
         switch (layer) {
         case 1:
             return (layer_control & layer_enable_scroll1) != 0U;
         case 2:
-            return (layer_control & layer_enable_scroll2) != 0U;
+            return (layer_control & layer_enable_scroll2) != 0U &&
+                   (video_control_ & video_enable_scroll2) != 0U;
         case 3:
-            return (layer_control & layer_enable_scroll3) != 0U;
+            return (layer_control & layer_enable_scroll3) != 0U &&
+                   (video_control_ & video_enable_scroll3) != 0U;
         default:
             return true;
         }
     }
 
     void cps2_video::draw_sprites(const std::array<std::uint16_t, 8>& sprite_masks) noexcept {
-        if (object_ram_.empty() || gfx_.empty()) {
+        if (gfx_.empty()) {
             return;
         }
         const bool flip = flip_screen();
@@ -583,10 +598,11 @@ namespace mnemos::chips::video {
             // or be occluded per the priority masks.
             const std::uint16_t layer_control = cps_b_layer_control();
             std::array<int, 4> raw_layers{};
-            decode_layer_control(layer_control, raw_layers);
+            decode_layer_control(layer_control, raw_layers, zero_layer_control_defaults_);
             std::array<int, 3> scroll_layers{};
             std::array<std::uint16_t, 8> sprite_masks{};
-            build_sprite_priority_masks(object_priority_, raw_layers, scroll_layers, sprite_masks);
+            build_sprite_priority_masks(object_priority_latch_, raw_layers, scroll_layers,
+                                        sprite_masks);
 
             const std::array<std::uint8_t, 3> slot_priority{tile_priority_0, tile_priority_1,
                                                             tile_priority_2};
@@ -644,6 +660,13 @@ namespace mnemos::chips::video {
         writer.u8(rowscroll_enabled_ ? 1U : 0U);
         writer.u16(video_control_);
         writer.u8(display_enabled_ ? 1U : 0U);
+        writer.u16(sprite_x_base_);
+        writer.u16(sprite_y_base_);
+        writer.u16(object_priority_);
+        writer.u16(object_priority_latch_);
+        for (const std::uint8_t b : object_render_ram_) {
+            writer.u8(b);
+        }
         for (const std::uint16_t r : cps_b_regs_) {
             writer.u16(r);
         }
@@ -669,6 +692,13 @@ namespace mnemos::chips::video {
         rowscroll_enabled_ = reader.u8() != 0U;
         video_control_ = reader.u16();
         display_enabled_ = reader.u8() != 0U;
+        sprite_x_base_ = reader.u16();
+        sprite_y_base_ = reader.u16();
+        object_priority_ = reader.u16();
+        object_priority_latch_ = reader.u16();
+        for (std::uint8_t& b : object_render_ram_) {
+            b = reader.u8();
+        }
         for (std::uint16_t& r : cps_b_regs_) {
             r = reader.u16();
         }

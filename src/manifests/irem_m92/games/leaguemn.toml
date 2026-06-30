@@ -1,0 +1,62 @@
+# Yakyuu Kakutou League-Man -- Irem M92-F-A clone of nbbatman.
+# Shared graphics, samples, PLDs, and the second program pair resolve from the
+# sibling Ninja Baseball Bat Man parent; the sound CPU pair is League-Man unique.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "leaguemn"
+parent      = "nbbatman"
+board       = "irem_m92"
+orientation = "horizontal"
+players     = 4
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "a1_-h0-.ic34"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x47c54204
+
+[[region.file]]
+name   = "a1_-l0-.ic31"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0x1d062c82
+
+[[region.file]]
+name   = "a1_-h1-.ic33"
+offset = 0x080001
+stride = 2
+size   = 0x40000
+crc32  = 0x3ce2aab5
+
+[[region.file]]
+name   = "a1_-l1-.ic32"
+offset = 0x080000
+stride = 2
+size   = 0x40000
+crc32  = 0x116d9bcc
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name   = "a1_-sh0-a.ic14"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0xc4aef83a
+
+[[region.file]]
+name   = "a1_-sl0-a.ic17"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0xe9ecbed2

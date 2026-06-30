@@ -1,0 +1,186 @@
+{
+  "profiles": [
+    {
+      "system": "msx",
+      "name": "ADONIS (1988)(MSX Magazine).rom",
+      "sha256": "a538fda1cec723ce4fc2215cd8463cb0c91733fc5143cb4484083bb24e37b4f3",
+      "boot_keys": "space"
+    },
+    {
+      "system": "msx",
+      "name": "1 2 3 (Al Alamiah) (1986) [Arabic MSX] [a].rom",
+      "sha256": "87cfdbe3f4c335ef723a7e0aacfabdeaab894e18aa40d2a8292954524ef2ab98",
+      "mapper": "plain",
+      "boot_frames": 3600,
+      "boot_sha256": "7120ea62709b765f235cdb681fa94ce76d0091a9564ccf5945c42d068091f689",
+      "reason": "Arabic cartridge reaches a visible title screen after the C-BIOS startup path; the default 600-frame smoke window can still be a uniform backdrop"
+    },
+    {
+      "system": "msx2",
+      "name": "1 2 3 (Al Alamiah) (1986) [Arabic MSX] [a].rom",
+      "sha256": "87cfdbe3f4c335ef723a7e0aacfabdeaab894e18aa40d2a8292954524ef2ab98",
+      "mapper": "plain",
+      "boot_frames": 3600,
+      "boot_sha256": "d6c8dd5aba21d95924aa28573796d1f6ca7748cf36e0369cbeaf189695b3b21b",
+      "reason": "Arabic cartridge reaches visible output after the C-BIOS MSX2 startup path; 600 frames can false-fail as a uniform backdrop"
+    },
+    {
+      "system": "msx2",
+      "name": "a_test2 [Arabic MSX].rom",
+      "sha256": "a4d5eb1097d36b0c170603577f2a99546e01cc88171aee649e58c7882182cced",
+      "bios": "cbios_main_msx2_br.rom",
+      "mapper": "plain",
+      "boot_frames": 3600,
+      "boot_sha256": "7855330785cbb9bcd8ba95149af8eef1fa67f035abbdc88c61e38fc0b6d27d9d",
+      "reason": "Arabic educational cartridge depends on the BR C-BIOS MSX2 main ROM metadata; the generic MSX2 C-BIOS leaves display blanked with R#1 bit 6 clear"
+    },
+    {
+      "system": "msx",
+      "name": "AKUPRO.rom",
+      "sha256": "57f11296ce5f898d562e58851700ae33365df2d60a23bc78fedc25e5d264f0ea",
+      "skip": true,
+      "reason": "MSX2-only cartridge; validate through the MSX2 profile"
+    },
+    {
+      "system": "msx",
+      "name": "ASHGUINZ.rom",
+      "sha256": "a32541a846364ac17b2e2dff601d7031dbfbdc829128bd462a91e54b60348e98",
+      "skip": true,
+      "reason": "MSX2-only AshGuine cartridge; validate through the MSX2 Generic8 profile"
+    },
+    {
+      "system": "msx2",
+      "name": "ASHGUINZ.rom",
+      "sha256": "a32541a846364ac17b2e2dff601d7031dbfbdc829128bd462a91e54b60348e98",
+      "mapper": "generic8",
+      "boot_frames": 3600,
+      "reason": "Local AshGuine dump writes all four 8 KiB Generic8 bank windows and stays black during the shorter intro fade"
+    },
+    {
+      "system": "msx",
+      "name": "Avenger (Gremlin Graphics) (1986) (Version ROM del juego, creada por Kabish).rom",
+      "sha256": "879ec2ab753d77c38c6d5012118ddd51ed5c7bb7908b454c10f96f137dfaf26a",
+      "mapper": "ascii8",
+      "boot_frames": 3600,
+      "reason": "Local cas2rom64ks conversion carries ASCII16-like signatures but boots correctly as ASCII8"
+    },
+    {
+      "system": "msx2",
+      "name": "Avenger (Gremlin Graphics) (1986) (Version ROM del juego, creada por Kabish).rom",
+      "sha256": "879ec2ab753d77c38c6d5012118ddd51ed5c7bb7908b454c10f96f137dfaf26a",
+      "mapper": "ascii8",
+      "boot_frames": 3600,
+      "reason": "Local cas2rom64ks conversion carries ASCII16-like signatures but boots correctly as ASCII8"
+    },
+    {
+      "system": "msx",
+      "name": "Barbarian (Melbourne House) (1988) (Version ROM del juego, creada por Kabish).rom",
+      "sha256": "d27283c7787629986a7ac0b00ea5336360199869abf9824f5ca80857b74922de",
+      "mapper": "ascii8",
+      "boot_frames": 3600,
+      "reason": "Local cas2rom64ks conversion carries ASCII16-like signatures but boots correctly as ASCII8"
+    },
+    {
+      "system": "msx2",
+      "name": "Barbarian (Melbourne House) (1988) (Version ROM del juego, creada por Kabish).rom",
+      "sha256": "d27283c7787629986a7ac0b00ea5336360199869abf9824f5ca80857b74922de",
+      "mapper": "ascii8",
+      "boot_frames": 3600,
+      "reason": "Local cas2rom64ks conversion carries ASCII16-like signatures but boots correctly as ASCII8"
+    },
+    {
+      "system": "msx",
+      "name": "barbarian_the_duel_v1.0-msxdev[ASCII16].rom",
+      "sha256": "6748a229ad5fedab2d7fea1fe4a6d379ce846cf32af3c72856dce3264f1a745e",
+      "skip": true,
+      "reason": "MSX2-only cartridge; validate through the MSX2 ASCII16 profile"
+    },
+    {
+      "system": "msx2",
+      "name": "barbarian_the_duel_v1.0-msxdev[ASCII16].rom",
+      "sha256": "6748a229ad5fedab2d7fea1fe4a6d379ce846cf32af3c72856dce3264f1a745e",
+      "mapper": "ascii16",
+      "boot_frames": 3600,
+      "reason": "MSX2-only MSXdev cartridge explicitly distributed as ASCII16"
+    },
+    {
+      "system": "msx2",
+      "name": "BARBARIAN.rom",
+      "sha256": "9fbf00f8decc1c640669556bdb08609ad37c564a41e27a620f2c428c2b520d6e",
+      "mapper": "ascii16",
+      "boot_frames": 3600,
+      "sub_slot": "3.1",
+      "ram_slot": "3.0",
+      "reason": "Legacy 64 KiB Barbarian conversion reaches a visible MSX2 screen with C-BIOS sub-ROM at 3.1 and RAM at 3.0; the default 3.0/3.2 profile leaves it executing from an unmapped RAM page"
+    },
+    {
+      "system": "msx",
+      "name": "Believe It or Not (Al Alamiah) (1990) [Arabic MSX].rom",
+      "sha256": "b53044bbad0ae77b7878e567791419e0805e19a1f58d8fa9dbea10c4143e2291",
+      "skip": true,
+      "reason": "C-BIOS MSX1 stays on the startup banner for this padded Arabic cartridge image; validate the C-BIOS-visible path through the MSX2 plain profile"
+    },
+    {
+      "system": "msx2",
+      "name": "Believe It or Not (Al Alamiah) (1990) [Arabic MSX].rom",
+      "sha256": "b53044bbad0ae77b7878e567791419e0805e19a1f58d8fa9dbea10c4143e2291",
+      "mapper": "plain",
+      "boot_frames": 3600,
+      "reason": "64 KiB padded plain image has its cartridge header at file offset $4000; the shared MSX loader maps that payload at the cartridge window"
+    },
+    {
+      "system": "msx",
+      "name": "Bestial Warrior (Dinamic) (1989) (Version ROM del juego, creada por Kabish).rom",
+      "sha256": "e05ad4653dc05ee3406b9bd9e15d6433ce8fcc45ad88d97383508788ec2f7dbd",
+      "mapper": "ascii8",
+      "boot_frames": 3600,
+      "reason": "Kabish cas2rom64ks conversion reaches the title art with ASCII8 banking"
+    },
+    {
+      "system": "msx2",
+      "name": "Bestial Warrior (Dinamic) (1989) (Version ROM del juego, creada por Kabish).rom",
+      "sha256": "e05ad4653dc05ee3406b9bd9e15d6433ce8fcc45ad88d97383508788ec2f7dbd",
+      "mapper": "ascii8",
+      "boot_frames": 3600,
+      "reason": "Kabish cas2rom64ks conversion reaches the title art with ASCII8 banking"
+    },
+    {
+      "system": "msx",
+      "name": "bean.rom",
+      "sha256": "7e193f203d6b327689ec4b65681a7b1a868756d942c2cc03f381878e12d8edb8",
+      "mapper": "plain",
+      "boot_frames": 600,
+      "boot_sha256": "690fe4e86d89606085c0296f68d7a2fb0ab7e1ba2adfdd8df23a2f5e45cd2f9a",
+      "reason": "C-BIOS MSX1 with the logo ROM reaches Bean's visible attract path and stays alive through the 600-frame proof window"
+    },
+    {
+      "system": "msx2",
+      "name": "bean.rom",
+      "sha256": "7e193f203d6b327689ec4b65681a7b1a868756d942c2cc03f381878e12d8edb8",
+      "mapper": "plain",
+      "boot_frames": 600,
+      "reason": "Tracked MSX2 parity blocker: C-BIOS MSX2 reaches Bean's $BFFF->$C000 handoff then falls into the known PC=$CA3E bad state"
+    },
+    {
+      "system": "msx",
+      "name": "boing.rom",
+      "sha256": "43844079a0a99e47d7d52894a9f782722c28c8c7fe6dd8f2b239da34be396018",
+      "skip": true,
+      "reason": "This local BOING image returns to the C-BIOS cartridge initialization diagnostic on both MSX and MSX2; Boing-b.rom in the same corpus validates the standalone game path"
+    },
+    {
+      "system": "msx2",
+      "name": "boing.rom",
+      "sha256": "43844079a0a99e47d7d52894a9f782722c28c8c7fe6dd8f2b239da34be396018",
+      "skip": true,
+      "reason": "This local BOING image returns to the C-BIOS cartridge initialization diagnostic on both MSX and MSX2; Boing-b.rom in the same corpus validates the standalone game path"
+    },
+    {
+      "system": "msx2",
+      "name": "Anty.rom",
+      "sha256": "2d5864119c17d01e3972515bc3b86f7ce74fce1cda960952b7938b8ea543e83d",
+      "bios": "cbios_main_msx2_eu.rom",
+      "reason": "BR C-BIOS stays on the cartridge initialization diagnostic screen; EU C-BIOS boots this plain 16 KiB cartridge"
+    }
+  ]
+}

@@ -1,0 +1,595 @@
+#include "irem_m78_adapter.hpp"
+
+#include "adapter_registry.hpp"
+#include "crc32.hpp"
+#include "file.hpp"
+#include "m78_game_manifests.hpp"
+#include "rom_set.hpp"
+#include "rom_set_toml.hpp"
+#include "zip_archive.hpp"
+
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <filesystem>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <utility>
+#include <vector>
+
+namespace mnemos::apps::player::adapters::irem_m78 {
+
+    namespace {
+        namespace fs = std::filesystem;
+        namespace m78 = mnemos::manifests::irem_m78;
+
+        using mnemos::manifests::common::rom_file_provider;
+        using mnemos::manifests::common::rom_load_issue;
+        using mnemos::manifests::common::rom_set_decl;
+        using mnemos::manifests::common::rom_set_image;
+
+        struct loaded_set final {
+            rom_set_image image;
+            std::string set_name;
+        };
+
+        struct nested_zip_source final {
+            std::vector<std::uint8_t> bytes;
+            std::string entry_name;
+        };
+
+        frontend_sdk::session_capability_info make_session_capabilities() {
+            frontend_sdk::session_capability_info session{};
+            session.input_ports = {
+                {.port_index = 0U,
+                 .player_slot = 1U,
+                 .format = frontend_sdk::input_device_format::arcade_panel,
+                 .device_id = "irem_m78.panel.p1",
+                 .label = "Player 1 Panel"},
+            };
+            session.deterministic_frame_input = true;
+            session.save_state_supported = true;
+            session.frame_exact_save_state = true;
+            session.max_input_delay_frames = 8U;
+            return session;
+        }
+
+        [[nodiscard]] std::uint32_t crc32_u64(std::uint32_t crc, std::uint64_t value) noexcept {
+            std::array<std::uint8_t, 8> bytes{};
+            for (std::size_t i = 0; i < bytes.size(); ++i) {
+                bytes[i] = static_cast<std::uint8_t>((value >> (i * 8U)) & 0xFFU);
+            }
+            return mnemos::security::cryptography::crc32(
+                std::span<const std::uint8_t>(bytes.data(), bytes.size()), crc);
+        }
+
+        [[nodiscard]] std::string hex32(std::uint32_t value) {
+            static constexpr char digits[] = "0123456789abcdef";
+            std::string out(8U, '0');
+            for (std::size_t i = 0; i < out.size(); ++i) {
+                const auto shift = static_cast<unsigned>((out.size() - 1U - i) * 4U);
+                out[i] = digits[(value >> shift) & 0x0FU];
+            }
+            return out;
+        }
+
+        [[nodiscard]] std::uint32_t crc32_string(std::uint32_t crc,
+                                                 std::string_view text) noexcept {
+            crc = crc32_u64(crc, text.size());
+            return mnemos::security::cryptography::crc32(text, crc);
+        }
+
+        [[nodiscard]] std::uint64_t resident_image_byte_count(const rom_set_image& image) noexcept {
+            std::uint64_t bytes = 0U;
+            for (const auto& [_, region] : image.regions) {
+                bytes += region.size();
+            }
+            return bytes;
+        }
+
+        [[nodiscard]] std::string resident_media_crc32(const loaded_set& set) {
+            if (set.image.regions.empty()) {
+                return {};
+            }
+            std::uint32_t crc = mnemos::security::cryptography::crc32("irem_m78.resident_media.v1");
+            crc = crc32_string(crc, set.set_name);
+            crc = crc32_u64(crc, set.image.regions.size());
+            for (const auto& [name, bytes] : set.image.regions) {
+                crc = crc32_string(crc, name);
+                crc = crc32_u64(crc, bytes.size());
+                crc = mnemos::security::cryptography::crc32(
+                    std::span<const std::uint8_t>(bytes.data(), bytes.size()), crc);
+            }
+            return hex32(crc);
+        }
+
+        frontend_sdk::media_capability_info make_media_capabilities(std::string_view display_name,
+                                                                    const loaded_set& set,
+                                                                    std::uint64_t source_bytes) {
+            const std::uint64_t resident_bytes = resident_image_byte_count(set.image);
+            std::vector<frontend_sdk::media_validation_issue> validation_issues;
+            validation_issues.reserve(set.image.issues.size());
+            for (const rom_load_issue& issue : set.image.issues) {
+                std::string detail = issue.message;
+                if (!issue.file.empty()) {
+                    detail = issue.file + ": " + detail;
+                }
+                validation_issues.push_back(
+                    {.code = "media.rom_set.load_issue", .detail = std::move(detail)});
+            }
+            std::string full_hash = resident_media_crc32(set);
+            frontend_sdk::media_capability_info media{};
+            media.media.push_back(frontend_sdk::media_image_info{
+                .id = "rom_set",
+                .label = display_name.empty() ? std::string{"ROM set"} : std::string{display_name},
+                .residency = frontend_sdk::media_residency::resident,
+                .byte_count = resident_bytes == 0U ? source_bytes : resident_bytes,
+                .hash_algorithm = full_hash.empty() ? frontend_sdk::media_hash_algorithm::none
+                                                    : frontend_sdk::media_hash_algorithm::crc32,
+                .full_hash = std::move(full_hash),
+                .provider_id = "irem_m78.adapter",
+                .revision = "loaded",
+                .cache_hint = "resident",
+                .validation_issues = std::move(validation_issues)});
+            return media;
+        }
+
+        [[nodiscard]] bool ends_with_zip(std::string_view value) noexcept {
+            constexpr std::string_view ext = ".zip";
+            if (value.size() < ext.size()) {
+                return false;
+            }
+            value.remove_prefix(value.size() - ext.size());
+            for (std::size_t i = 0; i < ext.size(); ++i) {
+                if (std::tolower(static_cast<unsigned char>(value[i])) != ext[i]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        [[nodiscard]] bool has_zip_signature(std::span<const std::uint8_t> bytes) noexcept {
+            return bytes.size() >= 4U && bytes[0] == 'P' && bytes[1] == 'K' && bytes[2] == 0x03U &&
+                   bytes[3] == 0x04U;
+        }
+
+        [[nodiscard]] bool is_directory_path(const std::string& path) {
+            if (path.empty()) {
+                return false;
+            }
+            std::error_code ec;
+            return fs::is_directory(fs::path{path}, ec);
+        }
+
+        [[nodiscard]] bool is_plain_set_id(std::string_view value) noexcept {
+            if (value.empty()) {
+                return false;
+            }
+            for (char c : value) {
+                const auto u = static_cast<unsigned char>(c);
+                if (std::isalnum(u) == 0 && c != '_') {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        [[nodiscard]] std::optional<std::string> set_id_from_rom_path(const std::string& rom_path) {
+            if (rom_path.empty()) {
+                return std::nullopt;
+            }
+            std::string normalized = rom_path;
+            while (!normalized.empty() && (normalized.back() == '/' || normalized.back() == '\\')) {
+                normalized.pop_back();
+            }
+            if (normalized.empty()) {
+                return std::nullopt;
+            }
+            const auto slash = normalized.find_last_of("/\\");
+            std::string basename =
+                slash == std::string::npos ? normalized : normalized.substr(slash + 1U);
+            const auto dot = basename.find_last_of('.');
+            if (dot != std::string::npos) {
+                basename.resize(dot);
+            }
+            if (!is_plain_set_id(basename)) {
+                return std::nullopt;
+            }
+            for (char& c : basename) {
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            }
+            return basename;
+        }
+
+        [[nodiscard]] std::optional<nested_zip_source>
+        unwrap_single_nested_zip(std::span<const std::uint8_t> archive_bytes) {
+            auto outer = mnemos::compression::zip_archive::open(archive_bytes);
+            if (!outer.has_value()) {
+                return std::nullopt;
+            }
+            const mnemos::compression::zip_entry* nested = nullptr;
+            std::size_t file_count = 0U;
+            for (const mnemos::compression::zip_entry& entry : outer->entries()) {
+                if (!entry.name.empty() &&
+                    (entry.name.back() == '/' || entry.name.back() == '\\')) {
+                    continue;
+                }
+                ++file_count;
+                if (ends_with_zip(entry.name)) {
+                    nested = &entry;
+                }
+            }
+            if (file_count != 1U || nested == nullptr) {
+                return std::nullopt;
+            }
+            auto inner = outer->extract(*nested);
+            if (!inner.has_value() || !has_zip_signature(*inner)) {
+                return std::nullopt;
+            }
+            return nested_zip_source{.bytes = std::move(*inner), .entry_name = nested->name};
+        }
+
+        [[nodiscard]] std::optional<rom_set_decl>
+        parse_irem_decl(std::string_view text, std::string source,
+                        std::optional<std::string_view> expected_set = std::nullopt,
+                        std::vector<rom_load_issue>* issues = nullptr) {
+            auto parsed = mnemos::manifests::common::parse_rom_set_decl(text, source);
+            if (!parsed.ok()) {
+                for (const auto& error : parsed.errors) {
+                    std::fprintf(stderr, "[irem_m78] %s:%u:%u: %s\n", error.source.c_str(),
+                                 error.line, error.column, error.message.c_str());
+                    if (issues != nullptr) {
+                        issues->push_back(
+                            {source, "invalid ROM-set declaration: " + error.message});
+                    }
+                }
+                return std::nullopt;
+            }
+            if (parsed.value->board != "irem_m78") {
+                std::fprintf(stderr, "[irem_m78] %s declares board '%s', expected 'irem_m78'\n",
+                             source.c_str(), parsed.value->board.c_str());
+                if (issues != nullptr) {
+                    issues->push_back({source, "unsupported Irem board '" + parsed.value->board +
+                                                   "' for the M78 adapter"});
+                }
+                return std::nullopt;
+            }
+            if (expected_set.has_value() && parsed.value->name != *expected_set) {
+                if (issues != nullptr) {
+                    issues->push_back({source, "declares set '" + parsed.value->name +
+                                                   "', expected '" + std::string{*expected_set} +
+                                                   "'"});
+                }
+                return std::nullopt;
+            }
+            return std::move(*parsed.value);
+        }
+
+        [[nodiscard]] std::optional<rom_set_decl> embedded_decl_for_set(std::string_view set_name) {
+            const std::string_view toml = m78::game_manifest_toml(set_name);
+            if (toml.empty()) {
+                return std::nullopt;
+            }
+            return parse_irem_decl(toml, "embedded:irem_m78/" + std::string(set_name) + ".toml",
+                                   set_name);
+        }
+
+        [[nodiscard]] loaded_set load_declared_set(rom_set_decl decl, rom_file_provider provider) {
+            loaded_set result;
+            result.image = mnemos::manifests::common::load_rom_set(decl, provider);
+            result.set_name = decl.name;
+            for (const auto& issue : result.image.issues) {
+                std::fprintf(stderr, "[irem_m78] %s: %s\n", issue.file.c_str(),
+                             issue.message.c_str());
+            }
+            return result;
+        }
+
+        [[nodiscard]] loaded_set load_set(std::vector<std::uint8_t> rom,
+                                          const std::string& rom_path) {
+            loaded_set result;
+            if (rom.empty() && is_directory_path(rom_path)) {
+                auto provider = mnemos::manifests::common::make_directory_rom_provider(rom_path);
+                if (auto manifest_bytes = provider("game.toml")) {
+                    const std::string text(manifest_bytes->begin(), manifest_bytes->end());
+                    auto decl =
+                        parse_irem_decl(text, "game.toml", std::nullopt, &result.image.issues);
+                    if (!decl.has_value()) {
+                        return result;
+                    }
+                    return load_declared_set(std::move(*decl), provider);
+                }
+                if (auto set_id = set_id_from_rom_path(rom_path)) {
+                    if (auto decl = embedded_decl_for_set(*set_id)) {
+                        return load_declared_set(std::move(*decl), provider);
+                    }
+                }
+                result.image.issues.push_back(
+                    {rom_path, "directory ROM set has no game.toml and no embedded manifest"});
+                return result;
+            }
+
+            std::string effective_rom_path = rom_path;
+            if (has_zip_signature(rom)) {
+                if (auto nested = unwrap_single_nested_zip(rom)) {
+                    const fs::path nested_name = fs::path{nested->entry_name}.filename();
+                    const fs::path outer_path{rom_path};
+                    effective_rom_path = outer_path.has_parent_path()
+                                             ? (outer_path.parent_path() / nested_name).string()
+                                             : nested_name.string();
+                    rom = std::move(nested->bytes);
+                }
+            }
+            if (has_zip_signature(rom)) {
+                if (auto provider =
+                        mnemos::manifests::common::make_zip_rom_provider(std::move(rom))) {
+                    if (auto manifest_bytes = (*provider)("game.toml")) {
+                        const std::string text(manifest_bytes->begin(), manifest_bytes->end());
+                        auto decl =
+                            parse_irem_decl(text, "game.toml", std::nullopt, &result.image.issues);
+                        if (!decl.has_value()) {
+                            return result;
+                        }
+                        return load_declared_set(std::move(*decl), std::move(*provider));
+                    }
+                    if (auto set_id = set_id_from_rom_path(effective_rom_path)) {
+                        if (auto decl = embedded_decl_for_set(*set_id)) {
+                            return load_declared_set(std::move(*decl), std::move(*provider));
+                        }
+                    }
+                    for (const char* region :
+                         {"maincpu", "audiocpu", "tiles", "tiles2", "m72_audio", "proms"}) {
+                        if (auto bytes = (*provider)(std::string{region} + ".bin")) {
+                            result.image.regions.emplace(region, std::move(*bytes));
+                        }
+                    }
+                }
+                return result;
+            }
+            result.image.regions.emplace("maincpu", std::move(rom));
+            return result;
+        }
+
+        [[nodiscard]] std::int16_t add_clamped(std::int16_t sample, std::int16_t addend) noexcept {
+            const std::int32_t mixed = static_cast<std::int32_t>(sample) + addend;
+            if (mixed > 32767) {
+                return 32767;
+            }
+            if (mixed < -32768) {
+                return -32768;
+            }
+            return static_cast<std::int16_t>(mixed);
+        }
+
+        void mix_dac_range(std::span<std::int16_t> interleaved_stereo, std::size_t first_frame,
+                           std::size_t last_frame, std::int16_t dac) noexcept {
+            if (dac == 0 || first_frame >= last_frame) {
+                return;
+            }
+            const std::size_t first = first_frame * 2U;
+            const std::size_t last = last_frame * 2U;
+            for (std::size_t i = first; i + 1U < last; i += 2U) {
+                interleaved_stereo[i] = add_clamped(interleaved_stereo[i], dac);
+                interleaved_stereo[i + 1U] = add_clamped(interleaved_stereo[i + 1U], dac);
+            }
+        }
+
+        constexpr std::uint32_t irem_m78_adapter_state_version = 1U;
+        constexpr std::uint32_t irem_m78_adapter_save_target_manifest_rev = 1U;
+
+        void save_controller_state(chips::state_writer& writer,
+                                   const frontend_sdk::controller_state& state) {
+            writer.boolean(state.start);
+            writer.boolean(state.select);
+            writer.boolean(state.a);
+            writer.boolean(state.b);
+            writer.boolean(state.service);
+            writer.boolean(state.test);
+        }
+
+        [[nodiscard]] frontend_sdk::controller_state
+        load_controller_state(chips::state_reader& reader) noexcept {
+            frontend_sdk::controller_state state{};
+            state.start = reader.boolean();
+            state.select = reader.boolean();
+            state.a = reader.boolean();
+            state.b = reader.boolean();
+            state.service = reader.boolean();
+            state.test = reader.boolean();
+            return state;
+        }
+
+    } // namespace
+
+    irem_m78_adapter::irem_m78_adapter(std::vector<std::uint8_t> rom, std::string display_name,
+                                       frontend_sdk::scheduler_factory* scheduler_factory,
+                                       std::optional<std::uint16_t> dip_override,
+                                       std::string rom_path)
+        : session_(make_session_capabilities()) {
+        (void)scheduler_factory;
+        const std::uint64_t source_byte_count = rom.size();
+        loaded_set set = load_set(std::move(rom), rom_path);
+        media_ = make_media_capabilities(display_name, set, source_byte_count);
+        loaded_set_name_ = set.set_name;
+        sys_ = m78::assemble_m78(std::move(set.image));
+        if (dip_override.has_value()) {
+            sys_->dsw1 = static_cast<std::uint8_t>(*dip_override);
+        }
+        chip_view_ = {&sys_->video, &sys_->main_cpu, &sys_->sound_cpu, &sys_->fm, &sys_->dac};
+        publish_memory_views();
+        const std::string game_label =
+            !loaded_set_name_.empty()
+                ? loaded_set_name_
+                : (display_name.empty() ? std::string{"unknown"} : display_name);
+        spec_ = {{"System", "Arcade"}, {"Board", "Irem M78"}, {"Game", game_label}};
+    }
+
+    void irem_m78_adapter::publish_memory_views() {
+        auto publish = [this](std::size_t index, std::string_view name,
+                              std::span<const std::uint8_t> bytes) {
+            memory_view_storage_[index] =
+                std::make_unique<instrumentation::span_memory_view>(name, bytes);
+            system_mem_view_[index] = memory_view_storage_[index].get();
+        };
+
+        publish(0U, "work_ram", sys_->work_ram);
+        publish(1U, "sound_ram", sys_->sound_ram);
+        publish(2U, "layer0_tile_ram", sys_->tile_ram[0]);
+        publish(3U, "layer0_attr_ram", sys_->attr_ram[0]);
+        publish(4U, "layer0_color_ram", sys_->color_ram[0]);
+        publish(5U, "layer1_tile_ram", sys_->tile_ram[1]);
+        publish(6U, "vregs", sys_->vregs);
+        publish(7U, "layer_control", sys_->layer_control);
+    }
+
+    void irem_m78_adapter::sync_inputs_from_ports() noexcept {
+        const frontend_sdk::controller_state& c = ports_[0];
+        std::uint8_t in0 = m78::m78_in0_default;
+        std::uint8_t in1 = m78::m78_in1_default;
+        if (c.service || c.test) {
+            in0 &= static_cast<std::uint8_t>(~0x01U);
+        }
+        if (c.select) {
+            in0 &= static_cast<std::uint8_t>(~0x02U);
+        }
+        if (c.start || c.a) {
+            in1 |= 0x01U;
+        }
+        if (c.b) {
+            in1 |= 0x02U;
+        }
+        sys_->set_inputs(in0, in1);
+    }
+
+    void irem_m78_adapter::save_adapter_state(chips::state_writer& writer) const {
+        writer.u32(irem_m78_adapter_state_version);
+        writer.u64(frames_stepped_);
+        writer.u64(samples_drained_);
+        save_controller_state(writer, ports_[0]);
+    }
+
+    void irem_m78_adapter::load_adapter_state(chips::state_reader& reader) {
+        if (reader.u32() != irem_m78_adapter_state_version) {
+            reader.fail();
+            return;
+        }
+        frames_stepped_ = reader.u64();
+        samples_drained_ = reader.u64();
+        ports_[0] = load_controller_state(reader);
+        if (reader.ok()) {
+            sync_inputs_from_ports();
+        }
+    }
+
+    void irem_m78_adapter::step_one_frame() {
+        sys_->run_frame();
+        ++frames_stepped_;
+    }
+
+    void irem_m78_adapter::apply_input(int port,
+                                       const frontend_sdk::controller_state& state) noexcept {
+        if (port != 0) {
+            return;
+        }
+        ports_[0] = state;
+        sync_inputs_from_ports();
+    }
+
+    frontend_sdk::audio_chunk irem_m78_adapter::drain_audio() noexcept {
+        constexpr std::uint64_t clocks_per_sample = chips::audio::ym2151::clocks_per_sample;
+        const std::uint64_t start_sample = samples_drained_;
+        const std::uint64_t due = sys_->fm.elapsed_clocks() / clocks_per_sample;
+        const std::uint64_t pending = due - start_sample;
+        samples_drained_ = due;
+        if (pending == 0U) {
+            return {};
+        }
+        audio_buf_.assign(static_cast<std::size_t>(pending) * 2U, 0);
+        sys_->fm.update(audio_buf_);
+
+        std::int16_t dac = sys_->dac.output();
+        std::size_t cursor = 0U;
+        for (const auto& event : sys_->dac_write_events) {
+            const std::uint64_t event_sample = event.sound_clock / clocks_per_sample;
+            if (event_sample < start_sample) {
+                dac = event.output;
+                continue;
+            }
+            if (event_sample >= due) {
+                break;
+            }
+            const auto boundary = static_cast<std::size_t>(event_sample - start_sample);
+            mix_dac_range(audio_buf_, cursor, boundary, dac);
+            dac = event.output;
+            cursor = boundary;
+        }
+        mix_dac_range(audio_buf_, cursor, static_cast<std::size_t>(pending), dac);
+        sys_->discard_dac_write_events_before(due * clocks_per_sample);
+
+        return {.samples = audio_buf_.data(),
+                .frame_count = static_cast<std::uint32_t>(pending),
+                .sample_rate = 55930U};
+    }
+
+    std::vector<std::uint8_t> irem_m78_adapter::save_state() {
+        return runtime::write_save_state(build_save_target(*this));
+    }
+
+    runtime::load_result irem_m78_adapter::load_state(std::span<const std::uint8_t> data) {
+        runtime::save_target target = build_save_target(*this);
+        const runtime::load_result result = runtime::read_save_state(data, target);
+        if (result.ok()) {
+            audio_buf_.clear();
+        }
+        return result;
+    }
+
+    void force_link() noexcept {}
+
+    runtime::save_target build_save_target(manifests::irem_m78::m78_system& sys) {
+        runtime::save_target target;
+        target.manifest_id = "irem_m78";
+        target.manifest_rev = manifests::irem_m78::m78_system_state_version;
+        target.components.push_back(
+            {"board", [&sys](chips::state_writer& writer) { sys.save_state(writer); },
+             [&sys](chips::state_reader& reader) { sys.load_state(reader); }});
+        return target;
+    }
+
+    runtime::save_target build_save_target(irem_m78_adapter& adapter) {
+        runtime::save_target target;
+        target.manifest_id = "irem_m78.adapter";
+        target.manifest_rev = irem_m78_adapter_save_target_manifest_rev;
+        target.components.push_back(
+            {"board",
+             [&adapter](chips::state_writer& writer) { adapter.machine().save_state(writer); },
+             [&adapter](chips::state_reader& reader) { adapter.machine().load_state(reader); }});
+        target.components.push_back(
+            {"adapter",
+             [&adapter](chips::state_writer& writer) { adapter.save_adapter_state(writer); },
+             [&adapter](chips::state_reader& reader) { adapter.load_adapter_state(reader); }});
+        return target;
+    }
+
+    namespace {
+        const auto register_irem_m78 = [] {
+            mnemos::frontend_sdk::adapter_registry::instance().register_family(
+                "irem_m78",
+                [](mnemos::frontend_sdk::adapter_options opts)
+                    -> std::unique_ptr<mnemos::frontend_sdk::player_system> {
+                    return std::make_unique<irem_m78_adapter>(
+                        std::move(opts.rom), std::move(opts.display_name),
+                        opts.scheduler_factory_override, opts.dip_override,
+                        std::move(opts.rom_path));
+                });
+            return 0;
+        }();
+    } // namespace
+
+} // namespace mnemos::apps::player::adapters::irem_m78

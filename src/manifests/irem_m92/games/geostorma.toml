@@ -1,0 +1,66 @@
+# Geostorm (Japan, alternate custom sound CPU) -- Irem M92 clone of gunforc2.
+# The local split clone carries the Geostorm lower program pair plus an
+# alternate sound CPU pair; shared graphics, samples, and PLDs resolve from the
+# sibling Gunforce 2 parent.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "geostorma"
+parent      = "gunforc2"
+board       = "irem_m92"
+orientation = "horizontal"
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name    = "a2_-h0-.ic37"
+aliases = ["ic37"]
+offset  = 0x000001
+stride  = 2
+size    = 0x40000
+crc32   = 0x9be58d09
+
+[[region.file]]
+name    = "a2_-l0-.ic49"
+aliases = ["ic49"]
+offset  = 0x000000
+stride  = 2
+size    = 0x40000
+crc32   = 0x59abb75d
+
+[[region.file]]
+name    = "a2_-h1-.ic36"
+aliases = ["ic36"]
+offset  = 0x080001
+stride  = 2
+size    = 0x40000
+crc32   = 0x34280b88
+
+[[region.file]]
+name    = "a2_-l1-.ic48"
+aliases = ["ic48"]
+offset  = 0x080000
+stride  = 2
+size    = 0x40000
+crc32   = 0xc8c13f51
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name   = "ic24"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0x62a13a96
+
+[[region.file]]
+name   = "ic31"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x16b8b6b5

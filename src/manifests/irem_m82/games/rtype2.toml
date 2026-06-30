@@ -1,0 +1,196 @@
+# R-Type II (World) -- Irem M82 parent set.
+# Schema mnemos-romset/1; this is a ROM-contract manifest only. The executable
+# M82 board profile remains separate from M72 because the CPU/video/IRQ map is
+# not a true-M72 wiring variant.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "rtype2"
+board  = "irem_m82"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "rt2_a-h0-d.ic54"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0xd8ece6f4
+
+[[region.file]]
+name   = "rt2_a-l0-d.ic60"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0x32cfb2e4
+
+[[region.file]]
+name   = "rt2_a-h1-d.ic53"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x4f6e9b15
+
+[[region.file]]
+name   = "rt2_a-l1-d.ic59"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x0fd123bf
+
+# Reset-vector reload of the second pair at the top of the 1 MiB region.
+[[region.file]]
+name   = "rt2_a-h1-d.ic53"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0x4f6e9b15
+
+[[region.file]]
+name   = "rt2_a-l1-d.ic59"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0x0fd123bf
+
+[[region]]
+name = "soundcpu"
+size = 0x010000
+
+[[region.file]]
+name   = "rt2_a-sp-.ic17"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x73ffecb4
+
+[[region]]
+name = "samples"
+size = 0x020000
+
+[[region.file]]
+name   = "rt2_a-vo-.ic14"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x637172d5
+
+[[region]]
+name = "tiles"
+size = 0x100000
+
+[[region.file]]
+name   = "rt2_a-g00.ic50"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0xf3f8736e
+
+[[region.file]]
+name   = "rt2_a-g01.ic51"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0xb4c543af
+
+[[region.file]]
+name   = "rt2_a-g10.ic56"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0x4cb80d66
+
+[[region.file]]
+name   = "rt2_a-g11.ic57"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0xbee128e0
+
+[[region.file]]
+name   = "rt2_a-g20.ic65"
+offset = 0x80000
+size   = 0x20000
+crc32  = 0x2dc9c71a
+
+[[region.file]]
+name   = "rt2_a-g21.ic66"
+offset = 0xA0000
+size   = 0x20000
+crc32  = 0x7533c428
+
+[[region.file]]
+name   = "rt2_a-g30.ic63"
+offset = 0xC0000
+size   = 0x20000
+crc32  = 0xa6ad67f2
+
+[[region.file]]
+name   = "rt2_a-g31.ic64"
+offset = 0xE0000
+size   = 0x20000
+crc32  = 0x3686d555
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "rt2_b-n0.ic31"
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x2cd8f913
+
+[[region.file]]
+name   = "rt2_b-n1.ic21"
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x5033066d
+
+[[region.file]]
+name   = "rt2_b-n2.ic32"
+offset = 0x40000
+size   = 0x20000
+crc32  = 0xec3a0450
+
+[[region.file]]
+name   = "rt2_b-n3.ic22"
+offset = 0x60000
+size   = 0x20000
+crc32  = 0xdb6176fc
+
+[[region]]
+name = "proms"
+size = 0x0649
+
+[[region.file]]
+name   = "rt2_b-4n-.ic23"
+offset = 0x0000
+size   = 0x0100
+crc32  = 0xb460c438
+
+[[region.file]]
+name   = "rt2_b-4p-.ic24"
+offset = 0x0100
+size   = 0x0100
+crc32  = 0xa4f2c4bc
+
+[[region.file]]
+name   = "rt2_a-7d-.ic45"
+offset = 0x0200
+size   = 0x0104
+crc32  = 0x53c1e087
+
+[[region.file]]
+name   = "rt2_a-2h-.ic5"
+offset = 0x0304
+size   = 0x0117
+crc32  = 0x21ede612
+
+[[region.file]]
+name   = "rt2_a-5l-.ic33"
+offset = 0x041b
+size   = 0x0117
+crc32  = 0x86e87e50
+
+[[region.file]]
+name   = "rt2_b-3a-.ic9"
+offset = 0x0532
+size   = 0x0117
+crc32  = 0x8ad303aa

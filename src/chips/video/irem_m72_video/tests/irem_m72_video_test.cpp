@@ -1,9 +1,11 @@
 #include "irem_m72_video.hpp"
 
 #include "chip_registry.hpp"
+#include "state.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <vector>
 
@@ -158,6 +160,71 @@ TEST_CASE("m72 video honours scroll and the code-word flip bits", "[m72_video]")
     }
 }
 
+TEST_CASE("m72 video applies scroll changes on later visible scanlines", "[m72_video]") {
+    irem_m72_video video;
+    const auto tiles = make_tiles({5U, 3U}); // tile 0 red, tile 1 green
+    std::vector<std::uint8_t> vram(map_bytes, 0U);
+    vram[4U] = 1U; // map cell (1,0): tile code 1
+    std::vector<std::uint8_t> palette(0xC00U, 0U);
+    palette[5U * 2U] = 0x1FU;          // red
+    palette[3U * 2U + 0x400U] = 0x1FU; // green
+
+    video.attach_vram_b(vram);
+    video.attach_tiles_b(tiles);
+    video.attach_palette_b(palette);
+    video.set_scroll_b(scroll_x_identity, scroll_y_identity);
+
+    constexpr std::uint64_t line_ticks = irem_m72_video::line_pixels;
+    video.tick(line_ticks); // line 0 rendered with identity scroll
+    video.set_scroll_b(scroll_x_identity + 8U, scroll_y_identity);
+    video.tick(frame_ticks - line_ticks);
+
+    const auto frame = video.framebuffer();
+    CHECK(frame.pixels[0] == 0x00FF0000U);
+    CHECK(frame.pixels[frame.effective_stride()] == 0x0000FF00U);
+}
+
+TEST_CASE("m72 video save-state preserves the mid-frame framebuffer", "[m72_video]") {
+    irem_m72_video video;
+    const auto tiles = make_tiles({5U});                 // tile 0 red
+    const std::vector<std::uint8_t> vram(map_bytes, 0U); // all tile 0
+    const auto palette = make_palette(5U, 0x1FU, 0U, 0U);
+
+    video.attach_vram_b(vram);
+    video.attach_tiles_b(tiles);
+    video.attach_palette_b(palette);
+    video.set_scroll_b(scroll_x_identity, scroll_y_identity);
+
+    constexpr std::uint64_t line_ticks = irem_m72_video::line_pixels;
+    video.tick(line_ticks); // line 0 is already visible, the rest is not.
+    REQUIRE(video.beam_line() == 1U);
+    REQUIRE(video.framebuffer().pixels[0] == 0x00FF0000U);
+
+    std::vector<std::uint8_t> snapshot;
+    mnemos::chips::state_writer writer(snapshot);
+    video.save_state(writer);
+
+    irem_m72_video restored;
+    restored.attach_vram_b(vram);
+    restored.attach_tiles_b(tiles);
+    restored.attach_palette_b(palette);
+    mnemos::chips::state_reader reader(snapshot);
+    restored.load_state(reader);
+    REQUIRE(reader.ok());
+    CHECK(restored.beam_line() == 1U);
+    CHECK(restored.framebuffer().pixels[0] == 0x00FF0000U);
+
+    video.tick(frame_ticks - line_ticks);
+    restored.tick(frame_ticks - line_ticks);
+    REQUIRE(restored.frame_index() == video.frame_index());
+    const auto original = video.framebuffer();
+    const auto replayed = restored.framebuffer();
+    REQUIRE(replayed.width == original.width);
+    REQUIRE(replayed.height == original.height);
+    const auto pixel_count = static_cast<std::size_t>(original.width) * original.height;
+    CHECK(std::equal(original.pixels, original.pixels + pixel_count, replayed.pixels));
+}
+
 TEST_CASE("m72 video tile priority groups paint above sprites", "[m72_video]") {
     irem_m72_video video;
     // Front playfield group 2: pens 1-15 render above sprites. A solid
@@ -212,6 +279,43 @@ TEST_CASE("m72 video display disable blanks the frame", "[m72_video]") {
     video.set_display_enable(true);
     video.tick(frame_ticks);
     CHECK(video.framebuffer().pixels[0] == 0x00FF0000U);
+}
+
+TEST_CASE("m72 video flip-screen mirrors the completed frame and saves state", "[m72_video]") {
+    irem_m72_video video;
+    // Tile 0: one white pixel at the visible origin before the cabinet flip.
+    std::vector<std::uint8_t> tiles(4U * 8U, 0U);
+    tiles[0] = 0x80U;
+    const std::vector<std::uint8_t> vram(map_bytes, 0U);
+    const auto palette = make_palette(1U, 0x1FU, 0x1FU, 0x1FU);
+
+    video.attach_vram_b(vram);
+    video.attach_tiles_b(tiles);
+    video.attach_palette_b(palette);
+    video.set_scroll_b(scroll_x_identity, scroll_y_identity);
+
+    video.tick(frame_ticks);
+    const auto normal = video.framebuffer();
+    CHECK(normal.pixels[0] == 0x00FFFFFFU);
+    CHECK(normal.pixels[normal.effective_stride() * (normal.height - 1U) + normal.width - 1U] ==
+          0U);
+
+    video.set_flip_screen(true);
+    video.tick(frame_ticks);
+    const auto flipped = video.framebuffer();
+    CHECK(flipped.pixels[0] == 0U);
+    CHECK(flipped.pixels[flipped.effective_stride() * (flipped.height - 1U) +
+                         flipped.width - 1U] == 0x00FFFFFFU);
+
+    std::vector<std::uint8_t> snapshot;
+    mnemos::chips::state_writer writer(snapshot);
+    video.save_state(writer);
+
+    irem_m72_video restored;
+    mnemos::chips::state_reader reader(snapshot);
+    restored.load_state(reader);
+    REQUIRE(reader.ok());
+    CHECK(restored.flip_screen());
 }
 
 TEST_CASE("m72 video exposes the tile-sheet debug layer", "[m72_video]") {
@@ -387,4 +491,22 @@ TEST_CASE("m72 video multi-cell sprites step 8 codes per column, 1 per row", "[m
     CHECK(frame.pixels[16U * frame.effective_stride()] == 0x0000FF00U); // cell 1
     CHECK(frame.pixels[16U] == 0x000000FFU);                            // cell 8
     CHECK(frame.pixels[48U * frame.effective_stride()] == 0x00000000U); // below
+}
+
+TEST_CASE("m72 video renders the full latched sprite entry range", "[m72_video]") {
+    irem_m72_video video;
+    const auto sprites = make_sprites({1U});
+    const auto palette_a = make_palette(1U, 0x1FU, 0x1FU, 0U); // yellow
+    std::vector<std::uint8_t> sprite_ram(0x400U, 0U);
+    set_sprite(sprite_ram, 64U, 5, 7, 0U, 0U, false, false);
+
+    video.attach_sprites(sprites);
+    video.attach_palette_a(palette_a);
+    video.attach_sprite_ram(sprite_ram);
+    video.latch_sprites();
+
+    video.tick(frame_ticks);
+    const auto frame = video.framebuffer();
+    CHECK(frame.pixels[7U * frame.effective_stride() + 5U] == 0x00FFFF00U);
+    CHECK(frame.pixels[0] == 0U);
 }

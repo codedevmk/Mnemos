@@ -1,0 +1,94 @@
+# Sky Chuter -- Irem M11/M10-lineage ROM contract.
+# Local corpus contract. Mnemos has a first-pass native 8085 player route, but
+# still lacks the final discrete sound and color PROM board model for this set.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "skychut"
+board       = "irem_m10"
+orientation = "vertical"
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name    = "sc1d"
+aliases = ["skychut/sc1d"]
+offset  = 0x1000
+size    = 0x0400
+crc32   = 0x30b5ded1
+
+[[region.file]]
+name    = "sc2d"
+aliases = ["skychut/sc2d"]
+offset  = 0x1400
+size    = 0x0400
+crc32   = 0xfd1f4b9e
+
+[[region.file]]
+name    = "sc3d"
+aliases = ["skychut/sc3d"]
+offset  = 0x1800
+size    = 0x0400
+crc32   = 0x67ed201e
+
+[[region.file]]
+name    = "sc4d"
+aliases = ["skychut/sc4d"]
+offset  = 0x1c00
+size    = 0x0400
+crc32   = 0x9b23a679
+
+[[region.file]]
+name    = "sc4d"
+aliases = ["skychut/sc4d"]
+offset  = 0xfc00
+size    = 0x0400
+crc32   = 0x9b23a679
+
+[[region.file]]
+name    = "sc5a"
+aliases = ["skychut/sc5a"]
+offset  = 0x2000
+size    = 0x0400
+crc32   = 0x51d975e6
+
+[[region.file]]
+name    = "sc6e"
+aliases = ["skychut/sc6e"]
+offset  = 0x2400
+size    = 0x0400
+crc32   = 0x617f302f
+
+[[region.file]]
+name    = "sc7"
+aliases = ["skychut/sc7"]
+offset  = 0x2800
+size    = 0x0400
+crc32   = 0xdd4c8e1a
+
+[[region.file]]
+name    = "sc8d"
+aliases = ["skychut/sc8d"]
+offset  = 0x2c00
+size    = 0x0400
+crc32   = 0xaca8b798
+
+[[region]]
+name = "tiles"
+size = 0x0800
+
+[[region.file]]
+name    = "sc9d"
+aliases = ["skychut/sc9d"]
+offset  = 0x0000
+size    = 0x0400
+crc32   = 0x2101029e
+
+[[region.file]]
+name    = "sc10d"
+aliases = ["skychut/sc10d"]
+offset  = 0x0400
+size    = 0x0400
+crc32   = 0x2f81c70c

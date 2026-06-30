@@ -1,0 +1,189 @@
+# Lode Runner IV - Teikoku Karano Dasshutsu -- Irem M62 region contract.
+# Local wrapper: D:\emu\irem\M62\ldrun4.zip -> ldrun4.zip.
+# Region placement follows the same public Irem M62 dump groups used by the
+# earlier Lode Runner contracts. Exact KNA video priority, MC6803 port/timer
+# behavior, bank behavior, and MSM5205 timing remain implementation gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "ldrun4"
+board       = "irem_m62"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x10000
+
+[[region.file]]
+name   = "lr4-a-4e"
+offset = 0x0000
+size   = 0x4000
+crc32  = 0x5383e9bf
+
+[[region.file]]
+name   = "lr4-a-4d.c"
+offset = 0x4000
+size   = 0x4000
+crc32  = 0x298afa36
+
+[[region]]
+name = "soundcpu"
+size = 0x10000
+
+[[region.file]]
+name   = "lr4-a-3d"
+offset = 0x8000
+size   = 0x4000
+crc32  = 0x86c6d445
+
+[[region.file]]
+name   = "lr4-a-3f"
+offset = 0xc000
+size   = 0x4000
+crc32  = 0x097c6c0a
+
+[[region]]
+name = "gfx1"
+size = 0xc000
+
+[[region.file]]
+name   = "lr4-v-2b"
+offset = 0x0000
+size   = 0x4000
+crc32  = 0x4118e60a
+
+[[region.file]]
+name   = "lr4-v-2c"
+offset = 0x4000
+size   = 0x4000
+crc32  = 0xc765266c
+
+[[region.file]]
+name   = "lr4-v-2d"
+offset = 0x8000
+size   = 0x4000
+crc32  = 0x542bb5b5
+
+[[region]]
+name = "gfx2"
+size = 0x18000
+
+[[region.file]]
+name   = "lr4-b-4k"
+offset = 0x00000
+size   = 0x4000
+crc32  = 0xe7fe620c
+
+[[region.file]]
+name   = "lr4-b-4f"
+offset = 0x04000
+size   = 0x4000
+crc32  = 0x6f0403db
+
+[[region.file]]
+name   = "lr4-b-3n"
+offset = 0x08000
+size   = 0x4000
+crc32  = 0xad1fba1b
+
+[[region.file]]
+name   = "lr4-b-4n"
+offset = 0x0c000
+size   = 0x4000
+crc32  = 0x0e568fab
+
+[[region.file]]
+name   = "lr4-b-4c"
+offset = 0x10000
+size   = 0x4000
+crc32  = 0x82c53669
+
+[[region.file]]
+name   = "lr4-b-4e"
+offset = 0x14000
+size   = 0x4000
+crc32  = 0x767a1352
+
+[[region]]
+name = "proms"
+size = 0x100
+
+[[region.file]]
+name   = "lr4-v-4h"
+offset = 0x000
+size   = 0x100
+crc32  = 0xdf674be9
+
+[[region]]
+name = "spr_height_prom"
+size = 0x20
+
+[[region.file]]
+name   = "lr4-b-5p"
+offset = 0x00
+size   = 0x20
+crc32  = 0xe01f69e2
+
+[[region]]
+name = "spr_color_proms"
+size = 0x300
+
+[[region.file]]
+name   = "lr4-b-1m"
+offset = 0x000
+size   = 0x100
+crc32  = 0x5d8d17d0
+
+[[region.file]]
+name   = "lr4-b-1n"
+offset = 0x100
+size   = 0x100
+crc32  = 0xda1129d2
+
+[[region.file]]
+name   = "lr4-b-1l"
+offset = 0x200
+size   = 0x100
+crc32  = 0x0d89b692
+
+[[region]]
+name = "chr_color_proms"
+size = 0x300
+
+[[region.file]]
+name   = "lr4-v-1m"
+offset = 0x000
+size   = 0x100
+crc32  = 0xfe51bf1d
+
+[[region.file]]
+name   = "lr4-v-1n"
+offset = 0x100
+size   = 0x100
+crc32  = 0xda0658e5
+
+[[region.file]]
+name   = "lr4-v-1p"
+offset = 0x200
+size   = 0x100
+crc32  = 0x0df23ebe
+
+[[region]]
+name = "timing"
+size = 0x100
+
+[[region.file]]
+name   = "lr4-b-6f"
+offset = 0x000
+size   = 0x100
+crc32  = 0x34d88d3c
+
+[[region]]
+name = "adpcm_samples"
+size = 0x8000
+
+[[region.file]]
+name   = "lr4-v-4k"
+offset = 0x0000
+size   = 0x8000
+crc32  = 0x8b248abd

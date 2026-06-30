@@ -1,0 +1,128 @@
+# Undercover Cops Alpha: Renewal Version (World) -- Irem M92-E-B clone of uccops.
+# The local Alpha Renewal set carries its own program, sound, graphics, and
+# samples; PLD declarations resolve from the sibling parent.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "uccopsar"
+parent      = "uccops"
+board       = "irem_m92"
+orientation = "horizontal"
+players     = 3
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "uca_-h0-.ic28"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x9e17cada
+
+[[region.file]]
+name   = "uca_-l0-.ic39"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0x4a4e3208
+
+[[region.file]]
+name   = "uca_-h1-b.ic27"
+offset = 0x080001
+stride = 2
+size   = 0x20000
+crc32  = 0x79d79742
+
+[[region.file]]
+name   = "uca_-l1-b.ic38"
+offset = 0x080000
+stride = 2
+size   = 0x20000
+crc32  = 0x37211581
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name   = "uc_sh0-.ic30"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0xf0ca1b03
+
+[[region.file]]
+name   = "uc_sl0-.ic31"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0xd1661723
+
+[[region]]
+name = "tiles"
+size = 0x200000
+
+[[region.file]]
+name   = "uc_c0.ic26"
+offset = 0x000000
+size   = 0x80000
+crc32  = 0x6a419a36
+
+[[region.file]]
+name   = "uc_c1.ic25"
+offset = 0x080000
+size   = 0x80000
+crc32  = 0xd703ecc7
+
+[[region.file]]
+name   = "uc_c2.ic24"
+offset = 0x100000
+size   = 0x80000
+crc32  = 0x96397ac6
+
+[[region.file]]
+name   = "uc_c3.ic23"
+offset = 0x180000
+size   = 0x80000
+crc32  = 0x5d07d10d
+
+[[region]]
+name = "sprites"
+size = 0x400000
+
+[[region.file]]
+name   = "uc_030.ic37"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0x97f7775e
+
+[[region.file]]
+name   = "uc_020.ic36"
+offset = 0x100000
+size   = 0x100000
+crc32  = 0x5e0b1d65
+
+[[region.file]]
+name   = "uc_010.ic35"
+offset = 0x200000
+size   = 0x100000
+crc32  = 0xbdc224b3
+
+[[region.file]]
+name   = "uc_000.ic34"
+offset = 0x300000
+size   = 0x100000
+crc32  = 0x7526daec
+
+[[region]]
+name = "samples"
+size = 0x080000
+
+[[region.file]]
+name   = "uc_da.bin"
+offset = 0x000000
+size   = 0x80000
+crc32  = 0x0b2855e9

@@ -12,6 +12,7 @@
 #include <array>
 #include <cstdint>
 #include <span>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -23,20 +24,26 @@ namespace {
     using mnemos::chips::state_writer;
     using mnemos::chips::audio::adpcm_b;
 
-    // A short packed-nibble waveform at byte 0x10..0x13 (each byte = two 4-bit
-    // ADPCM nibbles, high nibble first), END at 0x13, full L/R pan, TL=0, and
-    // unity DELTA-N so exactly one nibble decodes per native step. The chip is
-    // keyed via CTRL.START.
-    void configure_voice(adpcm_b& chip) {
+    [[nodiscard]] std::vector<std::uint8_t> make_sample_rom() {
         constexpr std::array<std::uint8_t, 4> wave = {0x12, 0x34, 0x56, 0x78};
-        const auto rom = chip.sample_rom();
+        std::vector<std::uint8_t> rom(0x1100U, 0U);
         for (std::size_t i = 0; i < wave.size(); ++i) {
-            rom[0x10 + i] = wave[i];
+            rom[0x1000U + i] = wave[i];
         }
+        return rom;
+    }
+
+    // A short packed-nibble waveform at byte 0x1000..0x1003 (each byte = two
+    // 4-bit ADPCM nibbles, high nibble first), selected by START=$0010 because
+    // YM2610 Delta-T START/END registers imply the low address byte is zero.
+    // Full L/R pan, TL=0, and unity DELTA-N make exactly one nibble decode per
+    // native step. The chip is keyed via CTRL.START.
+    void configure_voice(adpcm_b& chip, const std::vector<std::uint8_t>& rom) {
+        chip.set_sample_rom(rom);
         chip.write_reg(adpcm_b::reg_start_lo, 0x10);
-        chip.write_reg(adpcm_b::reg_start_hi, 0x00); // start = 0x0010
-        chip.write_reg(adpcm_b::reg_end_lo, 0x13);
-        chip.write_reg(adpcm_b::reg_end_hi, 0x00); // end = 0x0013
+        chip.write_reg(adpcm_b::reg_start_hi, 0x00); // start = 0x001000
+        chip.write_reg(adpcm_b::reg_end_lo, 0x10);
+        chip.write_reg(adpcm_b::reg_end_hi, 0x00); // end = 0x0010FF
         chip.write_reg(adpcm_b::reg_delta_lo, 0x00);
         chip.write_reg(adpcm_b::reg_delta_hi, 0x01); // DELTA-N = 0x0100 -> unity
         chip.write_reg(adpcm_b::reg_pan_tl,
@@ -48,6 +55,17 @@ namespace {
     constexpr std::array<std::int16_t, 16> kPcmGolden = {
         46, 46, 124, 124, 233, 233, 373, 373, 578, 578, 965, 965, 1858, 1858, 1716, 1716};
 
+    std::uint64_t register_value(std::span<const mnemos::chips::register_descriptor> regs,
+                                 std::string_view name) {
+        for (const auto& reg : regs) {
+            if (reg.name == name) {
+                return reg.value;
+            }
+        }
+        FAIL("missing register " << name);
+        return 0U;
+    }
+
 } // namespace
 
 TEST_CASE("adpcm_b registers in the chip registry as an audio synth", "[adpcm_b][audio]") {
@@ -58,7 +76,8 @@ TEST_CASE("adpcm_b registers in the chip registry as an audio synth", "[adpcm_b]
 
 TEST_CASE("adpcm_b decodes the ADPCM-B delta stream bit-exactly", "[adpcm_b][audio]") {
     adpcm_b chip;
-    configure_voice(chip);
+    const auto rom = make_sample_rom();
+    configure_voice(chip, rom);
     std::array<std::int16_t, 16> buf{};
     chip.generate(buf);
     for (std::size_t i = 0; i < buf.size(); ++i) {
@@ -69,7 +88,8 @@ TEST_CASE("adpcm_b decodes the ADPCM-B delta stream bit-exactly", "[adpcm_b][aud
 
 TEST_CASE("adpcm_b reset clears state to a defined baseline", "[adpcm_b][audio]") {
     adpcm_b chip;
-    configure_voice(chip);
+    const auto rom = make_sample_rom();
+    configure_voice(chip, rom);
     // Advance so runtime state is non-trivial, then a soft reset must silence it.
     std::array<std::int16_t, 8> warm{};
     chip.generate(warm);
@@ -97,7 +117,8 @@ TEST_CASE("adpcm_b register writes read back and CTRL.START keys the voice", "[a
     REQUIRE(chip.read_reg(0x0F) == 0xFF);
 
     // A keyed, audible voice produces non-zero output after CTRL.START.
-    configure_voice(chip);
+    const auto rom = make_sample_rom();
+    configure_voice(chip, rom);
     chip.step();
     REQUIRE(chip.last_left() != 0);
     REQUIRE(chip.last_right() != 0);
@@ -111,7 +132,8 @@ TEST_CASE("adpcm_b register writes read back and CTRL.START keys the voice", "[a
 
 TEST_CASE("adpcm_b save_state/load_state round-trips bit-identically", "[adpcm_b][audio]") {
     adpcm_b a;
-    configure_voice(a);
+    const auto rom = make_sample_rom();
+    configure_voice(a, rom);
     // Advance a few samples so the decoder accumulator/cursor are non-trivial.
     std::array<std::int16_t, 6> warm{};
     a.generate(warm);
@@ -121,6 +143,7 @@ TEST_CASE("adpcm_b save_state/load_state round-trips bit-identically", "[adpcm_b
     a.save_state(writer);
 
     adpcm_b b;
+    b.set_sample_rom(rom); // ROM is host-owned and not part of the state blob
     state_reader reader(blob);
     b.load_state(reader);
     REQUIRE(reader.ok());
@@ -136,9 +159,18 @@ TEST_CASE("adpcm_b save_state/load_state round-trips bit-identically", "[adpcm_b
 
 TEST_CASE("adpcm_b stops at END and latches EOS without repeat", "[adpcm_b][audio]") {
     adpcm_b chip;
-    configure_voice(chip); // 4 bytes = 8 nibbles, repeat OFF
-    std::array<std::int16_t, 32> buf{};
-    chip.generate(buf); // far more steps than the stream has nibbles
+    std::vector<std::uint8_t> rom(0x100U, 0x12U);
+    chip.set_sample_rom(rom);
+    chip.write_reg(adpcm_b::reg_start_lo, 0x00);
+    chip.write_reg(adpcm_b::reg_start_hi, 0x00);
+    chip.write_reg(adpcm_b::reg_end_lo, 0x00);
+    chip.write_reg(adpcm_b::reg_end_hi, 0x00);
+    chip.write_reg(adpcm_b::reg_delta_lo, 0x00);
+    chip.write_reg(adpcm_b::reg_delta_hi, 0x01);
+    chip.write_reg(adpcm_b::reg_pan_tl, adpcm_b::pan_left | adpcm_b::pan_right);
+    chip.write_reg(adpcm_b::reg_ctrl, adpcm_b::ctrl_start);
+    std::array<std::int16_t, 1100> buf{};
+    chip.generate(buf); // one 256-byte block = 512 nibbles, plus settling
 
     // EOS latched and BUSY cleared once the stream ran past END.
     REQUIRE((chip.read_reg(adpcm_b::reg_status) & adpcm_b::status_eos) != 0);
@@ -147,11 +179,66 @@ TEST_CASE("adpcm_b stops at END and latches EOS without repeat", "[adpcm_b][audi
     chip.step();
     REQUIRE(chip.last_left() == 0);
     REQUIRE(chip.last_right() == 0);
+    const auto regs = chip.register_snapshot();
+    REQUIRE(register_value(regs, "ACTIVE") == 0U);
+    REQUIRE(register_value(regs, "END_EVENTS") == 1U);
+    REQUIRE(register_value(regs, "LOOP_EVENTS") == 0U);
+    REQUIRE(register_value(regs, "ROM_UNDERRUNS") == 0U);
+}
+
+TEST_CASE("adpcm_b records repeat loops and ROM underruns",
+          "[adpcm_b][audio][introspection]") {
+    SECTION("repeat loop") {
+        adpcm_b chip;
+        std::vector<std::uint8_t> rom(0x100U, 0x12U);
+        chip.set_sample_rom(rom);
+        chip.write_reg(adpcm_b::reg_start_lo, 0x00);
+        chip.write_reg(adpcm_b::reg_start_hi, 0x00);
+        chip.write_reg(adpcm_b::reg_end_lo, 0x00);
+        chip.write_reg(adpcm_b::reg_end_hi, 0x00);
+        chip.write_reg(adpcm_b::reg_delta_lo, 0x00);
+        chip.write_reg(adpcm_b::reg_delta_hi, 0x01);
+        chip.write_reg(adpcm_b::reg_pan_tl, adpcm_b::pan_left | adpcm_b::pan_right);
+        chip.write_reg(adpcm_b::reg_ctrl, adpcm_b::ctrl_start | adpcm_b::ctrl_repeat);
+
+        std::array<std::int16_t, 1100> buf{};
+        chip.generate(buf);
+        const auto regs = chip.register_snapshot();
+
+        REQUIRE(register_value(regs, "ACTIVE") == 1U);
+        REQUIRE(register_value(regs, "REPEAT") == 1U);
+        REQUIRE(register_value(regs, "END_EVENTS") >= 1U);
+        REQUIRE(register_value(regs, "LOOP_EVENTS") >= 1U);
+        REQUIRE(register_value(regs, "ROM_UNDERRUNS") == 0U);
+    }
+
+    SECTION("attached ROM underrun") {
+        adpcm_b chip;
+        const std::vector<std::uint8_t> rom;
+        chip.set_sample_rom(rom);
+        chip.write_reg(adpcm_b::reg_start_lo, 0x00);
+        chip.write_reg(adpcm_b::reg_start_hi, 0x00);
+        chip.write_reg(adpcm_b::reg_end_lo, 0x00);
+        chip.write_reg(adpcm_b::reg_end_hi, 0x00);
+        chip.write_reg(adpcm_b::reg_delta_lo, 0x00);
+        chip.write_reg(adpcm_b::reg_delta_hi, 0x01);
+        chip.write_reg(adpcm_b::reg_pan_tl, adpcm_b::pan_left | adpcm_b::pan_right);
+        chip.write_reg(adpcm_b::reg_ctrl, adpcm_b::ctrl_start);
+
+        chip.step();
+        const auto regs = chip.register_snapshot();
+
+        REQUIRE(register_value(regs, "ACTIVE") == 0U);
+        REQUIRE((chip.read_reg(adpcm_b::reg_status) & adpcm_b::status_busy) == 0U);
+        REQUIRE((chip.read_reg(adpcm_b::reg_status) & adpcm_b::status_eos) != 0U);
+        REQUIRE(register_value(regs, "ROM_UNDERRUNS") == 1U);
+    }
 }
 
 TEST_CASE("adpcm_b audio capture counts and drains in stereo frames", "[adpcm_b][audio]") {
     adpcm_b chip;
-    configure_voice(chip); // an enabled, audible voice
+    const auto rom = make_sample_rom();
+    configure_voice(chip, rom); // an enabled, audible voice
     chip.enable_audio_capture(true);
     constexpr std::size_t frames = 6U;
     chip.tick(frames); // clock_divider defaults to 1 -> one (L,R) frame per cycle

@@ -24,11 +24,10 @@ namespace mnemos::chips::audio {
     // same waveform plays back at any pitch. A 6-bit total-level (TL) attenuator
     // and an L/R pan pair shape the mono output into a stereo frame.
     //
-    // The address registers on real hardware are shift-amount granular; this
-    // standalone core treats START/END as byte offsets into a host-set sample
-    // ROM span (each byte = two nibbles), the same host-supplied-memory idiom the
-    // RF5C68's wave RAM uses. That keeps the decode core deterministic and
-    // unit-testable without a full bus; the rate/decode math is integer-exact.
+    // START/END hold the high 16 bits of a 24-bit byte address; the low 8 bits
+    // are implied zero, matching the external-ROM topology used by YM2610
+    // boards. The host supplies the ROM span, keeping the decode core
+    // deterministic and unit-testable without a full bus.
     //
     // Ported from the Emu reference (chips/adpcm_b); clean-room per the YM2610
     // ADPCM-B datasheet. The Emu reference landed the register surface only; the
@@ -37,9 +36,9 @@ namespace mnemos::chips::audio {
     class adpcm_b final : public iaudio_synth {
       public:
         static constexpr std::size_t reg_count = 0x10U;
-        // External sample ROM the host populates (CPU/DMA loads on real hardware).
-        // 64 KB of bytes = 128 K nibbles, addressed by the 16-bit START/END regs.
-        static constexpr std::size_t sample_rom_size = 64U * 1024U;
+        // The YM2610 Delta-T external ROM address space is 24-bit; the host may
+        // set any ROM size up to this bound.
+        static constexpr std::size_t max_rom_size = 16U * 1024U * 1024U;
 
         // Register offsets ($00..$0D).
         enum reg : std::uint8_t {
@@ -96,11 +95,10 @@ namespace mnemos::chips::audio {
         [[nodiscard]] std::uint8_t read_reg(std::uint8_t index) const noexcept;
         void write_reg(std::uint8_t index, std::uint8_t value) noexcept;
 
-        // External sample-ROM view (host populates it; the decode core reads it).
-        [[nodiscard]] std::span<std::uint8_t> sample_rom() noexcept { return sample_rom_; }
-        [[nodiscard]] std::span<const std::uint8_t> sample_rom() const noexcept {
-            return sample_rom_;
-        }
+        // Host-set external sample ROM. The chip borrows the span; ROM storage
+        // belongs to the board/system and is reattached after save-state load.
+        void set_sample_rom(std::span<const std::uint8_t> rom) noexcept { rom_ = rom; }
+        [[nodiscard]] std::span<const std::uint8_t> sample_rom() const noexcept { return rom_; }
 
         // Key-on: jump the streaming address to START, clear the decoder, mark
         // the voice playing. CTRL.START does this implicitly.
@@ -180,8 +178,11 @@ namespace mnemos::chips::audio {
         std::int32_t accumulator_{};   // running 16-bit signed PCM accumulator
         std::int32_t step_{step_init}; // running step size, adapted per nibble
         std::uint32_t phase_{};        // 16.16 resample phase; carry advances a nibble
+        std::uint32_t end_events_{};   // times playback reached END
+        std::uint32_t loop_events_{};  // times repeat returned to START
+        std::uint32_t rom_underruns_{}; // times playback addressed past attached ROM
 
-        std::array<std::uint8_t, sample_rom_size> sample_rom_{};
+        std::span<const std::uint8_t> rom_{};
 
         std::int16_t last_left_{};
         std::int16_t last_right_{};
@@ -192,7 +193,7 @@ namespace mnemos::chips::audio {
         bool audio_capture_{};
         std::vector<std::int16_t> sample_queue_{};
 
-        std::array<register_descriptor, 9> register_view_{};
+        std::array<register_descriptor, 15> register_view_{};
         audio_source_impl audio_{*this};
         instrumentation::introspection_builder introspection_;
     };

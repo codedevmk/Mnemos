@@ -1,0 +1,45 @@
+# In the Hunt (Korea) -- Irem M92-E-B clone of inthunt.
+# The local split clone carries changed H0/L0 program ROMs; the H1/L1 program
+# pair and shared media resolve from the sibling parent.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "inthuntk"
+parent      = "inthunt"
+board       = "irem_m92"
+orientation = "horizontal"
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "ic28"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x90f82ea3
+
+[[region.file]]
+name   = "ic39"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0x4bf419c0
+
+[[region.file]]
+name    = "ith_-h1-b.ic38"
+aliases = ["ic38"]
+offset  = 0x080001
+stride  = 2
+size    = 0x20000
+crc32   = 0xfc2899df
+
+[[region.file]]
+name    = "ith_-l1-b.ic27"
+aliases = ["ic27"]
+offset  = 0x080000
+stride  = 2
+size    = 0x20000
+crc32   = 0x955a605a

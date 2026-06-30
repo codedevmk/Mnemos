@@ -4,7 +4,9 @@
 #include "ibus.hpp"
 #include "state.hpp"
 
+#include <algorithm>
 #include <array>
+#include <limits>
 #include <string_view>
 #include <utility>
 
@@ -198,15 +200,31 @@ namespace mnemos::chips::cpu {
         return (a & 0xFF0000U) == 0xA00000U;
     }
 
-    std::uint8_t m68000::read8(std::uint32_t a, bool program) noexcept {
-        if (group0_fault_.pending) {
-            return 0U;
-        }
+    void m68000::charge_bus_cycle(std::uint32_t a, bool program, bool write) noexcept {
+        const std::uint32_t instruction_cycles_before_access =
+            cycles_ > 0 ? static_cast<std::uint32_t>(cycles_) : 0U;
         cycles_ += 4;
         if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
             cycles_ += 1;
             ++cycle_sources_.z80_bus_accesses;
         }
+        if (bus_wait_callback_) {
+            const std::uint32_t wait = bus_wait_callback_(a & address_mask, program, write,
+                                                          instruction_cycles_before_access,
+                                                          cycle_sources_.external_wait_cycles);
+            const int room = std::numeric_limits<int>::max() - cycles_;
+            const auto clamped = static_cast<int>(
+                std::min<std::uint32_t>(wait, room > 0 ? static_cast<std::uint32_t>(room) : 0U));
+            cycles_ += clamped;
+            cycle_sources_.external_wait_cycles += static_cast<std::uint32_t>(clamped);
+        }
+    }
+
+    std::uint8_t m68000::read8(std::uint32_t a, bool program) noexcept {
+        if (group0_fault_.pending) {
+            return 0U;
+        }
+        charge_bus_cycle(a, program, false);
         // PC-relative byte read on a split board: take the byte from the decrypted
         // word (the opcode bus has no byte strobe; the lane is selected by A0).
         const std::uint8_t value =
@@ -229,11 +247,7 @@ namespace mnemos::chips::cpu {
             queue_address_error(a, inst_addr_, false, true);
             return 0U;
         }
-        cycles_ += 4;
-        if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
-            cycles_ += 1;
-            ++cycle_sources_.z80_bus_accesses;
-        }
+        charge_bus_cycle(a, program, false);
         const std::uint16_t value =
             (program && bus_ != nullptr) ? bus_->fetch16_be_opcode(a) : rd16(a);
         const ibus::bus_fault fault = consume_bus_fault();
@@ -251,17 +265,8 @@ namespace mnemos::chips::cpu {
             queue_address_error(a, inst_addr_, false, true);
             return 0U;
         }
-        cycles_ += 8;
-        if (z80_bus_latency_enabled_) {
-            if (is_z80_bus_addr(a)) {
-                cycles_ += 1;
-                ++cycle_sources_.z80_bus_accesses;
-            }
-            if (is_z80_bus_addr(a + 2U)) {
-                cycles_ += 1;
-                ++cycle_sources_.z80_bus_accesses;
-            }
-        }
+        charge_bus_cycle(a, program, false);
+        charge_bus_cycle(a + 2U, program, false);
         const std::uint32_t value =
             (program && bus_ != nullptr)
                 ? ((static_cast<std::uint32_t>(bus_->fetch16_be_opcode(a)) << 16U) |
@@ -278,11 +283,7 @@ namespace mnemos::chips::cpu {
         if (group0_fault_.pending) {
             return;
         }
-        cycles_ += 4;
-        if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
-            cycles_ += 1;
-            ++cycle_sources_.z80_bus_accesses;
-        }
+        charge_bus_cycle(a, false, true);
         wr8(a, v);
         const ibus::bus_fault fault = consume_bus_fault();
         if (!exception_entry_ && fault.asserted) {
@@ -297,11 +298,7 @@ namespace mnemos::chips::cpu {
             queue_address_error(a, inst_addr_, false, false);
             return;
         }
-        cycles_ += 4;
-        if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
-            cycles_ += 1;
-            ++cycle_sources_.z80_bus_accesses;
-        }
+        charge_bus_cycle(a, false, true);
         wr16(a, v);
         const ibus::bus_fault fault = consume_bus_fault();
         if (!exception_entry_ && fault.asserted) {
@@ -321,22 +318,14 @@ namespace mnemos::chips::cpu {
         // write-timing trace) sees the correct cumulative cycles for each halfword
         // -- the first word must read +4, not the full +8. Total cost (+8 plus any
         // Z80-bus latency) and the per-access latency attribution are unchanged.
-        cycles_ += 4;
-        if (z80_bus_latency_enabled_ && is_z80_bus_addr(a)) {
-            cycles_ += 1;
-            ++cycle_sources_.z80_bus_accesses;
-        }
+        charge_bus_cycle(a, false, true);
         wr16(a, static_cast<std::uint16_t>(v >> 16U));
         ibus::bus_fault fault = consume_bus_fault();
         if (!exception_entry_ && fault.asserted) {
             queue_bus_error(fault.address, inst_addr_, false, !fault.write);
             return;
         }
-        cycles_ += 4;
-        if (z80_bus_latency_enabled_ && is_z80_bus_addr(a + 2U)) {
-            cycles_ += 1;
-            ++cycle_sources_.z80_bus_accesses;
-        }
+        charge_bus_cycle(a + 2U, false, true);
         wr16(a + 2U, static_cast<std::uint16_t>(v));
         fault = consume_bus_fault();
         if (!exception_entry_ && fault.asserted) {
@@ -380,8 +369,8 @@ namespace mnemos::chips::cpu {
         if (group0_fault_.pending) {
             return 0U;
         }
-        cycles_ += 4;
         const std::uint32_t a = pc_ & address_mask;
+        charge_bus_cycle(a, true, false);
         if (!exception_entry_ && (a & 1U) != 0U) {
             queue_address_error(a, a, true, true);
             return 0U;
@@ -408,8 +397,8 @@ namespace mnemos::chips::cpu {
         if (group0_fault_.pending) {
             return 0U;
         }
-        cycles_ += 4;
         const std::uint32_t a = pc_ & address_mask;
+        charge_bus_cycle(a, true, false);
         pc_ += 2U;
         const std::uint32_t off = a - fetch_lo_;
         const std::uint32_t lo =
@@ -1279,7 +1268,7 @@ namespace mnemos::chips::cpu {
             } else {
                 a_[static_cast<std::size_t>(er)] += static_cast<std::uint32_t>(data);
             }
-            cycles_ += 4; // 8 total for both .W and .L (UM table 8-5)
+            cycles_ += sz == op_size::longword ? 2 : 4; // .L=6 total, .W=8 total.
             return;
         }
         std::uint32_t addr = 0;
@@ -1618,6 +1607,7 @@ namespace mnemos::chips::cpu {
                     }
                 }
             } else { // memory -> register
+                const bool program_source = is_pc_relative(em, er);
                 std::uint32_t a = em == 3 ? a_[static_cast<std::size_t>(er)]
                                           : ea_address(em, er, op_size::longword, false);
                 for (int i = 0; i < 16; ++i) {
@@ -1626,14 +1616,15 @@ namespace mnemos::chips::cpu {
                     }
                     std::uint32_t v{};
                     if (movem_sz == op_size::longword) {
-                        const std::uint16_t hi = read16(a);
+                        const std::uint16_t hi = read16(a, program_source);
                         a += 2U;
-                        const std::uint16_t lo = read16(a);
+                        const std::uint16_t lo = read16(a, program_source);
                         a += 2U;
                         v = (static_cast<std::uint32_t>(hi) << 16U) | lo;
                     } else {
                         v = static_cast<std::uint32_t>(
-                            sign_extend(read16(a), op_size::word)); // word loads sign-extend
+                            sign_extend(read16(a, program_source),
+                                        op_size::word)); // word loads sign-extend
                         a += 2U;
                     }
                     if (reg_is_addr(i)) {
@@ -1759,6 +1750,10 @@ namespace mnemos::chips::cpu {
                       // prefetch
             if ((sr_ & sr_s) == 0U) {
                 raise_exception(vec_privilege, inst_addr_);
+                return;
+            }
+            if (reset_callback_) {
+                reset_callback_();
             }
             cycles_ += 128; // 132 total - 4 fetch16 (opcode)
             return;
@@ -1817,14 +1812,15 @@ namespace mnemos::chips::cpu {
             //   (d16,PC) 18, (d8,PC,Xn) 22.
             // Bus already counted: fetch16 opcode (4) + EA address resolve
             // (variable: 0 for An, fetch16 for (d16,An)/(xxx).W/(d16,PC),
-            // fetch32 for (xxx).L, etc.) + push32 (8).
+            // fetch32 for (xxx).L, indexed extension fetch + idle for
+            // (d8,An,Xn)/(d8,PC,Xn), etc.) + push32 (8).
             int internal_idle = 4; // (An): 4 + 0 + 8 + 4 = 16
             if (em == 5) {
                 internal_idle = 2;
             } // (d16,An): 4 + 4 + 8 + 2 = 18
             else if (em == 6) {
-                internal_idle = 6;
-            } // (d8,An,Xn): 4 + 4 + 8 + 6 = 22
+                internal_idle = 4;
+            } // (d8,An,Xn): 4 + 6 + 8 + 4 = 22
             else if (em == 7) {
                 if (er == 0) {
                     internal_idle = 2;
@@ -1836,8 +1832,8 @@ namespace mnemos::chips::cpu {
                     internal_idle = 2;
                 } // (d16,PC): 4 + 4 + 8 + 2 = 18
                 else if (er == 3) {
-                    internal_idle = 6;
-                } // (d8,PC,Xn): 4 + 4 + 8 + 6 = 22
+                    internal_idle = 4;
+                } // (d8,PC,Xn): 4 + 6 + 8 + 4 = 22
             }
             cycles_ += internal_idle;
             return;
@@ -1846,14 +1842,14 @@ namespace mnemos::chips::cpu {
             pc_ = ea_address(em, er, op_size::longword, false);
             // JMP Motorola totals: (An) 8, (d16,An) 10, (d8,An,Xn) 14,
             //   (xxx).W 10, (xxx).L 12, (d16,PC) 10, (d8,PC,Xn) 14.
-            // Bus already counted: fetch16 (4) + EA address (0/4/8 depending on mode).
+            // Bus already counted: fetch16 (4) + EA address (0/4/6/8 depending on mode).
             int internal_idle = 4; // (An): 4 + 0 + 4 = 8
             if (em == 5) {
                 internal_idle = 2;
             } // (d16,An): 4 + 4 + 2 = 10
             else if (em == 6) {
-                internal_idle = 6;
-            } // (d8,An,Xn): 4 + 4 + 6 = 14
+                internal_idle = 4;
+            } // (d8,An,Xn): 4 + 6 + 4 = 14
             else if (em == 7) {
                 if (er == 0) {
                     internal_idle = 2;
@@ -1865,8 +1861,8 @@ namespace mnemos::chips::cpu {
                     internal_idle = 2;
                 } // (d16,PC): 4 + 4 + 2 = 10
                 else if (er == 3) {
-                    internal_idle = 6;
-                } // (d8,PC,Xn): 4 + 4 + 6 = 14
+                    internal_idle = 4;
+                } // (d8,PC,Xn): 4 + 6 + 4 = 14
             }
             cycles_ += internal_idle;
             return;
@@ -2019,11 +2015,17 @@ namespace mnemos::chips::cpu {
         if (irq_ack_) {
             irq_ack_(level); // IACK cycle: let the device clear its interrupt request
         }
+        // Standard MC68000 autovector entry is 42 cycles. The bus helpers above
+        // billed 20 cycles (push32 + push16 + vector read); add the remaining
+        // internal/IACK/prefetch slots. Genesis opts into its VDP phase table.
+        if (!genesis_interrupt_phase_timing_enabled_) {
+            cycles_ += 22;
+            return;
+        }
+
         // Autovectored IRQ entry on the Genesis 68K is cycle-dependent:
         // total entry cost is {50,59,58,57,56,55,54,53,52,51} CPU cycles
-        // indexed by (cycles / MUL) % 10. Our bus helpers above already
-        // billed 20 cycles (push32 + push16 + read32), so the remaining
-        // internal idle is (table - 20). The index uses elapsed_ (pre-
+        // indexed by (cycles / MUL) % 10. The index uses elapsed_ (pre-
         // instruction) -- the table is evaluated at the *start* of entry.
         constexpr int irq_idle[10] = {30, 39, 38, 37, 36, 35, 34, 33, 32, 31};
         cycles_ += irq_idle[static_cast<std::size_t>(elapsed_ % 10U)];
@@ -2452,8 +2454,8 @@ namespace mnemos::chips::cpu {
         // commit 21d2565) fires ~2% more refreshes than the hardware in tight
         // loops, which accumulates cumulative cycle drift over a boot sequence;
         // the sliding form matches the bus controller's actual behaviour.
-        if (elapsed_ >= bus_refresh_due_) {
-            bus_refresh_due_ = elapsed_ + 128U;
+        if (bus_refresh_enabled_ && elapsed_ >= bus_refresh_due_) {
+            bus_refresh_due_ = elapsed_ + genesis_refresh_period;
             cycles_ += 2;
             cycle_sources_.refresh_fired = 1U;
         }
@@ -2539,11 +2541,11 @@ namespace mnemos::chips::cpu {
         cycles_ = 0;
         cycle_debt_ = 0;
         elapsed_ = 0U;
-        // Initial DRAM refresh phase. The semantically canonical first-refresh
-        // point after the reset exception is 88, but 62 empirically aligns the
-        // refresh boundaries better with the rest of the boot-time cycle
-        // accounting, so it is the value used.
-        bus_refresh_due_ = 62U;
+        // Genesis-only initial DRAM refresh phase. The semantically canonical
+        // first-refresh point after the reset exception is 88, but 62 empirically
+        // aligns the refresh boundaries better with the rest of the boot-time
+        // cycle accounting, so it is the value used when a Genesis board opts in.
+        bus_refresh_due_ = bus_refresh_enabled_ ? genesis_refresh_initial_due : 0U;
 
         // Supervisor mode, interrupts fully masked; the reset vector lives at $0
         // (SSP) and $4 (PC), read big-endian off the bus. The vector sources the
@@ -2662,6 +2664,12 @@ namespace mnemos::chips::cpu {
         // systems leave it off (default).
         if (const auto v = chips::cfg_bool(cfg, "z80_bus_latency")) {
             z80_bus_latency_enabled_ = *v;
+        }
+        if (const auto v = chips::cfg_bool(cfg, "genesis_dram_refresh")) {
+            set_bus_refresh_enabled(*v);
+        }
+        if (const auto v = chips::cfg_bool(cfg, "genesis_interrupt_phase_timing")) {
+            set_genesis_interrupt_phase_timing_enabled(*v);
         }
 
         // Genesis IRQ-ack callback (clears VDP V-int latch on IACK cycle).

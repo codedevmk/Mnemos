@@ -1,0 +1,199 @@
+# Lode Runner II - The Bungeling Strikes Back -- Irem M62 region contract.
+# Local wrapper: D:\emu\irem\M62\ldrun2.zip -> ldrun2.zip.
+# Region placement follows public Irem M62 ROM metadata and the local CRC-clean
+# corpus. Banked main ROM maps, exact KNA video priority, MC6803 port/timer
+# behavior, and MSM5205 timing remain implementation gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "ldrun2"
+board       = "irem_m62"
+orientation = "horizontal"
+
+[[region]]
+name = "maincpu"
+size = 0x14000
+
+[[region.file]]
+name   = "lr2-a-4e.a"
+offset = 0x00000
+size   = 0x2000
+crc32  = 0x22313327
+
+[[region.file]]
+name   = "lr2-a-4d"
+offset = 0x02000
+size   = 0x2000
+crc32  = 0xef645179
+
+[[region.file]]
+name   = "lr2-a-4a.a"
+offset = 0x04000
+size   = 0x2000
+crc32  = 0xb11ddf59
+
+[[region.file]]
+name   = "lr2-a-4a"
+offset = 0x06000
+size   = 0x2000
+crc32  = 0x470cc8a1
+
+[[region.file]]
+name   = "lr2-h-1c.a"
+offset = 0x10000
+size   = 0x2000
+crc32  = 0x7ebcadbc
+
+[[region.file]]
+name   = "lr2-h-1d.a"
+offset = 0x12000
+size   = 0x2000
+crc32  = 0x64cbb7f9
+
+[[region]]
+name = "soundcpu"
+size = 0x10000
+
+[[region.file]]
+name   = "lr2-a-3e"
+offset = 0xa000
+size   = 0x2000
+crc32  = 0x853f3898
+
+[[region.file]]
+name   = "lr2-a-3f"
+offset = 0xc000
+size   = 0x2000
+crc32  = 0x7a96accd
+
+[[region.file]]
+name   = "lr2-a-3h"
+offset = 0xe000
+size   = 0x2000
+crc32  = 0x2a0e83ca
+
+[[region]]
+name = "gfx1"
+size = 0x6000
+
+[[region.file]]
+name   = "lr2-h-1e"
+offset = 0x0000
+size   = 0x2000
+crc32  = 0x9d63a8ff
+
+[[region.file]]
+name   = "lr2-h-1j"
+offset = 0x2000
+size   = 0x2000
+crc32  = 0x40332bbd
+
+[[region.file]]
+name   = "lr2-h-1h"
+offset = 0x4000
+size   = 0x2000
+crc32  = 0x9404727d
+
+[[region]]
+name = "gfx2"
+size = 0xc000
+
+[[region.file]]
+name   = "lr2-b-4k"
+offset = 0x0000
+size   = 0x2000
+crc32  = 0x79909871
+
+[[region.file]]
+name   = "lr2-b-4f"
+offset = 0x2000
+size   = 0x2000
+crc32  = 0x06ba1ef4
+
+[[region.file]]
+name   = "lr2-b-3n"
+offset = 0x4000
+size   = 0x2000
+crc32  = 0x3cc5893f
+
+[[region.file]]
+name   = "lr2-b-4n"
+offset = 0x6000
+size   = 0x2000
+crc32  = 0x49c12f42
+
+[[region.file]]
+name   = "lr2-b-4c"
+offset = 0x8000
+size   = 0x2000
+crc32  = 0xfbe6d24c
+
+[[region.file]]
+name   = "lr2-b-4e"
+offset = 0xa000
+size   = 0x2000
+crc32  = 0x75172d1f
+
+[[region]]
+name = "spr_height_prom"
+size = 0x20
+
+[[region.file]]
+name   = "lr2-b-5p"
+offset = 0x00
+size   = 0x20
+crc32  = 0xe01f69e2
+
+[[region]]
+name = "spr_color_proms"
+size = 0x300
+
+[[region.file]]
+name   = "lr2-b-1m"
+offset = 0x000
+size   = 0x100
+crc32  = 0x4ec9bb3d
+
+[[region.file]]
+name   = "lr2-b-1n"
+offset = 0x100
+size   = 0x100
+crc32  = 0x1daf1fa4
+
+[[region.file]]
+name   = "lr2-b-1l"
+offset = 0x200
+size   = 0x100
+crc32  = 0xc8fb708a
+
+[[region]]
+name = "chr_color_proms"
+size = 0x300
+
+[[region.file]]
+name   = "lr2-h-3m"
+offset = 0x000
+size   = 0x100
+crc32  = 0x2c5d834b
+
+[[region.file]]
+name   = "lr2-h-3l"
+offset = 0x100
+size   = 0x100
+crc32  = 0x3ae69aca
+
+[[region.file]]
+name   = "lr2-h-3n"
+offset = 0x200
+size   = 0x100
+crc32  = 0x2b28aec5
+
+[[region]]
+name = "timing"
+size = 0x100
+
+[[region.file]]
+name   = "lr2-b-6f"
+offset = 0x000
+size   = 0x100
+crc32  = 0x34d88d3c

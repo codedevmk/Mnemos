@@ -11,27 +11,61 @@
 
 namespace mnemos::chips::audio {
 
-    // QSound (Capcom DL-1425) -- the 16-voice stereo PCM mixer on QSound CPS1
-    // boards (and CPS2). Modelled at the behavioural level (HLE), not the DSP16
-    // instruction set the real part runs: each voice streams 8-bit PCM from an
-    // external sample ROM with a 12.4 fixed-point phase, a 16-bit rate, a loop, a
-    // volume, and a 6-step pan; the sound CPU programs the voices through a 3-port
-    // window (data hi / data lo / a register-select that commits). The mixer
-    // outputs a stereo pair at the QSound sample rate. Ported from the Emu
-    // reference QSound HLE (systems/capcom/cps1).
+    // QSound (Capcom DL-1425) -- the 16-voice stereo PCM + 3-voice ADPCM mixer on
+    // QSound CPS1 boards and CPS2. Modelled at the behavioural level (HLE), not
+    // the DSP16 instruction set the real part runs: each PCM voice streams 8-bit
+    // samples from an external ROM with a 12.4 fixed-point phase, and the ADPCM
+    // lane decodes the CPS2-triggered mono effects mixed equally into both lanes.
+    // The sound CPU programs the voices through a 3-port window (data hi / data lo
+    // / a register-select that commits). Ported from the Emu CPS2 QSound HLE.
     class qsound final : public iaudio_synth {
       public:
         static constexpr int voice_count = 16;
-        static constexpr std::uint16_t default_pan = 0x0110U;
-        static constexpr int mix_shift = 2;
+        static constexpr int adpcm_voice_count = 3;
+        static constexpr std::uint16_t default_pan = 0x0120U;
+        static constexpr int mix_shift = 0;
         static constexpr std::uint8_t ready_flag = 0x80U;
+        static constexpr std::int16_t adpcm_min_step_size = 1;
+        static constexpr std::int16_t adpcm_max_step_size = 2000;
+        static constexpr std::uint16_t echo_delay_base = 0x0554U;
+        static constexpr std::uint16_t mode2_echo_delay_base = 0x053CU;
+        static constexpr std::size_t echo_delay_capacity = 1024U;
+        static constexpr std::size_t delay_line_capacity = 51U;
+        static constexpr std::size_t filter_tap_capacity = 95U;
+        static constexpr std::size_t mixed_voice_count = voice_count + adpcm_voice_count;
+        static constexpr std::uint32_t master_clock_hz = 30'000'000U;
+        static constexpr std::uint32_t command_ready_cycles = 1'248U;
+        static constexpr std::size_t register_trace_capacity = 128U;
+        static constexpr std::size_t pcm_register_fields = 10U;
+        static constexpr std::size_t adpcm_register_fields = 10U;
+        static constexpr std::size_t register_trace_fields = 4U;
+        static constexpr std::size_t register_histogram_fields = 3U;
+        static constexpr std::size_t register_view_count =
+            16U + voice_count * pcm_register_fields +
+            adpcm_voice_count * adpcm_register_fields +
+            256U * register_histogram_fields +
+            register_trace_capacity * register_trace_fields;
         // 60 MHz / 2 / 1248 -- the DSP's native stereo output rate.
         static constexpr std::uint32_t native_sample_rate = 24038U;
 
-        qsound() {
-            introspection_.with_registers([this] { return register_snapshot(); });
-            reset(reset_kind::power_on);
-        }
+        enum class mixer_mode : std::uint8_t {
+            dl1425_hle = 0,
+            direct_pan = 1,
+        };
+
+        enum class ready_mode : std::uint8_t {
+            sample_interval = 0,
+            immediate = 1,
+        };
+
+        struct register_trace_entry final {
+            std::uint32_t sequence{};
+            std::uint8_t reg{};
+            std::uint16_t data{};
+            std::uint16_t pc{};
+        };
+
+        qsound();
 
         [[nodiscard]] chip_metadata metadata() const noexcept override;
         void tick(std::uint64_t cycles) override;
@@ -47,8 +81,10 @@ namespace mnemos::chips::audio {
 
         // Sound-CPU port window: offset&3 == 0 latches the data high byte, == 1 the
         // low byte, == 2 commits (register = value, data = the latched word) and
-        // re-arms the ready flag.
+        // applies the selected ready handshake policy.
         void write_port(std::uint8_t offset, std::uint8_t value) noexcept;
+        void write_port_with_pc(std::uint8_t offset, std::uint8_t value,
+                                std::uint16_t writer_pc) noexcept;
         [[nodiscard]] std::uint8_t read_status() const noexcept { return ready_; }
 
         // Advance every active voice one step and recompute the stereo mix (stored
@@ -59,12 +95,46 @@ namespace mnemos::chips::audio {
 
         // Fill interleaved (L,R) pairs (size must be even), stepping once per pair.
         void generate(std::span<std::int16_t> buf_lr) noexcept;
+        void set_mixer_mode(mixer_mode mode) noexcept { mixer_mode_ = mode; }
+        [[nodiscard]] mixer_mode current_mixer_mode() const noexcept { return mixer_mode_; }
+        void set_ready_mode(ready_mode mode) noexcept;
+        [[nodiscard]] ready_mode current_ready_mode() const noexcept { return ready_mode_; }
+
+        [[nodiscard]] std::uint32_t port_write_count() const noexcept {
+            return port_write_count_;
+        }
+        [[nodiscard]] std::uint32_t register_write_count() const noexcept {
+            return register_write_count_;
+        }
+        [[nodiscard]] std::uint32_t nonzero_pcm_volume_write_count() const noexcept {
+            return nonzero_pcm_volume_write_count_;
+        }
+        [[nodiscard]] std::uint32_t nonzero_adpcm_volume_write_count() const noexcept {
+            return nonzero_adpcm_volume_write_count_;
+        }
+        [[nodiscard]] std::uint32_t adpcm_trigger_count() const noexcept {
+            return adpcm_trigger_count_;
+        }
+        [[nodiscard]] std::uint8_t last_register() const noexcept { return last_register_; }
+        [[nodiscard]] std::uint16_t last_register_data() const noexcept {
+            return last_register_data_;
+        }
+        [[nodiscard]] std::uint16_t last_register_pc() const noexcept { return last_register_pc_; }
+        [[nodiscard]] std::uint32_t register_write_histogram(std::uint8_t reg) const noexcept {
+            return register_write_histogram_[reg];
+        }
+        [[nodiscard]] std::uint32_t register_trace_count() const noexcept {
+            return register_trace_count_;
+        }
+        [[nodiscard]] register_trace_entry register_trace(std::uint32_t sequence) const noexcept {
+            return register_trace_[sequence % register_trace_.size()];
+        }
 
         [[nodiscard]] std::span<const register_descriptor> register_snapshot() noexcept;
 
       private:
-        // One PCM voice. All fields are the raw 16-bit values the DSP registers
-        // hold; `addr`/`phase` form a 12.4 fixed-point position into the bank.
+        // One PCM voice. The CPS1/CPS2 sound drivers program the address, loop,
+        // end, and volume registers as unsigned 16-bit words.
         struct voice final {
             std::uint16_t bank{0x8000U};
             std::uint16_t addr{};
@@ -74,22 +144,124 @@ namespace mnemos::chips::audio {
             std::uint16_t end_addr{};
             std::uint16_t volume{};
             std::uint16_t pan{default_pan};
-            std::uint16_t echo{};
+            std::int16_t echo{};
         };
 
-        void write_register(std::uint8_t reg, std::uint16_t data) noexcept;
+        struct adpcm_voice final {
+            std::uint16_t start_addr{};
+            std::uint16_t end_addr{};
+            std::uint16_t bank{0x8000U};
+            std::uint16_t volume{};
+            std::uint16_t pan{default_pan};
+            std::uint16_t play_volume{};
+            std::uint16_t flag{};
+            std::uint16_t cur_addr{};
+            std::int16_t step_size{};
+            std::int16_t cur_vol{};
+            std::int16_t last_sample{};
+        };
+
+        struct fir_filter final {
+            std::uint16_t table_pos{};
+            std::int16_t tap_count{};
+            std::int16_t delay_pos{};
+            std::array<std::int16_t, filter_tap_capacity> taps{};
+            std::array<std::int16_t, filter_tap_capacity> delay_line{};
+        };
+
+        struct mix_delay final {
+            std::int16_t delay{};
+            std::int16_t volume{};
+            std::int16_t write_pos{};
+            std::int16_t read_pos{};
+            std::array<std::int16_t, delay_line_capacity> delay_line{};
+        };
+
+        void write_register(std::uint8_t reg, std::uint16_t data,
+                            std::uint16_t writer_pc) noexcept;
+        void initialize_trace_register_names() noexcept;
+        [[nodiscard]] std::uint8_t read_sample_u8(std::uint32_t rom_addr) const noexcept;
         [[nodiscard]] std::int16_t read_sample(std::uint16_t bank,
                                                std::uint16_t addr) const noexcept;
+        [[nodiscard]] std::uint8_t read_adpcm_nibble(const adpcm_voice& voice,
+                                                     std::uint32_t nibble) const noexcept;
+        void step_adpcm(std::uint32_t voice_index, std::uint32_t nibble_phase) noexcept;
+        void advance_command_ready(std::uint64_t cycles) noexcept;
+        void initialize_mode(std::uint8_t mode) noexcept;
+        void initialize_mode1_defaults() noexcept;
+        void refresh_filter_mode1() noexcept;
+        void refresh_filter_mode2() noexcept;
+        // Reset one FIR channel and (re)load its tap table, capped to tap_count.
+        void load_filter(fir_filter& f, std::int16_t tap_count) noexcept;
+        void update_sample() noexcept;
+        void update_normal_sample() noexcept;
+        [[nodiscard]] std::int16_t pcm_update(voice& v, std::int32_t& echo_out) noexcept;
+        [[nodiscard]] std::int16_t echo(std::int32_t input) noexcept;
+        [[nodiscard]] std::int32_t fir(fir_filter& filter, std::int16_t input) noexcept;
+        [[nodiscard]] std::int32_t delay(mix_delay& delay, std::int32_t input) noexcept;
+        void delay_update(mix_delay& delay) noexcept;
+        [[nodiscard]] const std::int16_t* filter_table(std::uint16_t offset,
+                                                       std::size_t& count) const noexcept;
+        void reset_echo_state() noexcept;
+        [[nodiscard]] std::uint16_t echo_delay_length() const noexcept;
 
         std::array<voice, voice_count> voices_{};
+        std::array<adpcm_voice, adpcm_voice_count> adpcm_{};
+        std::array<std::int16_t, mixed_voice_count> voice_output_{};
+        std::array<fir_filter, 2> filter_{};
+        std::array<fir_filter, 2> alt_filter_{};
+        std::array<mix_delay, 2> wet_{};
+        std::array<mix_delay, 2> dry_{};
         std::span<const std::uint8_t> rom_{};
 
         std::uint16_t data_latch_{};
         std::uint8_t ready_{ready_flag};
+        std::uint32_t ready_cycle_accum_{};
+        ready_mode ready_mode_{ready_mode::sample_interval};
+        std::uint32_t port_write_count_{};
+        std::uint32_t register_write_count_{};
+        std::array<std::uint32_t, 256> register_write_histogram_{};
+        std::array<std::uint16_t, 256> register_last_data_{};
+        std::array<std::uint16_t, 256> register_last_pc_{};
+        std::uint32_t nonzero_pcm_volume_write_count_{};
+        std::uint8_t last_nonzero_pcm_volume_reg_{};
+        std::uint16_t last_nonzero_pcm_volume_data_{};
+        std::uint16_t last_nonzero_pcm_volume_pc_{};
+        std::uint32_t nonzero_adpcm_volume_write_count_{};
+        std::uint8_t last_nonzero_adpcm_volume_voice_{};
+        std::uint16_t last_nonzero_adpcm_volume_data_{};
+        std::uint16_t last_nonzero_adpcm_volume_pc_{};
+        std::uint32_t adpcm_trigger_count_{};
+        std::uint8_t last_adpcm_trigger_voice_{};
+        std::uint16_t last_adpcm_trigger_flag_{};
+        std::uint16_t last_adpcm_trigger_pc_{};
+        std::uint8_t last_register_{};
+        std::uint16_t last_register_data_{};
+        std::uint16_t last_register_pc_{};
+        std::uint32_t register_trace_count_{};
+        std::array<register_trace_entry, register_trace_capacity> register_trace_{};
+        std::array<std::array<char, 16>, voice_count * pcm_register_fields>
+            voice_register_names_{};
+        std::array<std::array<char, 16>, 256U * register_histogram_fields>
+            histogram_register_names_{};
+        std::array<std::array<char, 16>, register_trace_capacity * register_trace_fields>
+            trace_register_names_{};
+        std::uint32_t adpcm_phase_{};
+        std::uint16_t state_{};
+        std::uint16_t next_state_{};
+        std::uint16_t delay_update_{};
+        std::uint16_t state_counter_{};
+        std::array<std::int16_t, echo_delay_capacity> echo_delay_{};
+        std::uint16_t echo_end_pos_{};
+        std::uint16_t echo_length_{};
+        std::int16_t echo_feedback_{};
+        std::uint16_t echo_delay_pos_{};
+        std::int16_t echo_last_sample_{};
         std::int16_t last_l_{};
         std::int16_t last_r_{};
+        mixer_mode mixer_mode_{mixer_mode::dl1425_hle};
 
-        std::array<register_descriptor, 4> register_view_{};
+        std::array<register_descriptor, register_view_count> register_view_{};
         instrumentation::introspection_builder introspection_;
     };
 

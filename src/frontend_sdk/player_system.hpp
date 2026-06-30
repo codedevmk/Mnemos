@@ -21,6 +21,7 @@
 #include "chip.hpp"                // for mnemos::chips::frame_buffer_view, ichip
 #include "introspection_views.hpp" // for mnemos::instrumentation::memory_view
 #include "peripheral.hpp"          // for mnemos::peripheral::controller_state
+#include "save_state.hpp"          // for mnemos::runtime::load_result
 
 #include <cstddef>
 #include <cstdint>
@@ -33,9 +34,14 @@ namespace mnemos::frontend_sdk {
 
     // How the system's framebuffer is meant to face the player. Vertical
     // (TATE) arcade games render a portrait image on a rotated monitor; the
-    // frontend rotates presentation 90 degrees clockwise. Consoles are
-    // horizontal.
-    enum class display_orientation : std::uint8_t { horizontal, vertical };
+    // frontend rotates presentation upright. `vertical` is the legacy clockwise
+    // direction; ROT270 boards use the counterclockwise value.
+    enum class display_orientation : std::uint8_t {
+        horizontal,
+        vertical,
+        vertical_clockwise = vertical,
+        vertical_counterclockwise,
+    };
 
     // Video timing of the booted system. `frames_per_second_x1000` is the
     // refresh rate scaled by 1000 so NTSC (~59.94) and PAL (50.00) both fit
@@ -112,6 +118,11 @@ namespace mnemos::frontend_sdk {
         std::string hash{};
     };
 
+    struct media_validation_issue final {
+        std::string code{};
+        std::string detail{};
+    };
+
     struct media_image_info final {
         std::string id{};
         std::string label{};
@@ -126,6 +137,7 @@ namespace mnemos::frontend_sdk {
         std::string revision{};
         bool revision_supported{true};
         std::string cache_hint{};
+        std::vector<media_validation_issue> validation_issues{};
     };
 
     struct media_capability_info final {
@@ -186,6 +198,17 @@ namespace mnemos::frontend_sdk {
         // audio path wired yet -- the frontend handles silence cleanly.
         [[nodiscard]] virtual audio_chunk drain_audio() noexcept = 0;
 
+        // Whole-session save/load. Adapters that publish
+        // session_capability_info::save_state_supported must return a complete
+        // runtime save-state container here and accept it through load_state().
+        // Default empty/unsupported keeps older adapters honest until they wire
+        // a full-machine target.
+        [[nodiscard]] virtual std::vector<std::uint8_t> save_state() { return {}; }
+        [[nodiscard]] virtual runtime::load_result load_state(std::span<const std::uint8_t> data) {
+            (void)data;
+            return {.status = runtime::load_status::unsupported_version};
+        }
+
         // The chips that make up this system, returned in scheduler order so
         // debug consumers can present a stable view. Each pointer is non-owning
         // and valid for the lifetime of the player_system. Used by the
@@ -204,12 +227,24 @@ namespace mnemos::frontend_sdk {
             return {};
         }
 
+        // Optional, named runtime diagnostics requested by headless tooling before
+        // artifact dump. Default unsupported keeps system-specific probes explicit.
+        virtual bool run_debug_probe(std::string_view id) noexcept {
+            (void)id;
+            return false;
+        }
+
         // Cartridge battery-backed RAM (SRAM), exposed so the frontend can persist
         // it to a .srm file across sessions: the frontend loads saved bytes into
         // this span on boot and writes it back on exit. The span is the adapter's
         // live backing store. Default empty -- only adapters with a battery-save
         // chip return non-empty (a cartridge console with no save RAM returns {}).
         [[nodiscard]] virtual std::span<std::uint8_t> battery_ram() noexcept { return {}; }
+
+        // Adapter-stable media id that owns battery_ram() ("cart", "cart2",
+        // "fmpac", etc.). Empty preserves the legacy frontend behavior of
+        // saving beside the primary media path.
+        [[nodiscard]] virtual std::string_view battery_ram_media_id() const noexcept { return {}; }
 
         // Convenience: lookup a chip by an adapter-stable id ("cpu", "vdp",
         // "z80", "sub_cpu", "vdp1", ...). Returns nullptr if the adapter

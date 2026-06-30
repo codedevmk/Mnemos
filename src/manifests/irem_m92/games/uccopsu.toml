@@ -1,0 +1,44 @@
+# Undercover Cops (US) -- Irem M92-E-B clone of uccops.
+# The local split clone carries changed H1/L1 program ROMs; shared media and
+# the H0/L0 program pair resolve from the sibling parent.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "uccopsu"
+parent      = "uccops"
+board       = "irem_m92"
+orientation = "horizontal"
+players     = 3
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "ucc_e-h0.ic28"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x240aa5f7
+
+[[region.file]]
+name   = "ucc_e-l0.ic39"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0xdf9a4826
+
+[[region.file]]
+name   = "ucc_h1-g.ic27"
+offset = 0x080001
+stride = 2
+size   = 0x20000
+crc32  = 0x6b8ca2de
+
+[[region.file]]
+name   = "ucc_l1-g.ic38"
+offset = 0x080000
+stride = 2
+size   = 0x20000
+crc32  = 0x2bdec7dd

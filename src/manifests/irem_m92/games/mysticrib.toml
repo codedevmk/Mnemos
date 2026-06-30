@@ -1,0 +1,61 @@
+# Mystic Riders (bootleg/split) -- Irem M92 clone of mysticri.
+# Requires the parent mysticri set beside the clone for inherited graphics,
+# sample, and PLD declarations.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "mysticrib"
+parent      = "mysticri"
+board       = "irem_m92"
+orientation = "horizontal"
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "h0"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0xe38c1f56
+
+[[region.file]]
+name   = "l0"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0x77846e48
+
+[[region.file]]
+name   = "h1"
+offset = 0x080001
+stride = 2
+size   = 0x10000
+crc32  = 0x4dcb085b
+
+[[region.file]]
+name   = "l1"
+offset = 0x080000
+stride = 2
+size   = 0x10000
+crc32  = 0x88df4f70
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name   = "sh0"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0xfc7221ee
+
+[[region.file]]
+name   = "sl0"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x65c809e6

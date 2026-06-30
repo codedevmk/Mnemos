@@ -1,0 +1,161 @@
+# Undercover Cops (World) -- Irem M92-E-B set.
+# Schema mnemos-romset/1. The first-pass M92 board can load the set, but the
+# encrypted V35 sound program and GA21/GA22 video are not parity-authentic yet.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "uccops"
+board       = "irem_m92"
+orientation = "horizontal"
+players     = 3
+sound       = "encrypted_v35"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "ucc_e-h0.ic28"
+offset = 0x000001
+stride = 2
+size   = 0x40000
+crc32  = 0x240aa5f7
+
+[[region.file]]
+name   = "ucc_e-l0.ic39"
+offset = 0x000000
+stride = 2
+size   = 0x40000
+crc32  = 0xdf9a4826
+
+[[region.file]]
+name   = "ucc_h1.ic27"
+offset = 0x080001
+stride = 2
+size   = 0x20000
+crc32  = 0x8d29bcd6
+
+[[region.file]]
+name   = "ucc_l1.ic38"
+offset = 0x080000
+stride = 2
+size   = 0x20000
+crc32  = 0xa8a402d8
+
+[[region]]
+name = "soundcpu"
+size = 0x020000
+
+[[region.file]]
+name   = "ucc_e-sh0-.ic30"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0xdf90b198
+
+[[region.file]]
+name   = "ucc_e-sl0-.ic31"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x96c11aac
+
+[[region]]
+name = "tiles"
+size = 0x200000
+
+[[region.file]]
+name   = "uc_w38m.ic26"
+offset = 0x000000
+size   = 0x80000
+crc32  = 0x130a40e5
+
+[[region.file]]
+name   = "uc_w39m.ic25"
+offset = 0x080000
+size   = 0x80000
+crc32  = 0xe42ca144
+
+[[region.file]]
+name   = "uc_w40m.ic24"
+offset = 0x100000
+size   = 0x80000
+crc32  = 0xc2961648
+
+[[region.file]]
+name   = "uc_w41m.ic23"
+offset = 0x180000
+size   = 0x80000
+crc32  = 0xf5334b80
+
+[[region]]
+name = "sprites"
+size = 0x400000
+
+[[region.file]]
+name   = "uc_k16m.ic37"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0x4a225f09
+
+[[region.file]]
+name   = "uc_k17m.ic36"
+offset = 0x100000
+size   = 0x100000
+crc32  = 0xe4ed9a54
+
+[[region.file]]
+name   = "uc_k18m.ic35"
+offset = 0x200000
+size   = 0x100000
+crc32  = 0xa626eb12
+
+[[region.file]]
+name   = "uc_k19m.ic34"
+offset = 0x300000
+size   = 0x100000
+crc32  = 0x5df46549
+
+[[region]]
+name = "samples"
+size = 0x080000
+
+[[region.file]]
+name   = "uc_w42.ic9"
+offset = 0x000000
+size   = 0x80000
+crc32  = 0xd17d3fd6
+
+[[region]]
+name = "plds"
+size = 0x000C00
+
+[[region.file]]
+name   = "m92_a-3m-.ic11"
+offset = 0x0000
+size   = 0x0117
+crc32  = 0xfc718efe
+
+[[region.file]]
+name   = "m92_a-7j-.ic41"
+offset = 0x0200
+size   = 0x0117
+crc32  = 0x5730b25a
+
+[[region.file]]
+name   = "m92_a-9j-.ic51"
+offset = 0x0400
+size   = 0x0117
+crc32  = 0x92d477cf
+
+[[region.file]]
+name   = "m92_e-3p-.ic21"
+offset = 0x0600
+size   = 0x0117
+crc32  = 0x67a4cc04
+
+[[region.file]]
+name   = "m92_e-4k-.ic29"
+offset = 0x0800
+size   = 0x0117
+crc32  = 0x506a0e20

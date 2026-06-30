@@ -1,0 +1,54 @@
+# R-Type (US) -- Irem M72 clone of rtype.
+# Requires the parent rtype.zip set beside the clone for inherited graphics declarations.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "rtypeu"
+parent = "rtype"
+board  = "irem_m72"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "rt_r-h0-a.1b"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0x36008a4e
+
+[[region.file]]
+name   = "rt_r-l0-a.3b"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x4aaa668e
+
+[[region.file]]
+name   = "rt_r-h1-a.1c"
+offset = 0x20001
+stride = 2
+size   = 0x10000
+crc32  = 0x7ebb2a53
+
+[[region.file]]
+name   = "rt_r-l1-a.3c"
+offset = 0x20000
+stride = 2
+size   = 0x10000
+crc32  = 0xc28b103b
+
+[[region.file]]
+name   = "rt_r-h1-a.1c"
+offset = 0xE0001
+stride = 2
+size   = 0x10000
+crc32  = 0x7ebb2a53
+
+[[region.file]]
+name   = "rt_r-l1-a.3c"
+offset = 0xE0000
+stride = 2
+size   = 0x10000
+crc32  = 0xc28b103b

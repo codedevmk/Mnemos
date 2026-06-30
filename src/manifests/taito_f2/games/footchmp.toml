@@ -1,0 +1,120 @@
+# Football Champ / Euro Football Champ (World) -- Taito F2 / C80 with
+# TC0480SCP tilemaps and TC0190FMC sprite banking.
+# Schema mnemos-romset/1; drop a copy of this file into the set zip as
+# "game.toml" next to the dump files it names.
+#
+# Region names are the Mnemos board regions: "tiles" maps the TC0480SCP SCR
+# graphics, "sprites" maps TC0200OBJ object graphics, and "adpcma" maps
+# YM2610 ADPCM-A. This set has no Delta-T sample region.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "footchmp"
+board  = "taito_f2"
+orientation = "horizontal"
+taito_f2_map = "footchmp"
+taito_f2_input_profile = "standard"
+taito_f2_tc0480scp_profile = "footchmp"
+taito_f2_io_profile = "tc0220ioc"
+taito_f2_palette_profile = "tc0260dar"
+taito_f2_priority_profile = "tc0360pri"
+taito_f2_sprite_chip_pair = "tc0200obj_tc0210fbc"
+taito_f2_sound_comm_chip = "tc0140syt"
+taito_f2_video_profile = "tc0480scp"
+taito_f2_aux_profile = "none"
+taito_f2_vblank_irq_level = 5
+taito_f2_sprite_dma_irq_level = 6
+taito_f2_palette_format = "rgbx_444"
+taito_f2_sprite_policy = "banked"
+taito_f2_sprite_active_area = "y_word_bit0"
+taito_f2_sprite_buffering = "full_delayed"
+taito_f2_sprite_hide_pixels = 3
+taito_f2_sprite_flip_hide_pixels = 3
+
+[[region]]
+name = "maincpu"
+size = 0x080000
+
+[[region.file]]
+name   = "c80-11.6"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xf78630fb
+
+[[region.file]]
+name   = "c80-10.4"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x32c109cb
+
+[[region.file]]
+name   = "c80-12.7"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x80d46fef
+
+[[region.file]]
+name   = "c80-14.5"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x40ac4828
+
+[[region]]
+name = "tiles"
+size = 0x100000
+
+[[region.file]]
+name   = "c80-04.1"
+offset = 0x00000
+unit   = 2
+stride = 4
+size   = 0x80000
+crc32  = 0x9a17fe8c
+
+[[region.file]]
+name   = "c80-05.2"
+offset = 0x00002
+unit   = 2
+stride = 4
+size   = 0x80000
+crc32  = 0xacde7071
+
+[[region]]
+name = "sprites"
+size = 0x200000
+
+[[region.file]]
+name   = "c80-01.9"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0xf43782e6
+
+[[region.file]]
+name   = "c80-02.10"
+offset = 0x100000
+size   = 0x100000
+crc32  = 0x060a8b61
+
+[[region]]
+name = "audiocpu"
+size = 0x10000
+
+[[region.file]]
+name   = "c80-15.70"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x05aa7fd7
+
+[[region]]
+name = "adpcma"
+size = 0x100000
+
+[[region.file]]
+name   = "c80-03.57"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0x609938d5

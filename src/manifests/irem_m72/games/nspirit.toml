@@ -1,0 +1,473 @@
+# Ninja Spirit (World) -- Irem M72 protected board.
+# Schema mnemos-romset/1; the adapter embeds this checked-in manifest and
+# resolves it from the standard set zip name, so no game.toml copy is required.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "nspirit"
+board       = "irem_m72"
+orientation = "horizontal"
+
+[[dip]]
+bank = "SW1"
+name = "Lives"
+mask = 0x0003
+default = 0x0003
+
+[[dip.option]]
+label = "2"
+value = 0x0002
+
+[[dip.option]]
+label = "3"
+value = 0x0003
+
+[[dip.option]]
+label = "4"
+value = 0x0001
+
+[[dip.option]]
+label = "5"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Difficulty"
+mask = 0x000c
+default = 0x000c
+
+[[dip.option]]
+label = "Easy"
+value = 0x0008
+
+[[dip.option]]
+label = "Normal"
+value = 0x000c
+
+[[dip.option]]
+label = "Hard"
+value = 0x0004
+
+[[dip.option]]
+label = "Hardest"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Coinage"
+mask = 0x00f0
+default = 0x00f0
+condition_mask = 0x0400
+condition_value = 0x0400
+
+[[dip.option]]
+label = "6 Coins / 1 Credit"
+value = 0x00a0
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0x00b0
+
+[[dip.option]]
+label = "4 Coins / 1 Credit"
+value = 0x00c0
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0x00d0
+
+[[dip.option]]
+label = "8 Coins / 3 Credits"
+value = 0x0010
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0x00e0
+
+[[dip.option]]
+label = "5 Coins / 3 Credits"
+value = 0x0020
+
+[[dip.option]]
+label = "3 Coins / 2 Credits"
+value = 0x0030
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0x00f0
+
+[[dip.option]]
+label = "2 Coins / 3 Credits"
+value = 0x0040
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0x0090
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x0080
+
+[[dip.option]]
+label = "1 Coin / 4 Credits"
+value = 0x0070
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x0060
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x0050
+
+[[dip.option]]
+label = "Free Play"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Coin A"
+mask = 0x0030
+default = 0x0030
+condition_mask = 0x0400
+condition_value = 0x0000
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0x0000
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0x0010
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0x0020
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0x0030
+
+[[dip]]
+bank = "SW1"
+name = "Coin B"
+mask = 0x00c0
+default = 0x00c0
+condition_mask = 0x0400
+condition_value = 0x0000
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0x00c0
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x0080
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x0040
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Flip Screen"
+mask = 0x0100
+default = 0x0100
+
+[[dip.option]]
+label = "Off"
+value = 0x0100
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Cabinet"
+mask = 0x0200
+default = 0x0000
+
+[[dip.option]]
+label = "Upright"
+value = 0x0000
+
+[[dip.option]]
+label = "Cocktail"
+value = 0x0200
+
+[[dip]]
+bank = "SW2"
+name = "Coin Mode"
+mask = 0x0400
+default = 0x0400
+
+[[dip.option]]
+label = "Mode 1"
+value = 0x0400
+
+[[dip.option]]
+label = "Mode 2"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Demo Sounds"
+mask = 0x0800
+default = 0x0000
+
+[[dip.option]]
+label = "Off"
+value = 0x0800
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Allow Continue"
+mask = 0x1000
+default = 0x1000
+
+[[dip.option]]
+label = "No"
+value = 0x0000
+
+[[dip.option]]
+label = "Yes"
+value = 0x1000
+
+[[dip]]
+bank = "SW2"
+name = "Stop Mode"
+mask = 0x2000
+default = 0x2000
+
+[[dip.option]]
+label = "Off"
+value = 0x2000
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Invulnerability"
+mask = 0x4000
+default = 0x4000
+
+[[dip.option]]
+label = "Off"
+value = 0x4000
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "nin_c-h0-b.ic40"
+aliases = ["nin_c-h0.6h"]
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0x035692fa
+
+[[region.file]]
+name   = "nin_c-l0-b.ic37"
+aliases = ["nin_c-l0.6d"]
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x9a405898
+
+[[region.file]]
+name   = "nin_c-h1-.ic41"
+aliases = ["nin_c-h1.6j"]
+offset = 0x20001
+stride = 2
+size   = 0x10000
+crc32  = 0xcbc10586
+
+[[region.file]]
+name   = "nin_c-l1-.ic36"
+aliases = ["nin_c-l1.6c"]
+offset = 0x20000
+stride = 2
+size   = 0x10000
+crc32  = 0xb75c9a4d
+
+[[region.file]]
+name   = "nin_c-h2-.ic42"
+aliases = ["nin_c-h2.6l"]
+offset = 0x40001
+stride = 2
+size   = 0x10000
+crc32  = 0x8ad818fa
+
+[[region.file]]
+name   = "nin_c-l2-.ic35"
+aliases = ["nin_c-l2.6b"]
+offset = 0x40000
+stride = 2
+size   = 0x10000
+crc32  = 0xc52ca78c
+
+[[region.file]]
+name   = "nin_c-h3-b.ic43"
+aliases = ["nin_c-h3.6m"]
+offset = 0x60001
+stride = 2
+size   = 0x10000
+crc32  = 0x501104ef
+
+[[region.file]]
+name   = "nin_c-l3-b.ic34"
+aliases = ["nin_c-l3.6a"]
+offset = 0x60000
+stride = 2
+size   = 0x10000
+crc32  = 0xfd7408b8
+
+# Boot-chunk reload of the final program pair at the top of the region.
+[[region.file]]
+name   = "nin_c-h3-b.ic43"
+aliases = ["nin_c-h3.6m"]
+offset = 0xE0001
+stride = 2
+size   = 0x10000
+crc32  = 0x501104ef
+
+[[region.file]]
+name   = "nin_c-l3-b.ic34"
+aliases = ["nin_c-l3.6a"]
+offset = 0xE0000
+stride = 2
+size   = 0x10000
+crc32  = 0xfd7408b8
+
+[[region]]
+name = "mcu"
+size = 0x1000
+
+[[region.file]]
+name   = "nin_c-pr-b.ic1"
+offset = 0x0000
+size   = 0x1000
+crc32  = 0x0f7b2713
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "nin-r00.ic53"
+aliases = ["nin-r00.7m"]
+offset = 0x00000
+size   = 0x20000
+crc32  = 0x5f61d30b
+
+[[region.file]]
+name   = "nin-r10.ic51"
+aliases = ["nin-r10.7j"]
+offset = 0x20000
+size   = 0x20000
+crc32  = 0x0caad107
+
+[[region.file]]
+name   = "nin-r20.ic49"
+aliases = ["nin-r20.7f"]
+offset = 0x40000
+size   = 0x20000
+crc32  = 0xef3617d3
+
+[[region.file]]
+name   = "nin-r30.ic47"
+aliases = ["nin-r30.7d"]
+offset = 0x60000
+size   = 0x20000
+crc32  = 0x175d2a24
+
+[[region]]
+name = "tiles_a"
+size = 0x040000
+
+[[region.file]]
+name   = "nin_b-a0.ic21"
+aliases = ["nin_b-a0.4c"]
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x63f8f658
+
+[[region.file]]
+name   = "nin_b-a1.ic22"
+aliases = ["nin_b-a1.4d"]
+offset = 0x10000
+size   = 0x10000
+crc32  = 0x75eb8306
+
+[[region.file]]
+name   = "nin_b-a2.ic20"
+aliases = ["nin_b-a2.4b"]
+offset = 0x20000
+size   = 0x10000
+crc32  = 0xdf532172
+
+[[region.file]]
+name   = "nin_b-a3.ic23"
+aliases = ["nin_b-a3.4e"]
+offset = 0x30000
+size   = 0x10000
+crc32  = 0x4dedd64c
+
+[[region]]
+name = "tiles_b"
+size = 0x040000
+
+[[region.file]]
+name   = "b0.ic26"
+aliases = ["b0.4j"]
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x1b0e08a6
+
+[[region.file]]
+name   = "b1.ic27"
+aliases = ["b1.4k"]
+offset = 0x10000
+size   = 0x10000
+crc32  = 0x728727f0
+
+[[region.file]]
+name   = "b2.ic25"
+aliases = ["b2.4h"]
+offset = 0x20000
+size   = 0x10000
+crc32  = 0xf87efd75
+
+[[region.file]]
+name   = "b3.ic24"
+aliases = ["b3.4f"]
+offset = 0x30000
+size   = 0x10000
+crc32  = 0x98856cb4
+
+[[region]]
+name = "samples"
+size = 0x10000
+
+[[region.file]]
+name   = "nin-v0.ic44"
+aliases = ["nin-v0.7a"]
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xa32e8caf

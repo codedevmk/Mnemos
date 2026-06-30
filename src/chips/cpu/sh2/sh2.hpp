@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <functional>
 #include <span>
+#include <utility>
 
 namespace mnemos::chips::cpu {
 
@@ -107,6 +108,16 @@ namespace mnemos::chips::cpu {
         // timers directly; CPU code reaches it through the $FFFFFE00 window).
         [[nodiscard]] sh2_peripherals& peripherals() noexcept { return peripherals_; }
 
+        using onchip_extension_read_handler =
+            std::function<bool(std::uint32_t address, std::uint8_t& value)>;
+        using onchip_extension_write_handler =
+            std::function<bool(std::uint32_t address, std::uint8_t value)>;
+        void set_onchip_extension_handlers(onchip_extension_read_handler on_read,
+                                           onchip_extension_write_handler on_write) {
+            onchip_extension_read_ = std::move(on_read);
+            onchip_extension_write_ = std::move(on_write);
+        }
+
         // ---- interrupt delivery (driven by the system / 32X INTC) ----
         // Present an external interrupt request at priority `level` (1-15) and
         // the given vector number. The CPU accepts it at the next instruction
@@ -182,6 +193,10 @@ namespace mnemos::chips::cpu {
         void wr16(std::uint32_t a, std::uint16_t v) noexcept;
         [[nodiscard]] std::uint32_t rd32(std::uint32_t a) noexcept;
         void wr32(std::uint32_t a, std::uint32_t v) noexcept;
+        [[nodiscard]] bool read_onchip_extension8(std::uint32_t a,
+                                                  std::uint8_t& value) noexcept;
+        [[nodiscard]] bool write_onchip_extension8(std::uint32_t a,
+                                                   std::uint8_t value) noexcept;
 
         // ---- status-register T bit ----
         void set_t(bool value) noexcept { sr_ = value ? (sr_ | sr_t) : (sr_ & ~sr_t); }
@@ -393,6 +408,8 @@ namespace mnemos::chips::cpu {
         std::function<void(int, std::uint8_t)> irq_accept_{};
         std::function<int(std::uint32_t, std::uint8_t, data_access_kind)> bus_wait_{};
         std::function<void()> self_reset_{}; // board hook: WDT internal reset is imminent
+        onchip_extension_read_handler onchip_extension_read_{};
+        onchip_extension_write_handler onchip_extension_write_{};
 
         ibus* bus_{};
         sh2_peripherals peripherals_{}; // on-chip SH7604 peripherals ($FFFFFE00 window)

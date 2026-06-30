@@ -1,0 +1,54 @@
+# R-Type (World bootleg) -- Irem M72 clone of rtype.
+# Requires the parent rtype.zip set beside the clone for inherited graphics declarations.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "rtypeb"
+parent = "rtype"
+board  = "irem_m72"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "7.512"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0xeacc8024
+
+[[region.file]]
+name   = "1.512"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x2e5fe27b
+
+[[region.file]]
+name   = "8.512"
+offset = 0x20001
+stride = 2
+size   = 0x10000
+crc32  = 0x22cc4950
+
+[[region.file]]
+name   = "2.512"
+offset = 0x20000
+stride = 2
+size   = 0x10000
+crc32  = 0xada7b90e
+
+[[region.file]]
+name   = "8.512"
+offset = 0xE0001
+stride = 2
+size   = 0x10000
+crc32  = 0x22cc4950
+
+[[region.file]]
+name   = "2.512"
+offset = 0xE0000
+stride = 2
+size   = 0x10000
+crc32  = 0xada7b90e

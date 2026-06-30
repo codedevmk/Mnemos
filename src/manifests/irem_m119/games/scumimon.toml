@@ -1,0 +1,52 @@
+# Slotters Club: Umi Monogatari -- Irem M119 ROM contract.
+# First-pass executable route: Mnemos models the HD6417708S/SH-3 shell,
+# SH7708 local-register bus surface, uPD94244-210 VDP MMIO shell, and YMZ280B
+# sample-player register/PCM/ADPCM surface. Authentic raster, SH-3
+# MMU/cache/timer/interrupt, YMZ280B DSP/IRQ/bus timing, and hardware
+# visual/audio parity remain later silicon passes.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "scumimon"
+board       = "irem_m119"
+orientation = "horizontal"
+players     = 1
+sound       = "ymz280b"
+
+[[region]]
+name = "maincpu"
+size = 0x080000
+
+[[region.file]]
+name   = "scu1.a-pr00-c.ic43"
+offset = 0x000000
+size   = 0x080000
+crc32  = 0x18c17fcf
+
+[[region]]
+name = "vdp"
+size = 0x400000
+
+[[region.file]]
+name   = "scu1.b-c0.ic4"
+offset = 0x000000
+stride = 2
+size   = 0x200000
+crc32  = 0x56402e4b
+
+[[region.file]]
+name   = "scu1.b-c1.ic2"
+offset = 0x000001
+stride = 2
+size   = 0x200000
+crc32  = 0xadff81ba
+
+[[region]]
+name = "ymz"
+size = 0x200000
+
+[[region.file]]
+name   = "scu1.a-v0-.ic35"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0xef52018d

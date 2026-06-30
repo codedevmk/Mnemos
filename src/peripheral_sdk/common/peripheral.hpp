@@ -7,17 +7,21 @@
 // can present them as catalog entries and an adapter can pick a default
 // appropriate to the loaded software.
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 
 namespace mnemos::peripheral {
+
+    inline constexpr std::size_t keyboard_usage_count = 256U;
 
     // System-agnostic abstract input state a frontend passes to a peripheral
     // each frame. Lives at this tier so the player adapters (tier 8) and the
     // peripheral devices (tier 2) can both reference the same shape without
     // a tier inversion. A peripheral consumes the subset of fields its
     // hardware exposes and ignores the rest -- a 3-button pad reads only
-    // u/d/l/r/a/b/c/start; a mouse reads dx/dy/buttons; a lightgun reads
-    // aim_x/aim_y/trigger; etc.
+    // u/d/l/r/a/b/c/start; an arcade panel may read coin/service/test; a mouse
+    // reads dx/dy/buttons; a lightgun reads aim_x/aim_y/trigger; etc.
     struct controller_state final {
         bool up{};
         bool down{};
@@ -32,13 +36,27 @@ namespace mnemos::peripheral {
         bool y{};
         bool z{};
         bool mode{};
+        bool service{}; // arcade service credit / service switch
+        bool test{};    // arcade operator test/menu switch
+        std::uint16_t paddle{}; // rotary paddle/dial absolute position, board-masked
         // Lightgun / pointer fields (Zapper, Menacer, ...): the aimed screen pixel
-        // in the system's native framebuffer coordinates and the trigger. A pad
-        // device ignores them; a lightgun ignores the buttons. aim_x/aim_y are -1
-        // when the pointer is off-screen.
+        // in the system's native framebuffer coordinates and the trigger. Analog
+        // devices reuse aim_x/aim_y as normalized 0..255 axis positions, with -1
+        // meaning disconnected/default maximum resistance.
         std::int16_t aim_x{-1};
         std::int16_t aim_y{-1};
         bool trigger{};
+        std::array<bool, keyboard_usage_count> keyboard_usage{};
+
+        [[nodiscard]] bool key_down(std::uint16_t usage) const noexcept {
+            return usage < keyboard_usage.size() && keyboard_usage[usage];
+        }
+
+        void set_key(std::uint16_t usage, bool pressed) noexcept {
+            if (usage < keyboard_usage.size()) {
+                keyboard_usage[usage] = pressed;
+            }
+        }
     };
 
     // The category a peripheral belongs to. Drives the category subtree the

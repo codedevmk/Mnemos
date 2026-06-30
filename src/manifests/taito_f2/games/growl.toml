@@ -1,0 +1,127 @@
+# Growl (World, Rev 1) -- Taito F2 / C74 with TC0190FMC sprite banking.
+# Schema mnemos-romset/1; drop a copy of this file into the set zip as
+# "game.toml" next to the dump files it names.
+#
+# Region names are the Mnemos board regions: "tiles" maps the TC0100SCN SCR
+# dump, "sprites" maps TC0200OBJ object graphics, and YM2610 sample ROMs are
+# "adpcma" / "adpcmb".
+
+[set]
+schema = "mnemos-romset/1"
+name   = "growl"
+board  = "taito_f2"
+orientation = "horizontal"
+taito_f2_map = "growl"
+players = 4
+taito_f2_input_profile = "split_tmp82c265"
+taito_f2_text_gfx_source = "tc0100scn_ram_2bpp"
+taito_f2_tc0100scn_bg_x_offset = 16
+taito_f2_tc0100scn_text_x_offset = 23
+taito_f2_tc0480scp_profile = "none"
+taito_f2_io_profile = "tc0510nio"
+taito_f2_palette_profile = "tc0260dar"
+taito_f2_priority_profile = "tc0360pri"
+taito_f2_sprite_chip_pair = "tc0200obj_tc0210fbc"
+taito_f2_sound_comm_chip = "tc0140syt"
+taito_f2_video_profile = "tc0100scn"
+taito_f2_aux_profile = "none"
+taito_f2_vblank_irq_level = 5
+taito_f2_sprite_dma_irq_level = 6
+taito_f2_palette_format = "rrrr_gggg_bbbb_rgbx"
+taito_f2_sprite_policy = "banked"
+taito_f2_sprite_active_area = "y_word_bit0"
+taito_f2_sprite_buffering = "immediate"
+taito_f2_sprite_hide_pixels = 3
+taito_f2_sprite_flip_hide_pixels = 3
+taito_f2_tc0100scn_positive_text_y_origin = 24
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "c74-10-1.ic59"
+offset = 0x00000
+stride = 2
+size   = 0x40000
+crc32  = 0x8bf17a85
+
+[[region.file]]
+name   = "c74-08-1.ic61"
+offset = 0x00001
+stride = 2
+size   = 0x40000
+crc32  = 0xbc70396f
+
+[[region.file]]
+name   = "c74-11.ic58"
+offset = 0x80000
+stride = 2
+size   = 0x40000
+crc32  = 0xee3bd6d5
+
+[[region.file]]
+name   = "c74-14.ic60"
+offset = 0x80001
+stride = 2
+size   = 0x40000
+crc32  = 0xb6c24ec7
+
+[[region]]
+name = "tiles"
+size = 0x100000
+
+[[region.file]]
+name   = "c74-01.ic34"
+offset = 0x000000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x100000
+crc32  = 0x3434ce80
+
+[[region]]
+name = "sprites"
+size = 0x200000
+
+[[region.file]]
+name   = "c74-03.ic12"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0x1a0d8951
+
+[[region.file]]
+name   = "c74-02.ic11"
+offset = 0x100000
+size   = 0x100000
+crc32  = 0x15a21506
+
+[[region]]
+name = "audiocpu"
+size = 0x10000
+
+[[region.file]]
+name   = "c74-12.ic62"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xbb6ed668
+
+[[region]]
+name = "adpcma"
+size = 0x100000
+
+[[region.file]]
+name   = "c74-04.ic28"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0x2d97edf2
+
+[[region]]
+name = "adpcmb"
+size = 0x080000
+
+[[region.file]]
+name   = "c74-05.ic29"
+offset = 0x000000
+size   = 0x080000
+crc32  = 0xe29c0828

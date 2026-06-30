@@ -1,0 +1,139 @@
+# Thunder Fox (World, Rev 1) -- Taito F2 / C28 with dual TC0100SCN tilemaps.
+# Schema mnemos-romset/1; drop a copy of this file into the set zip as
+# "game.toml" next to the dump files it names.
+#
+# Region names are the Mnemos board regions: "tiles" maps the first TC0100SCN
+# SCR graphics ROM, "tiles_secondary" maps the second TC0100SCN SCR graphics
+# ROM, "sprites" maps TC0200OBJ object graphics, "adpcma" maps YM2610 ADPCM-A,
+# and "adpcmb" maps YM2610 Delta-T samples.
+
+[set]
+schema = "mnemos-romset/1"
+name   = "thundfox"
+board  = "taito_f2"
+orientation = "horizontal"
+taito_f2_map = "thundfox"
+taito_f2_input_profile = "standard"
+taito_f2_text_gfx_source = "tc0100scn_ram_2bpp"
+taito_f2_tc0100scn_bg_x_offset = 16
+taito_f2_tc0100scn_text_x_offset = 23
+taito_f2_tc0480scp_profile = "none"
+taito_f2_io_profile = "tc0220ioc"
+taito_f2_palette_profile = "tc0260dar"
+taito_f2_priority_profile = "tc0360pri"
+taito_f2_sprite_chip_pair = "tc0200obj_tc0210fbc"
+taito_f2_sound_comm_chip = "tc0140syt"
+taito_f2_video_profile = "dual_tc0100scn"
+taito_f2_aux_profile = "none"
+taito_f2_vblank_irq_level = 5
+taito_f2_sprite_dma_irq_level = 6
+taito_f2_palette_format = "rgbx_444"
+taito_f2_sprite_buffering = "partial_delayed_thundfox"
+taito_f2_sprite_hide_pixels = 3
+taito_f2_sprite_flip_hide_pixels = -3
+
+[[region]]
+name = "maincpu"
+size = 0x080000
+
+[[region.file]]
+name   = "c28-13-1.51"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xacb07013
+
+[[region.file]]
+name   = "c28-16-1.40"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x1e43d55b
+
+[[region.file]]
+name   = "c28-08.50"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x38e038f1
+
+[[region.file]]
+name   = "c28-07.39"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0x24419abb
+
+[[region]]
+name = "tiles"
+size = 0x080000
+
+[[region.file]]
+name   = "c28-02.61"
+offset = 0x000000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x080000
+crc32  = 0x6230a09d
+
+[[region]]
+name = "tiles_secondary"
+size = 0x080000
+
+[[region.file]]
+name   = "c28-01.63"
+offset = 0x000000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x080000
+crc32  = 0x44552b25
+
+[[region]]
+name = "sprites"
+size = 0x100000
+
+[[region.file]]
+name   = "c28-03.29"
+offset = 0x000000
+stride = 2
+size   = 0x080000
+crc32  = 0x51bdc7af
+
+[[region.file]]
+name   = "c28-04.28"
+offset = 0x000001
+stride = 2
+size   = 0x080000
+crc32  = 0xba7ed535
+
+[[region]]
+name = "audiocpu"
+size = 0x10000
+
+[[region.file]]
+name   = "c28-14.3"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0x45ef3616
+
+[[region]]
+name = "adpcma"
+size = 0x080000
+
+[[region.file]]
+name   = "c28-06.41"
+offset = 0x000000
+size   = 0x080000
+crc32  = 0xdb6983db
+
+[[region]]
+name = "adpcmb"
+size = 0x080000
+
+[[region.file]]
+name   = "c28-05.42"
+offset = 0x000000
+size   = 0x080000
+crc32  = 0xd3b238fa

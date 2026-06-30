@@ -1,0 +1,469 @@
+# Battle Chopper (World) -- Irem M72 protected board.
+# Schema mnemos-romset/1; the adapter embeds this checked-in manifest and
+# resolves it from the standard set zip name, so no game.toml copy is required.
+#
+# This is the M72-C parent set for Mr. Heli. It carries an i8751 protection MCU
+# and a sample ROM; the Z80 still uses the board's RAM-upload sound path.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "bchopper"
+board       = "irem_m72"
+orientation = "horizontal"
+
+[[dip]]
+bank = "SW1"
+name = "Lives"
+mask = 0x0003
+default = 0x0003
+
+[[dip.option]]
+label = "1"
+value = 0x0000
+
+[[dip.option]]
+label = "2"
+value = 0x0002
+
+[[dip.option]]
+label = "3"
+value = 0x0003
+
+[[dip.option]]
+label = "4"
+value = 0x0001
+
+[[dip]]
+bank = "SW1"
+name = "Demo Sounds"
+mask = 0x0004
+default = 0x0004
+
+[[dip.option]]
+label = "Off"
+value = 0x0000
+
+[[dip.option]]
+label = "On"
+value = 0x0004
+
+[[dip]]
+bank = "SW1"
+name = "Bonus Life"
+mask = 0x0008
+default = 0x0008
+
+[[dip.option]]
+label = "80K 200K 350K"
+value = 0x0008
+
+[[dip.option]]
+label = "100K 250K 400K"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Coinage"
+mask = 0x00f0
+default = 0x00f0
+condition_mask = 0x0400
+condition_value = 0x0400
+
+[[dip.option]]
+label = "6 Coins / 1 Credit"
+value = 0x00a0
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0x00b0
+
+[[dip.option]]
+label = "4 Coins / 1 Credit"
+value = 0x00c0
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0x00d0
+
+[[dip.option]]
+label = "8 Coins / 3 Credits"
+value = 0x0010
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0x00e0
+
+[[dip.option]]
+label = "5 Coins / 3 Credits"
+value = 0x0020
+
+[[dip.option]]
+label = "3 Coins / 2 Credits"
+value = 0x0030
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0x00f0
+
+[[dip.option]]
+label = "2 Coins / 3 Credits"
+value = 0x0040
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0x0090
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x0080
+
+[[dip.option]]
+label = "1 Coin / 4 Credits"
+value = 0x0070
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x0060
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x0050
+
+[[dip.option]]
+label = "Free Play"
+value = 0x0000
+
+[[dip]]
+bank = "SW1"
+name = "Coin A"
+mask = 0x0030
+default = 0x0030
+condition_mask = 0x0400
+condition_value = 0x0000
+
+[[dip.option]]
+label = "5 Coins / 1 Credit"
+value = 0x0000
+
+[[dip.option]]
+label = "3 Coins / 1 Credit"
+value = 0x0010
+
+[[dip.option]]
+label = "2 Coins / 1 Credit"
+value = 0x0020
+
+[[dip.option]]
+label = "1 Coin / 1 Credit"
+value = 0x0030
+
+[[dip]]
+bank = "SW1"
+name = "Coin B"
+mask = 0x00c0
+default = 0x00c0
+condition_mask = 0x0400
+condition_value = 0x0000
+
+[[dip.option]]
+label = "1 Coin / 2 Credits"
+value = 0x00c0
+
+[[dip.option]]
+label = "1 Coin / 3 Credits"
+value = 0x0080
+
+[[dip.option]]
+label = "1 Coin / 5 Credits"
+value = 0x0040
+
+[[dip.option]]
+label = "1 Coin / 6 Credits"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Flip Screen"
+mask = 0x0100
+default = 0x0100
+
+[[dip.option]]
+label = "Off"
+value = 0x0100
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Cabinet"
+mask = 0x0200
+default = 0x0000
+
+[[dip.option]]
+label = "Upright"
+value = 0x0000
+
+[[dip.option]]
+label = "Cocktail"
+value = 0x0200
+
+[[dip]]
+bank = "SW2"
+name = "Coin Mode"
+mask = 0x0400
+default = 0x0400
+
+[[dip.option]]
+label = "Mode 1"
+value = 0x0400
+
+[[dip.option]]
+label = "Mode 2"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Difficulty"
+mask = 0x0800
+default = 0x0800
+
+[[dip.option]]
+label = "Normal"
+value = 0x0800
+
+[[dip.option]]
+label = "Hard"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Allow Continue"
+mask = 0x1000
+default = 0x1000
+
+[[dip.option]]
+label = "No"
+value = 0x0000
+
+[[dip.option]]
+label = "Yes"
+value = 0x1000
+
+[[dip]]
+bank = "SW2"
+name = "Stop Mode"
+mask = 0x2000
+default = 0x2000
+
+[[dip.option]]
+label = "Off"
+value = 0x2000
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[dip]]
+bank = "SW2"
+name = "Invulnerability"
+mask = 0x4000
+default = 0x4000
+
+[[dip.option]]
+label = "Off"
+value = 0x4000
+
+[[dip.option]]
+label = "On"
+value = 0x0000
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "mh_c-h0-b.ic40"
+offset = 0x00001
+stride = 2
+size   = 0x10000
+crc32  = 0xf2feab16
+
+[[region.file]]
+name   = "mh_c-l0-b.ic37"
+offset = 0x00000
+stride = 2
+size   = 0x10000
+crc32  = 0x9f887096
+
+[[region.file]]
+name   = "mh_c-h1-b.ic41"
+offset = 0x20001
+stride = 2
+size   = 0x10000
+crc32  = 0xa995d64f
+
+[[region.file]]
+name   = "mh_c-l1-b.ic36"
+offset = 0x20000
+stride = 2
+size   = 0x10000
+crc32  = 0x41dda999
+
+[[region.file]]
+name   = "mh_c-h3-b.ic43"
+offset = 0x60001
+stride = 2
+size   = 0x10000
+crc32  = 0xab9451ca
+
+[[region.file]]
+name   = "mh_c-l3-b.ic34"
+offset = 0x60000
+stride = 2
+size   = 0x10000
+crc32  = 0x11562221
+
+# Boot-chunk reload of the final program pair at the top of the region.
+[[region.file]]
+name   = "mh_c-h3-b.ic43"
+offset = 0xE0001
+stride = 2
+size   = 0x10000
+crc32  = 0xab9451ca
+
+[[region.file]]
+name   = "mh_c-l3-b.ic34"
+offset = 0xE0000
+stride = 2
+size   = 0x10000
+crc32  = 0x11562221
+
+[[region]]
+name = "mcu"
+size = 0x1000
+
+[[region.file]]
+name   = "mh_c-pr-b.ic1"
+offset = 0x0000
+size   = 0x1000
+crc32  = 0x9d201fea
+
+[[region]]
+name = "sprites"
+size = 0x080000
+
+[[region.file]]
+name   = "mh_c-00-a.ic53"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xf6e6e660
+
+[[region.file]]
+name   = "mh_c-01-b.ic52"
+offset = 0x10000
+size   = 0x10000
+crc32  = 0x708cdd37
+
+[[region.file]]
+name   = "mh_c-10-a.ic51"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0x292c8520
+
+[[region.file]]
+name   = "mh_c-11-b.ic50"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0x20904cf3
+
+[[region.file]]
+name   = "mh_c-20-a.ic49"
+offset = 0x40000
+size   = 0x10000
+crc32  = 0x1ab50c23
+
+[[region.file]]
+name   = "mh_c-21-b.ic48"
+offset = 0x50000
+size   = 0x10000
+crc32  = 0xc823d34c
+
+[[region.file]]
+name   = "mh_c-30-a.ic47"
+offset = 0x60000
+size   = 0x10000
+crc32  = 0x11f6c56b
+
+[[region.file]]
+name   = "mh_c-31-b.ic46"
+offset = 0x70000
+size   = 0x10000
+crc32  = 0x23134ec5
+
+[[region]]
+name = "tiles_a"
+size = 0x040000
+
+[[region.file]]
+name   = "mh_b-a0-b.ic21"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xe46ed7bf
+
+[[region.file]]
+name   = "mh_b-a1-b.ic22"
+offset = 0x10000
+size   = 0x10000
+crc32  = 0x590605ff
+
+[[region.file]]
+name   = "mh_b-a2-b.ic20"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0xf8158226
+
+[[region.file]]
+name   = "mh_b-a3-b.ic23"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0x0f07b9b7
+
+[[region]]
+name = "tiles_b"
+size = 0x040000
+
+[[region.file]]
+name   = "mh_b-b0-.ic26"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xb5b95776
+
+[[region.file]]
+name   = "mh_b-b1-.ic27"
+offset = 0x10000
+size   = 0x10000
+crc32  = 0x74ca16ee
+
+[[region.file]]
+name   = "mh_b-b2-.ic25"
+offset = 0x20000
+size   = 0x10000
+crc32  = 0xb82cca04
+
+[[region.file]]
+name   = "mh_b-b3-.ic24"
+offset = 0x30000
+size   = 0x10000
+crc32  = 0xa7afc920
+
+[[region]]
+name = "samples"
+size = 0x10000
+
+[[region.file]]
+name   = "mh_c-v0-b.ic44"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xd0c27e58

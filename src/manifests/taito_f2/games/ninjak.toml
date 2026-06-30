@@ -1,0 +1,126 @@
+# The Ninja Kids (World) -- Taito F2 / C85 with TE7750 I/O and
+# TC0190FMC sprite banking.
+# Schema mnemos-romset/1; drop a copy of this file into the set zip as
+# "game.toml" next to the dump files it names.
+#
+# Region names are the Mnemos board regions: "tiles" maps the TC0100SCN SCR
+# dump, "sprites" maps TC0200OBJ object graphics, and YM2610 sample ROMs are
+# "adpcma" / "adpcmb".
+
+[set]
+schema = "mnemos-romset/1"
+name   = "ninjak"
+board  = "taito_f2"
+orientation = "horizontal"
+taito_f2_map = "ninjak"
+players = 4
+taito_f2_input_profile = "te7750_quad"
+taito_f2_text_gfx_source = "tc0100scn_ram_2bpp"
+taito_f2_tc0100scn_bg_x_offset = 16
+taito_f2_tc0100scn_text_x_offset = 23
+taito_f2_tc0480scp_profile = "none"
+taito_f2_io_profile = "te7750"
+taito_f2_palette_profile = "tc0260dar"
+taito_f2_priority_profile = "tc0360pri"
+taito_f2_sprite_chip_pair = "tc0200obj_tc0210fbc"
+taito_f2_sound_comm_chip = "tc0140syt"
+taito_f2_video_profile = "tc0100scn"
+taito_f2_aux_profile = "none"
+taito_f2_vblank_irq_level = 5
+taito_f2_sprite_dma_irq_level = 6
+taito_f2_palette_format = "rgbx_444"
+taito_f2_sprite_policy = "banked"
+taito_f2_sprite_buffering = "partial_delayed"
+taito_f2_sprite_hide_pixels = 0
+taito_f2_sprite_flip_hide_pixels = 0
+
+[[region]]
+name = "maincpu"
+size = 0x080000
+
+[[region.file]]
+name   = "c85-10x.ic50"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xba7e6e74
+
+[[region.file]]
+name   = "c85-13x.ic49"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x0ac2cba2
+
+[[region.file]]
+name   = "c85-07.ic48"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x3eccfd0a
+
+[[region.file]]
+name   = "c85-06.ic47"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0xd126ded1
+
+[[region]]
+name = "tiles"
+size = 0x080000
+
+[[region.file]]
+name   = "c85-03.ic65"
+offset = 0x00000
+unit   = 2
+stride = 2
+swap   = true
+size   = 0x80000
+crc32  = 0x4cc7b9df
+
+[[region]]
+name = "sprites"
+size = 0x200000
+
+[[region.file]]
+name   = "c85-01.ic19"
+offset = 0x000000
+size   = 0x100000
+crc32  = 0xa711977c
+
+[[region.file]]
+name   = "c85-02.ic17"
+offset = 0x100000
+size   = 0x100000
+crc32  = 0xa6ad0f3d
+
+[[region]]
+name = "audiocpu"
+size = 0x10000
+
+[[region.file]]
+name   = "c85-14.ic54"
+offset = 0x00000
+size   = 0x10000
+crc32  = 0xf2a52a51
+
+[[region]]
+name = "adpcma"
+size = 0x080000
+
+[[region.file]]
+name   = "c85-04.ic31"
+offset = 0x00000
+size   = 0x80000
+crc32  = 0x5afb747e
+
+[[region]]
+name = "adpcmb"
+size = 0x080000
+
+[[region.file]]
+name   = "c85-05.ic33"
+offset = 0x00000
+size   = 0x80000
+crc32  = 0x3c1b0ed0

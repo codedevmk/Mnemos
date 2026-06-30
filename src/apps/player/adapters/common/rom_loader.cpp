@@ -3,6 +3,9 @@
 #include "file.hpp"
 #include "zip_archive.hpp"
 
+#include <filesystem>
+#include <system_error>
+
 namespace mnemos::apps::player::adapters {
 
     std::optional<loaded_rom> load_rom(const std::string& path) {
@@ -47,6 +50,10 @@ namespace mnemos::apps::player::adapters {
     }
 
     std::optional<loaded_rom> load_rom_verbatim(const std::string& path) {
+        std::error_code ec;
+        if (std::filesystem::is_directory(std::filesystem::path{path}, ec)) {
+            return loaded_rom{.bytes = {}, .name = path, .directory_source = true};
+        }
         auto bytes = mnemos::io::read_file(path);
         if (!bytes) {
             return std::nullopt;

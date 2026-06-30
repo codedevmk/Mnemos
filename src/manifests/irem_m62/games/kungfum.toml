@@ -1,0 +1,182 @@
+# Kung-Fu Master -- Irem M62 raw-media contract.
+# Local wrapper: D:\emu\irem\M62\kungfum.zip.
+# Region placement is a contiguous artifact contract only; exact M62 bus
+# mapping, video priority, and M6803/AY/MSM5205 behavior remain gaps.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "kungfum"
+board       = "irem_m62"
+orientation = "horizontal"
+
+[[region]]
+name = "raw_media"
+size = 0x2c720
+
+[[region.file]]
+name   = "a-3e-.bin"
+offset = 0x0
+size   = 0x2000
+crc32  = 0x58e87ab0
+
+[[region.file]]
+name   = "a-3f-.bin"
+offset = 0x2000
+size   = 0x2000
+crc32  = 0xc81e31ea
+
+[[region.file]]
+name   = "a-3h-.bin"
+offset = 0x4000
+size   = 0x2000
+crc32  = 0xd99fb995
+
+[[region.file]]
+name   = "a-4d-c.bin"
+offset = 0x6000
+size   = 0x4000
+crc32  = 0x7532918e
+
+[[region.file]]
+name   = "a-4e-c.bin"
+offset = 0xa000
+size   = 0x4000
+crc32  = 0xb6e2d083
+
+[[region.file]]
+name   = "b-1l-.bin"
+offset = 0xe000
+size   = 0x100
+crc32  = 0x35e45021
+
+[[region.file]]
+name   = "b-1m-.bin"
+offset = 0xe100
+size   = 0x100
+crc32  = 0x76c05a9c
+
+[[region.file]]
+name   = "b-1n-.bin"
+offset = 0xe200
+size   = 0x100
+crc32  = 0x23f06b99
+
+[[region.file]]
+name   = "b-3m-.bin"
+offset = 0xe300
+size   = 0x2000
+crc32  = 0xeba0d66b
+
+[[region.file]]
+name   = "b-3n-.bin"
+offset = 0x10300
+size   = 0x2000
+crc32  = 0x28a213aa
+
+[[region.file]]
+name   = "b-4a-.bin"
+offset = 0x12300
+size   = 0x2000
+crc32  = 0x6189d626
+
+[[region.file]]
+name   = "b-4c-.bin"
+offset = 0x14300
+size   = 0x2000
+crc32  = 0x01298885
+
+[[region.file]]
+name   = "b-4d-.bin"
+offset = 0x16300
+size   = 0x2000
+crc32  = 0x6a70615f
+
+[[region.file]]
+name   = "b-4e-.bin"
+offset = 0x18300
+size   = 0x2000
+crc32  = 0xc77b87d4
+
+[[region.file]]
+name   = "b-4f-.bin"
+offset = 0x1a300
+size   = 0x2000
+crc32  = 0x67745a33
+
+[[region.file]]
+name   = "b-4h-.bin"
+offset = 0x1c300
+size   = 0x2000
+crc32  = 0x8ac5ed3a
+
+[[region.file]]
+name   = "b-4k-.bin"
+offset = 0x1e300
+size   = 0x2000
+crc32  = 0x16fb5150
+
+[[region.file]]
+name   = "b-4l-.bin"
+offset = 0x20300
+size   = 0x2000
+crc32  = 0xbd1c2261
+
+[[region.file]]
+name   = "b-4m-.bin"
+offset = 0x22300
+size   = 0x2000
+crc32  = 0xb16de4f2
+
+[[region.file]]
+name   = "b-4n-.bin"
+offset = 0x24300
+size   = 0x2000
+crc32  = 0xd5228df3
+
+[[region.file]]
+name   = "b-5f-.bin"
+offset = 0x26300
+size   = 0x20
+crc32  = 0x7a601c3d
+
+[[region.file]]
+name   = "b-6f-.bin"
+offset = 0x26320
+size   = 0x100
+crc32  = 0x82c20d12
+
+[[region.file]]
+name   = "g-1f-.bin"
+offset = 0x26420
+size   = 0x100
+crc32  = 0x964b6495
+
+[[region.file]]
+name   = "g-1h-.bin"
+offset = 0x26520
+size   = 0x100
+crc32  = 0x550563e1
+
+[[region.file]]
+name   = "g-1j-.bin"
+offset = 0x26620
+size   = 0x100
+crc32  = 0x668e6bca
+
+[[region.file]]
+name   = "g-4c-a.bin"
+offset = 0x26720
+size   = 0x2000
+crc32  = 0x6b2cc9c8
+
+[[region.file]]
+name   = "g-4d-a.bin"
+offset = 0x28720
+size   = 0x2000
+crc32  = 0xc648f558
+
+[[region.file]]
+name   = "g-4e-a.bin"
+offset = 0x2a720
+size   = 0x2000
+crc32  = 0xfbe9276e

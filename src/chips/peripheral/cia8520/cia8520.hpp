@@ -12,10 +12,11 @@ namespace mnemos::chips::peripheral {
 
     // CSG 8520 Complex Interface Adapter (CIA) -- the Amiga-era CIA.
     //
-    // The 8520 is register-compatible with the MOS 6526 for the timer, TOD,
-    // serial, port, and interrupt behavior Mnemos currently models. Keep the
-    // public peripheral identity here, but delegate the shared state machine to
-    // the 6526 implementation so fixes land once.
+    // The 8520 is register-compatible with the MOS 6526 for timers, serial,
+    // ports, and interrupts, but TOD is a 24-bit binary event counter rather
+    // than a BCD time-of-day clock. Keep the public peripheral identity here,
+    // but delegate the shared state machine to the 6526 implementation so fixes
+    // land once.
     class cia8520 final : public iperipheral, public immio {
       public:
         struct config final {
@@ -23,6 +24,7 @@ namespace mnemos::chips::peripheral {
             std::function<std::uint8_t()> read_port_b;
             std::function<void(std::uint8_t)> write_port_a;
             std::function<void(std::uint8_t)> write_port_b;
+            std::function<void(bool)> write_sp;
             std::function<void(bool)> irq_edge;
             std::uint32_t tod_tick_hz{715'909U}; // source clock per second (NTSC /E)
             std::uint32_t tod_src_hz{60U};       // TOD source frequency (50/60)
@@ -61,6 +63,7 @@ namespace mnemos::chips::peripheral {
             return core_.pb_timer_bits();
         }
         [[nodiscard]] std::uint8_t port_a_pins() const { return core_.port_a_pins(); }
+        [[nodiscard]] std::uint8_t port_b_pins() const { return core_.port_b_pins(); }
         [[nodiscard]] std::uint8_t port_a_output() const noexcept {
             return core_.port_a_output();
         }

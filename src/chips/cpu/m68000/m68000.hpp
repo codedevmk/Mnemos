@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <functional>
 #include <span>
+#include <utility>
 
 namespace mnemos::chips::cpu {
 
@@ -23,14 +24,14 @@ namespace mnemos::chips::cpu {
     // Built in phases. Implemented so far: all 14 addressing modes; MOVE/MOVEA/MOVEQ;
     // the integer arithmetic set (ADD/SUB/CMP families, ADDQ/SUBQ, ADDI/SUBI/CMPI,
     // MULU/MULS, NEG/NEGX/CLR/EXT/TST); the logicals (AND/OR/EOR/NOT, the immediate
-    // and CCR forms) and bit ops; the shift/rotate family; and control flow plus the
-    // exception core (Bcc/DBcc/Scc/BSR/BRA/JMP/JSR/RTS/RTR/RTE/TRAP/TRAPV/LINK/UNLK/
-    // STOP/RESET, privilege checks, the 7-level autovectored interrupt dispatch, and
-    // trace). Cycle counts are 4 clocks per bus access plus the documented internal
-    // idles. Still to come: the trapping arithmetic (DIVU/DIVS/CHK), MOVE-to/from-SR,
-    // BCD + the remaining misc ops (MOVEM/SWAP/PEA/...), the cycle-accurate two-word
-    // prefetch pipeline, concrete system bus-error map policy, and prefetch-exact
-    // group-0 corpus parity. Opcodes not yet decoded execute as 4-cycle no-ops.
+    // and CCR forms) and bit ops; BCD helpers; the shift/rotate family; misc/control
+    // ops such as MOVEM/SWAP/PEA; and control flow plus the exception core
+    // (Bcc/DBcc/Scc/BSR/BRA/JMP/JSR/RTS/RTR/RTE/TRAP/TRAPV/LINK/UNLK/STOP/RESET,
+    // privilege checks, the 7-level autovectored interrupt dispatch, and trace).
+    // Cycle counts are 4 clocks per bus access plus the documented internal idles.
+    // Still to come: the cycle-accurate two-word prefetch pipeline, concrete system
+    // bus-error map policy, and prefetch-exact group-0 corpus parity. Opcodes not yet
+    // decoded execute as 4-cycle no-ops.
     //
     // Instruction-stepped like the Z80: step_instruction() runs one instruction and
     // returns its cycle cost; tick(cycles) catches up by running whole instructions.
@@ -122,6 +123,31 @@ namespace mnemos::chips::cpu {
             tas_callback_ = std::move(callback);
         }
 
+        // RESET asserts the external reset bus line; it does not reload the
+        // 68000's own SSP/PC vectors. Boards use this hook to reset attached
+        // devices while the CPU continues with the next instruction.
+        void set_reset_callback(std::function<void()> callback) noexcept {
+            reset_callback_ = std::move(callback);
+        }
+
+        // Board-specific bus wait states for cycle-accounted memory accesses.
+        // The callback returns additional 68000 cycles for one byte/word bus
+        // transfer at `addr`; longword accesses call it once per halfword.
+        // `instruction_cycles_before_access` is the cycle position of this
+        // bus transfer within the current instruction before the transfer's
+        // base four cycles are charged.
+        // `instruction_wait_cycles` is the external wait already charged in
+        // this instruction, so boards can model a lockout window as residual
+        // wait instead of charging the same bus hold for every transfer.
+        // Unset = no added latency. Used by Amiga chip-RAM DMA contention.
+        void set_bus_wait_callback(
+            std::function<std::uint32_t(std::uint32_t addr, bool program, bool write,
+                                        std::uint32_t instruction_cycles_before_access,
+                                        std::uint32_t instruction_wait_cycles)>
+                callback) noexcept {
+            bus_wait_callback_ = std::move(callback);
+        }
+
         // Diagnostic facade: trace callback + cycle-source decomposition for
         // the last completed instruction. Pure observation -- toggling these
         // never changes the CPU's architectural behaviour. Off-by-default,
@@ -134,6 +160,24 @@ namespace mnemos::chips::cpu {
         // other m68000 systems leave it off.
         void set_z80_bus_latency_enabled(bool enabled) noexcept {
             z80_bus_latency_enabled_ = enabled;
+        }
+
+        // Genesis / Mega Drive DRAM refresh steals 2 68K cycles on a sliding
+        // ~128-cycle cadence. This is a board bus-controller quirk, not part of
+        // the MC68000 core, so non-Genesis systems leave it disabled.
+        void set_bus_refresh_enabled(bool enabled) noexcept {
+            bus_refresh_enabled_ = enabled;
+            bus_refresh_due_ =
+                enabled ? (bus_refresh_due_ == 0U ? elapsed_ + genesis_refresh_initial_due
+                                                   : bus_refresh_due_)
+                        : 0U;
+        }
+
+        // Standard MC68000 autovector entry is 42 cycles. The Sega Genesis bus
+        // phase stretches VDP IRQ entry with a cycle-dependent table; Genesis
+        // opts into that board quirk explicitly.
+        void set_genesis_interrupt_phase_timing_enabled(bool enabled) noexcept {
+            genesis_interrupt_phase_timing_enabled_ = enabled;
         }
 
         // Schedule an IRQ to fire ONE INSTRUCTION later than the normal
@@ -180,6 +224,9 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] static int size_bytes(op_size s) noexcept;
         [[nodiscard]] static std::int32_t sign_extend(std::uint32_t v, op_size s) noexcept;
 
+        static constexpr std::uint64_t genesis_refresh_initial_due = 62U;
+        static constexpr std::uint64_t genesis_refresh_period = 128U;
+
         // ---- raw memory (no cycle accounting), 24-bit masked, big-endian ----
         [[nodiscard]] std::uint8_t rd8(std::uint32_t a) const noexcept;
         void wr8(std::uint32_t a, std::uint8_t v) noexcept;
@@ -202,6 +249,7 @@ namespace mnemos::chips::cpu {
         [[nodiscard]] std::uint32_t read_sized(std::uint32_t a, op_size s,
                                                bool program = false) noexcept;
         void write_sized(std::uint32_t a, op_size s, std::uint32_t v) noexcept;
+        void charge_bus_cycle(std::uint32_t a, bool program, bool write) noexcept;
         // PC-relative modes (mode 7 reg 2 = d16(PC), reg 3 = d8(PC,Xn)) are the only
         // program-space EA reads; everything else uses the data bus.
         [[nodiscard]] static constexpr bool is_pc_relative(int mode, int reg) noexcept {
@@ -288,6 +336,11 @@ namespace mnemos::chips::cpu {
         int prev_irq_level_{}; // for the level-7 (NMI) edge
         std::function<void(int)> irq_ack_{};
         std::function<void(std::uint32_t)> tas_callback_{};
+        std::function<void()> reset_callback_{};
+        std::function<std::uint32_t(std::uint32_t addr, bool program, bool write,
+                                    std::uint32_t instruction_cycles_before_access,
+                                    std::uint32_t instruction_wait_cycles)>
+            bus_wait_callback_{};
         std::function<void(std::uint32_t)> trace_callback_{};
         bool exception_raised_{};
         bool exception_entry_{};
@@ -299,11 +352,13 @@ namespace mnemos::chips::cpu {
         friend class cpu_catch_up<m68000>;
         std::uint64_t elapsed_{}; // total cycles executed
 
-        // Genesis / Mega Drive 68K bus DRAM refresh tracking. Every 128 68K
-        // cycles (= 896 master cycles) the bus takes 2 extra 68K cycles
-        // (= 14 master cycles) for DRAM refresh. Checked at the start of
-        // each instruction.
-        std::uint64_t bus_refresh_due_{128U};
+        // Genesis / Mega Drive 68K bus DRAM refresh tracking. Disabled by
+        // default because arcade and computer boards using the same MC68000 do
+        // not inherit Sega's bus-controller refresh stalls.
+        std::uint64_t bus_refresh_due_{};
+        bool bus_refresh_enabled_{false};
+
+        bool genesis_interrupt_phase_timing_enabled_{false};
 
         // Genesis $A00000-$A0FFFF access latency (see set_z80_bus_latency_enabled).
         bool z80_bus_latency_enabled_{false};

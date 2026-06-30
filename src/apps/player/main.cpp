@@ -1,16 +1,27 @@
 // SDL3 windowed player. Boots the player_system adapter named by --system
-// (genesis / sms / gg / c64 / segacd / sega32x / irem_m72 / cps1 / cps2) with the --rom media (zip
-// archives are extracted transparently), presents its framebuffer at integer
-// scale, streams audio, and routes keyboard + gamepad input. ESC quits.
+// (genesis / sms / gg / c64 / segacd / sega32x / irem_m10 / irem_m14 / irem_m15 / irem_m27 /
+// irem_m47 / irem_m52 / irem_m57 / irem_m58 / irem_m62 / irem_m63 / irem_travrusa /
+// irem_redalert / irem_m72 / irem_m75 / irem_m78 / irem_m81 / irem_m82 / irem_m84 / irem_m85 /
+// irem_m90 / irem_m92 / irem_m102 / irem_m107 / irem_m119 / taito_f2 / taito_gnet / cps1 / cps2 /
+// spectrum / nes / msx / msx2 / amiga500 / amiga500plus / amiga600 / amiga2000)
+// with the --rom media (zip archives are extracted transparently; Irem arcade
+// boards also accept wrapper zips and unpacked set directories),
+// presents its framebuffer at integer scale, streams audio, and routes keyboard
+// + gamepad input. ESC quits. Optional devices
+// include --fm for MSX-MUSIC/FM-PAC or SMS YM2413, --rtc for MSX RP-5C01
+// clock/CMOS, and --msx2 for MSX2/V9938 video hardware.
 
 #define SDL_MAIN_HANDLED
 
-#include "battery_save.hpp"         // .srm load/save (cartridge battery RAM persistence)
+#include "battery_save.hpp" // .srm load/save (cartridge battery RAM persistence)
 #include "cli_args.hpp"
 #include "headless_commands.hpp"
+#include "player_audio.hpp"
 #include "player_system.hpp"
 #include "region.hpp"
 #include "region_args.hpp"
+#include "state_file.hpp"
+#include "system_family.hpp" // family_names() for the usage screen
 #include "system_launch.hpp"
 #include "text_overlay.hpp"
 
@@ -21,12 +32,25 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <csignal>
+#include <exception>
 #include <fstream>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string>
 #include <utility>
 #include <vector>
+
+#if defined(_MSC_VER) && !defined(NDEBUG)
+#include <crtdbg.h>
+#endif
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#endif
 
 namespace {
 
@@ -34,11 +58,11 @@ namespace {
     constexpr int kInitialWindowHeight = 960;
 
     // Streaming texture is sized for the worst-case frame across supported
-    // systems: Genesis VDP 320x240 V30 (x2 rows for interlace) and the Irem
-    // M72's 384x256 (256x384 once a vertical game is rotated for TATE
-    // presentation); per-frame uploads only touch the active subregion the
-    // adapter reports.
-    constexpr std::uint32_t kMaxFbWidth = 384U;
+    // systems: Amiga high-resolution modes at 640 columns, Genesis VDP 320x240
+    // V30 (x2 rows for interlace), and the Irem M72's 384x256 (256x384 once a
+    // vertical game is rotated for TATE presentation); per-frame uploads only
+    // touch the active subregion the adapter reports.
+    constexpr std::uint32_t kMaxFbWidth = 640U;
     constexpr std::uint32_t kMaxFbHeight = 480U;
 
     // Status overlay: two lines of 8x8 monospaced text, anchored to the
@@ -54,6 +78,10 @@ namespace {
     constexpr std::uint32_t kOverlayBgColor = 0xFF000000U; // opaque black panel
     constexpr std::uint32_t kOverlayFgColor = 0xFFFFFFFFU; // white text
     constexpr int kOverlayScreenMargin = 8;
+    constexpr int kAudioPrimeMs = 120;
+    constexpr int kAudioMaxCatchupFrames = 3;
+    constexpr int kAudioChannels = 2;
+    constexpr int kAudioBytesPerSample = static_cast<int>(sizeof(std::int16_t));
 
     struct dst_rect {
         int x{}, y{}, w{}, h{};
@@ -67,8 +95,9 @@ namespace {
     // (normal quit, --screenshot return, error returns) persists through it.
     class battery_save_guard {
       public:
-        battery_save_guard(mnemos::frontend_sdk::player_system* sys, std::string path)
-            : sys_(sys), path_(std::move(path)) {
+        battery_save_guard(mnemos::frontend_sdk::player_system* sys, std::string path,
+                           bool writeback)
+            : sys_(sys), path_(std::move(path)), writeback_(writeback) {
             const auto sram = ram();
             if (sram.empty()) {
                 return; // no battery RAM on this cart -- nothing to persist
@@ -83,7 +112,7 @@ namespace {
         battery_save_guard& operator=(const battery_save_guard&) = delete;
         ~battery_save_guard() {
             const auto sram = ram();
-            if (sram.empty()) {
+            if (sram.empty() || !writeback_) {
                 return;
             }
             const bool changed = sram.size() != loaded_.size() ||
@@ -102,8 +131,104 @@ namespace {
         }
         mnemos::frontend_sdk::player_system* sys_;
         std::string path_;
+        bool writeback_{};
         std::vector<std::uint8_t> loaded_;
     };
+
+    [[nodiscard]] bool headless_load_battery_enabled() noexcept {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996) // std::getenv: opt-in diagnostic flag.
+#endif
+        const char* value = std::getenv("MNEMOS_PLAYER_HEADLESS_LOAD_BATTERY");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+        return value != nullptr && value[0] != '\0' && value[0] != '0';
+    }
+
+#if defined(_MSC_VER) && !defined(NDEBUG)
+    void route_debug_crt_reports_to_stderr() noexcept {
+        _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_FILE);
+        _CrtSetReportFile(_CRT_WARN, _CRTDBG_FILE_STDERR);
+        _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+        _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+        _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+        _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+    }
+#else
+    void route_debug_crt_reports_to_stderr() noexcept {}
+#endif
+
+    [[noreturn]] void log_terminate() noexcept {
+        std::fprintf(stderr, "[mnemos_player] std::terminate reached\n");
+        std::fflush(stderr);
+        std::abort();
+    }
+
+    void log_fatal_signal(int signal) noexcept {
+        std::fprintf(stderr, "[mnemos_player] fatal signal: %d\n", signal);
+        std::fflush(stderr);
+        std::_Exit(128 + signal);
+    }
+
+#if defined(_MSC_VER)
+    void log_invalid_parameter(const wchar_t*, const wchar_t*, const wchar_t*, unsigned int line,
+                               std::uintptr_t) noexcept {
+        std::fprintf(stderr, "[mnemos_player] invalid CRT parameter: line=%u\n", line);
+        std::fflush(stderr);
+        std::abort();
+    }
+
+    void log_purecall() noexcept {
+        std::fprintf(stderr, "[mnemos_player] pure virtual call reached\n");
+        std::fflush(stderr);
+        std::abort();
+    }
+#endif
+
+#if defined(_WIN32)
+    LONG WINAPI log_unhandled_exception(EXCEPTION_POINTERS* exception) noexcept {
+        const DWORD code = exception != nullptr && exception->ExceptionRecord != nullptr
+                               ? exception->ExceptionRecord->ExceptionCode
+                               : 0U;
+        void* address = exception != nullptr && exception->ExceptionRecord != nullptr
+                            ? exception->ExceptionRecord->ExceptionAddress
+                            : nullptr;
+        std::fprintf(stderr, "[mnemos_player] unhandled SEH exception: code=0x%08lX address=%p\n",
+                     static_cast<unsigned long>(code), address);
+        std::fflush(stderr);
+        return EXCEPTION_EXECUTE_HANDLER;
+    }
+
+    void install_debug_fatal_handlers() noexcept {
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+        SetUnhandledExceptionFilter(log_unhandled_exception);
+#if defined(_MSC_VER)
+        _set_invalid_parameter_handler(log_invalid_parameter);
+        _set_purecall_handler(log_purecall);
+#endif
+        std::set_terminate(log_terminate);
+        std::signal(SIGABRT, log_fatal_signal);
+        std::signal(SIGFPE, log_fatal_signal);
+        std::signal(SIGILL, log_fatal_signal);
+        std::signal(SIGSEGV, log_fatal_signal);
+        std::signal(SIGTERM, log_fatal_signal);
+    }
+#else
+    void install_debug_fatal_handlers() noexcept {
+#if defined(_MSC_VER)
+        _set_invalid_parameter_handler(log_invalid_parameter);
+        _set_purecall_handler(log_purecall);
+#endif
+        std::set_terminate(log_terminate);
+        std::signal(SIGABRT, log_fatal_signal);
+        std::signal(SIGFPE, log_fatal_signal);
+        std::signal(SIGILL, log_fatal_signal);
+        std::signal(SIGSEGV, log_fatal_signal);
+        std::signal(SIGTERM, log_fatal_signal);
+    }
+#endif
 
     dst_rect integer_letterbox(int window_w, int window_h, int src_w, int src_h) {
         if (src_w <= 0 || src_h <= 0 || window_w <= 0 || window_h <= 0) {
@@ -148,61 +273,311 @@ namespace {
         pad.mode |= SDL_GetGamepadButton(gp, SDL_GAMEPAD_BUTTON_BACK);
     }
 
+    [[nodiscard]] std::int16_t normalize_analog_axis(Sint16 value) noexcept {
+        const int shifted = static_cast<int>(value) + 32768;
+        const int clamped = std::clamp(shifted, 0, 65535);
+        return static_cast<std::int16_t>((clamped * 255 + 32767) / 65535);
+    }
+
+    void populate_analog_state(mnemos::frontend_sdk::controller_state& state, SDL_Gamepad* gp,
+                               std::size_t analog_index) noexcept {
+        if (gp == nullptr) {
+            return;
+        }
+        const SDL_GamepadAxis x_axis =
+            analog_index == 0U ? SDL_GAMEPAD_AXIS_LEFTX : SDL_GAMEPAD_AXIS_RIGHTX;
+        const SDL_GamepadAxis y_axis =
+            analog_index == 0U ? SDL_GAMEPAD_AXIS_LEFTY : SDL_GAMEPAD_AXIS_RIGHTY;
+        state.aim_x = normalize_analog_axis(SDL_GetGamepadAxis(gp, x_axis));
+        state.aim_y = normalize_analog_axis(SDL_GetGamepadAxis(gp, y_axis));
+    }
+
+    [[nodiscard]] bool key_pressed(const bool* keys, int key_count,
+                                   SDL_Scancode scancode) noexcept {
+        const int index = static_cast<int>(scancode);
+        return keys != nullptr && index >= 0 && index < key_count && keys[index];
+    }
+
+    void populate_keyboard_usage(mnemos::frontend_sdk::controller_state& state, const bool* keys,
+                                 int key_count) noexcept {
+        if (keys == nullptr || key_count <= 0) {
+            return;
+        }
+        const auto count = std::min<std::size_t>(static_cast<std::size_t>(key_count),
+                                                 mnemos::peripheral::keyboard_usage_count);
+        for (std::size_t usage = 0; usage < count; ++usage) {
+            state.set_key(static_cast<std::uint16_t>(usage), keys[usage]);
+        }
+    }
+
+    [[nodiscard]] const char* load_status_name(mnemos::runtime::load_status status) noexcept {
+        switch (status) {
+        case mnemos::runtime::load_status::ok:
+            return "ok";
+        case mnemos::runtime::load_status::bad_magic:
+            return "bad_magic";
+        case mnemos::runtime::load_status::unsupported_version:
+            return "unsupported_version";
+        case mnemos::runtime::load_status::manifest_mismatch:
+            return "manifest_mismatch";
+        case mnemos::runtime::load_status::truncated:
+            return "truncated";
+        case mnemos::runtime::load_status::bad_crc:
+            return "bad_crc";
+        case mnemos::runtime::load_status::decompress_failed:
+            return "decompress_failed";
+        case mnemos::runtime::load_status::chunk_rejected:
+            return "chunk_rejected";
+        }
+        return "unknown";
+    }
+
+    void save_quick_state(mnemos::frontend_sdk::player_system* system, const std::string& path) {
+        if (system == nullptr || path.empty()) {
+            return;
+        }
+        if (!system->session_capabilities().save_state_supported) {
+            std::fprintf(stderr, "[mnemos_player] save states are not supported by this system\n");
+            std::fflush(stderr);
+            return;
+        }
+        const std::vector<std::uint8_t> bytes = system->save_state();
+        if (bytes.empty() || !mnemos::apps::player::adapters::save_save_state_file(path, bytes)) {
+            std::fprintf(stderr, "[mnemos_player] quick save failed: %s\n", path.c_str());
+        } else {
+            std::fprintf(stderr, "[mnemos_player] quick saved: %s (%zu bytes)\n", path.c_str(),
+                         bytes.size());
+        }
+        std::fflush(stderr);
+    }
+
+    [[nodiscard]] int audio_prime_bytes(std::uint32_t source_rate) noexcept {
+        const std::uint64_t bytes =
+            static_cast<std::uint64_t>(source_rate) * kAudioPrimeMs *
+            static_cast<std::uint64_t>(kAudioChannels * kAudioBytesPerSample) / 1000ULL;
+        return bytes > static_cast<std::uint64_t>(std::numeric_limits<int>::max())
+                   ? std::numeric_limits<int>::max()
+                   : static_cast<int>(bytes);
+    }
+
+    void maybe_resume_primed_audio(SDL_AudioStream* audio_stream, bool& audio_started,
+                                   int prime_bytes) {
+        if (audio_stream == nullptr || audio_started) {
+            return;
+        }
+        const int queued = SDL_GetAudioStreamQueued(audio_stream);
+        if (queued >= prime_bytes && SDL_ResumeAudioStreamDevice(audio_stream)) {
+            audio_started = true;
+        }
+    }
+
+    void queue_audio_chunk(SDL_AudioStream* audio_stream, bool& audio_started, int prime_bytes,
+                           mnemos::frontend_sdk::audio_chunk audio) {
+        if (audio_stream == nullptr || audio.samples == nullptr || audio.frame_count == 0U) {
+            return;
+        }
+        const int byte_count =
+            static_cast<int>(audio.frame_count * kAudioChannels * sizeof(std::int16_t));
+        if (SDL_PutAudioStreamData(audio_stream, audio.samples, byte_count)) {
+            maybe_resume_primed_audio(audio_stream, audio_started, prime_bytes);
+        }
+    }
+
+    void load_quick_state(mnemos::frontend_sdk::player_system* system, const std::string& path,
+                          SDL_AudioStream* audio_stream, bool* audio_started) {
+        if (system == nullptr || path.empty()) {
+            return;
+        }
+        if (!system->session_capabilities().save_state_supported) {
+            std::fprintf(stderr, "[mnemos_player] save states are not supported by this system\n");
+            std::fflush(stderr);
+            return;
+        }
+        const auto bytes = mnemos::apps::player::adapters::load_save_state_file(path);
+        if (!bytes.has_value()) {
+            std::fprintf(stderr, "[mnemos_player] quick load missing: %s\n", path.c_str());
+            std::fflush(stderr);
+            return;
+        }
+        const mnemos::runtime::load_result result = system->load_state(*bytes);
+        if (!result.ok()) {
+            std::fprintf(stderr, "[mnemos_player] quick load failed: %s (%s)\n", path.c_str(),
+                         load_status_name(result.status));
+        } else {
+            if (audio_stream != nullptr) {
+                SDL_PauseAudioStreamDevice(audio_stream);
+                SDL_ClearAudioStream(audio_stream);
+                if (audio_started != nullptr) {
+                    *audio_started = false;
+                }
+            }
+            std::fprintf(stderr, "[mnemos_player] quick loaded: %s\n", path.c_str());
+        }
+        std::fflush(stderr);
+    }
+
+    void print_usage() {
+        std::printf(
+            R"(mnemos_player -- Mnemos multi-system emulator (SDL3 windowed player)
+
+Usage:
+  mnemos_player --system <name> --rom <file-or-folder> [options]
+
+Systems (--system, -s):
+  %s
+
+Core:
+  --rom, -r <path>      Primary media (Irem arcade accepts zips, wrappers, or folders)
+  --disk <file>         Additional disk image (F6 cycles a multi-disk set)
+  --system, -s <name>   Emulation engine to run (required with media)
+  --region <ntsc|pal>   Force a region instead of the media's default
+  --mapper <name>       Override cartridge mapper (system-specific vocabulary)
+  --mapper2 <name>      Mapper for a system's second slot (e.g. MSX cart 2)
+  --dip <value>         16-bit DIP bank (0x-hex or decimal)
+  --no-autostart        Drop to a bare prompt instead of auto-loading
+  --amiga-model <name>  Amiga config token (amiga2000: base, ecs-1m, fast-ram=2m)
+
+Optional hardware:
+  --fm                  FM expansion (SMS YM2413 / MSX-MUSIC / FM-PAC)
+  --rtc                 Battery-backed RTC where present (MSX RP-5C01)
+  --msx2                Select MSX2-class video hardware (V9938)
+  --light-gun           Plug a light gun into the gun port
+  --four-score          NES Four Score 4-player multitap
+
+Headless (run, do work, then exit -- no window opens):
+  --screenshot <file> --frames <n>    Dump a frame (.png or .ppm) after n frames
+  --save-state <file> [--frames <n>]  Write a save-state container, then exit
+  --load-state <file>                 Restore a save-state before running
+  --capabilities                      Print the system capability summary
+  --extract-assets <base> [--extract-frames <n>]   Dump decoded gfx to <base>.*
+  --extract-audio <base> [--extract-frames <n>]    Dump chip PCM to <base>.*
+  --record-gif <file.gif> --frames <n>             Record n frames as a GIF
+  --record-movie <base> --frames <n>               Record a PNG frame sequence
+  --press [pN:]<button>@<frame>[+hold]             Scripted input (headless)
+
+Other:
+  --help, -h            Show this help and exit
+
+Window hotkeys:
+  ESC quit   P pause   F5 quick-save   F9 quick-load
+  F6 swap disk   F11 fullscreen   F12 dump PPM frame
+
+Keyboard as pad:
+  arrows = D-pad   Z/X/C = A/B/C   A/S/D = X/Y/Z (Genesis 6-button extras)
+  Enter or 1 = Start   Backspace or 5 = Select/coin   LShift = Mode
+  6 = service credit   F2 = test switch
+
+Environment:
+  MNEMOS_*_BIOS / MNEMOS_*_BIOS_DIR   BIOS/Kickstart paths (Sega CD, 32X, FDS,
+                                      MSX/MSX2, Amiga Kickstart)
+  MNEMOS_AMIGA2000_MODEL              Amiga 2000 config token (base, ecs-1m, fast-ram=2m)
+  MNEMOS_GPU_DRIVER                   Override GPU backend (default direct3d12 on Windows)
+  MNEMOS_GPU_DEBUG=1                  Enable the GPU validation layer (slow)
+)",
+            mnemos::apps::player::adapters::family_names());
+    }
+
 } // namespace
 
 int main(int argc, char* argv[]) {
+    route_debug_crt_reports_to_stderr();
+    install_debug_fatal_handlers();
+
     using mnemos::apps::player::adapters::parse_animation_record_args;
+    using mnemos::apps::player::adapters::parse_amiga_model_arg;
     using mnemos::apps::player::adapters::parse_capabilities_arg;
     using mnemos::apps::player::adapters::parse_dip_arg;
+    using mnemos::apps::player::adapters::parse_dump_battery_args;
     using mnemos::apps::player::adapters::parse_extract_assets_args;
     using mnemos::apps::player::adapters::parse_extract_audio_args;
     using mnemos::apps::player::adapters::parse_fm_unit_arg;
     using mnemos::apps::player::adapters::parse_four_score_arg;
+    using mnemos::apps::player::adapters::parse_help_arg;
+    using mnemos::apps::player::adapters::parse_keyboard_layout_arg;
     using mnemos::apps::player::adapters::parse_light_gun_arg;
+    using mnemos::apps::player::adapters::parse_load_state_arg;
+    using mnemos::apps::player::adapters::parse_mapper2_arg;
     using mnemos::apps::player::adapters::parse_mapper_arg;
+    using mnemos::apps::player::adapters::parse_msx2_arg;
     using mnemos::apps::player::adapters::parse_no_autostart;
     using mnemos::apps::player::adapters::parse_region_arg;
     using mnemos::apps::player::adapters::parse_rom_args;
+    using mnemos::apps::player::adapters::parse_rtc_arg;
+    using mnemos::apps::player::adapters::parse_save_state_args;
     using mnemos::apps::player::adapters::parse_screenshot_args;
     using mnemos::apps::player::adapters::parse_system_arg;
     using mnemos::apps::player::adapters::srm_path_for;
+    using mnemos::apps::player::adapters::state_path_for;
+    using mnemos::apps::player::adapters::validate_headless_request_args;
+
+    // --help / -h short-circuits before touching media, SDL, or the GPU.
+    if (parse_help_arg(argc, argv)) {
+        print_usage();
+        return 0;
+    }
+
+    if (const auto headless_error = validate_headless_request_args(argc, argv)) {
+        std::fprintf(stderr, "%s\n", headless_error->c_str());
+        std::fflush(stderr);
+        return 1;
+    }
 
     const auto rom_paths = parse_rom_args(argc, argv);
     const auto system_arg = parse_system_arg(argc, argv);
     const bool autostart = !parse_no_autostart(argc, argv);
     const auto region_arg = parse_region_arg(argc, argv);
     const auto mapper_arg = parse_mapper_arg(argc, argv);
+    const auto mapper2_arg = parse_mapper2_arg(argc, argv);
     const bool fm_unit = parse_fm_unit_arg(argc, argv);
     const bool light_gun = parse_light_gun_arg(argc, argv);
     const bool four_score = parse_four_score_arg(argc, argv);
+    const bool rtc = parse_rtc_arg(argc, argv);
+    const bool msx2 = parse_msx2_arg(argc, argv);
     const auto dip_arg = parse_dip_arg(argc, argv);
+    const auto keyboard_layout_arg = parse_keyboard_layout_arg(argc, argv);
+    const auto amiga_model_arg = parse_amiga_model_arg(argc, argv);
     const mnemos::apps::player::headless_requests headless{
         .screenshot = parse_screenshot_args(argc, argv),
+        .save_state = parse_save_state_args(argc, argv),
+        .dump_battery = parse_dump_battery_args(argc, argv),
+        .load_state = parse_load_state_arg(argc, argv),
         .extract_assets = parse_extract_assets_args(argc, argv),
         .extract_audio = parse_extract_audio_args(argc, argv),
         .record_animation = parse_animation_record_args(argc, argv),
         .capabilities = parse_capabilities_arg(argc, argv),
     };
 
-    auto launch = mnemos::apps::player::launch_system({.rom_paths = rom_paths,
-                                                       .system_arg = system_arg,
-                                                       .autostart = autostart,
-                                                       .region_override = region_arg,
-                                                       .mapper_override = mapper_arg,
-                                                       .fm_unit = fm_unit,
-                                                       .light_gun = light_gun,
-                                                       .four_score = four_score,
-                                                       .dip_override = dip_arg});
+    auto launch =
+        mnemos::apps::player::launch_system({.rom_paths = rom_paths,
+                                             .system_arg = system_arg,
+                                             .autostart = autostart,
+                                             .region_override = region_arg,
+                                             .mapper_override = mapper_arg,
+                                             .mapper2_override = mapper2_arg,
+                                             .fm_unit = fm_unit,
+                                             .light_gun = light_gun,
+                                             .four_score = four_score,
+                                             .rtc = rtc,
+                                             .msx2 = msx2,
+                                             .dip_override = dip_arg,
+                                             .keyboard_layout_override = keyboard_layout_arg,
+                                             .amiga_model_override = amiga_model_arg});
     if (launch.exit_code != 0) {
         return launch.exit_code;
     }
     auto system = std::move(launch.system);
+    const std::string quick_state_path = launch.primary_media_path.empty()
+                                             ? std::string{}
+                                             : state_path_for(launch.primary_media_path);
 
     // Diagnostic/headless sweeps over ROM corpora must not create or update
     // save files beside source media.
     std::optional<battery_save_guard> srm_guard;
-    if (system && !mnemos::apps::player::has_headless_request(headless)) {
-        srm_guard.emplace(system.get(), srm_path_for(launch.primary_media_path));
+    const bool headless_request = mnemos::apps::player::has_headless_request(headless);
+    if (system && !launch.battery_media_path.empty() &&
+        (!headless_request || headless_load_battery_enabled())) {
+        srm_guard.emplace(system.get(), srm_path_for(launch.battery_media_path),
+                          !headless_request);
     }
 
     if (const auto exit_code =
@@ -394,9 +769,12 @@ int main(int argc, char* argv[]) {
     // The adapter reports its native stereo s16 sample rate via drain_audio();
     // SDL_AudioStream resamples to the device rate.
     SDL_AudioStream* audio_stream = nullptr;
+    bool audio_started = false;
+    int audio_prime_threshold = 0;
     if (system) {
         const auto chunk = system->drain_audio(); // probe for sample rate
-        const std::uint32_t rate = chunk.sample_rate != 0U ? chunk.sample_rate : 48000U;
+        const std::uint32_t rate = mnemos::apps::player::select_audio_stream_sample_rate(chunk);
+        audio_prime_threshold = audio_prime_bytes(rate);
         SDL_AudioSpec spec{};
         spec.format = SDL_AUDIO_S16;
         spec.channels = 2;
@@ -404,8 +782,8 @@ int main(int argc, char* argv[]) {
         audio_stream =
             SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
         if (audio_stream != nullptr) {
-            SDL_ResumeAudioStreamDevice(audio_stream);
-            std::fprintf(stderr, "[mnemos_player] audio: %u Hz stereo s16\n", rate);
+            std::fprintf(stderr, "[mnemos_player] audio: %u Hz stereo s16 (prime %d ms)\n", rate,
+                         kAudioPrimeMs);
         } else {
             std::fprintf(stderr, "[mnemos_player] SDL_OpenAudioDeviceStream failed: %s\n",
                          SDL_GetError());
@@ -446,6 +824,10 @@ int main(int argc, char* argv[]) {
                     running = false;
                 } else if (event.key.key == SDLK_F12) {
                     dump_requested = true;
+                } else if (event.key.key == SDLK_F5) {
+                    save_quick_state(system.get(), quick_state_path);
+                } else if (event.key.key == SDLK_F9) {
+                    load_quick_state(system.get(), quick_state_path, audio_stream, &audio_started);
                 } else if (event.key.key == SDLK_F11) {
                     fullscreen = !fullscreen;
                     SDL_SetWindowFullscreen(window, fullscreen);
@@ -489,31 +871,57 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Keyboard + gamepad OR'd into the same controller_state so the user
-        // can switch input mid-session. Adapters ignore buttons their hardware
-        // doesn't have.
-        //   Keyboard: arrows = dpad, Z/X/C = A/B/C, A/S/D = X/Y/Z (Genesis
-        //             6-button extras), Enter = Start, LShift = Mode.
+        // Keyboard + gamepad OR'd into the same controller_state for pad-only
+        // systems. Systems that advertise a dedicated keyboard port receive the
+        // host keyboard as physical key usages on that port instead.
+        //   Keyboard-as-pad: arrows = dpad, Z/X/C = A/B/C, A/S/D = X/Y/Z
+        //             (Genesis 6-button extras), Enter/1 = Start, Backspace/5 =
+        //             Select (arcade coin), LShift = Mode, 6 = service credit,
+        //             F2 = test switch.
         //   Gamepad : dpad + left stick = dpad, South/East/West = A/B/C,
         //             North = X, L1/R1 = Y/Z, Start/Back = Start/Mode.
         {
-            const bool* keys = SDL_GetKeyboardState(nullptr);
+            int key_count = 0;
+            const bool* keys = SDL_GetKeyboardState(&key_count);
+            int keyboard_port = -1;
+            if (system != nullptr) {
+                for (const auto& p : system->session_capabilities().input_ports) {
+                    if (p.format == mnemos::frontend_sdk::input_device_format::keyboard) {
+                        keyboard_port = static_cast<int>(p.port_index);
+                        break;
+                    }
+                }
+            }
             mnemos::frontend_sdk::controller_state pad{};
-            pad.up = keys[SDL_SCANCODE_UP];
-            pad.down = keys[SDL_SCANCODE_DOWN];
-            pad.left = keys[SDL_SCANCODE_LEFT];
-            pad.right = keys[SDL_SCANCODE_RIGHT];
-            pad.a = keys[SDL_SCANCODE_Z];
-            pad.b = keys[SDL_SCANCODE_X];
-            pad.c = keys[SDL_SCANCODE_C];
-            pad.x = keys[SDL_SCANCODE_A];
-            pad.y = keys[SDL_SCANCODE_S];
-            pad.z = keys[SDL_SCANCODE_D];
-            pad.start = keys[SDL_SCANCODE_RETURN] || keys[SDL_SCANCODE_KP_ENTER];
-            pad.mode = keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT];
+            if (keyboard_port < 0 && keys != nullptr) {
+                pad.up = key_pressed(keys, key_count, SDL_SCANCODE_UP);
+                pad.down = key_pressed(keys, key_count, SDL_SCANCODE_DOWN);
+                pad.left = key_pressed(keys, key_count, SDL_SCANCODE_LEFT);
+                pad.right = key_pressed(keys, key_count, SDL_SCANCODE_RIGHT);
+                pad.a = key_pressed(keys, key_count, SDL_SCANCODE_Z);
+                pad.b = key_pressed(keys, key_count, SDL_SCANCODE_X);
+                pad.c = key_pressed(keys, key_count, SDL_SCANCODE_C);
+                pad.x = key_pressed(keys, key_count, SDL_SCANCODE_A);
+                pad.y = key_pressed(keys, key_count, SDL_SCANCODE_S);
+                pad.z = key_pressed(keys, key_count, SDL_SCANCODE_D);
+                pad.start = key_pressed(keys, key_count, SDL_SCANCODE_RETURN) ||
+                            key_pressed(keys, key_count, SDL_SCANCODE_KP_ENTER) ||
+                            key_pressed(keys, key_count, SDL_SCANCODE_1);
+                pad.select = key_pressed(keys, key_count, SDL_SCANCODE_BACKSPACE) ||
+                             key_pressed(keys, key_count, SDL_SCANCODE_5);
+                pad.mode = key_pressed(keys, key_count, SDL_SCANCODE_LSHIFT) ||
+                           key_pressed(keys, key_count, SDL_SCANCODE_RSHIFT);
+                pad.service = key_pressed(keys, key_count, SDL_SCANCODE_6);
+                pad.test = key_pressed(keys, key_count, SDL_SCANCODE_F2);
+            }
             merge_gamepad(pad, gamepad);
             if (system) {
                 system->apply_input(0, pad);
+                if (keyboard_port >= 0) {
+                    mnemos::frontend_sdk::controller_state keyboard{};
+                    populate_keyboard_usage(keyboard, keys, key_count);
+                    system->apply_input(keyboard_port, keyboard);
+                }
             }
             // Four Score: pads 2-4 from the additional gamepads on ports 1-3.
             if (system && four_score) {
@@ -522,6 +930,60 @@ int main(int argc, char* argv[]) {
                     merge_gamepad(extra, fs_pads[static_cast<std::size_t>(port - 1)]);
                     system->apply_input(port, extra);
                 }
+            }
+        }
+
+        // Analog controls: systems that advertise analog ports consume raw
+        // normalized axes. The first analog port is the gamepad left stick, the
+        // second is the right stick; additional ports repeat the right stick.
+        if (system) {
+            std::size_t analog_index = 0U;
+            for (const auto& p : system->session_capabilities().input_ports) {
+                if (p.format != mnemos::frontend_sdk::input_device_format::analog) {
+                    continue;
+                }
+                mnemos::frontend_sdk::controller_state analog{};
+                populate_analog_state(analog, gamepad, analog_index);
+                system->apply_input(static_cast<int>(p.port_index), analog);
+                ++analog_index;
+            }
+        }
+
+        // Pointer-style mouse ports consume the OS pointer even when --light-gun
+        // is not active; adapters advertise the concrete port they want driven.
+        if (system) {
+            int mouse_port = -1;
+            for (const auto& p : system->session_capabilities().input_ports) {
+                if (p.format == mnemos::frontend_sdk::input_device_format::mouse) {
+                    mouse_port = static_cast<int>(p.port_index);
+                    break;
+                }
+            }
+            if (mouse_port >= 0) {
+                float mx = 0.0F;
+                float my = 0.0F;
+                const auto mouse = SDL_GetMouseState(&mx, &my);
+                int ww = 0;
+                int wh = 0;
+                SDL_GetWindowSize(window, &ww, &wh);
+                const auto fb = system->current_frame();
+                mnemos::frontend_sdk::controller_state pointer{};
+                pointer.trigger = (mouse & SDL_BUTTON_MASK(SDL_BUTTON_LEFT)) != 0U;
+                pointer.a = (mouse & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0U;
+                pointer.b = (mouse & SDL_BUTTON_MASK(SDL_BUTTON_MIDDLE)) != 0U;
+                if (fb.width != 0U && fb.height != 0U && ww > 0 && wh > 0) {
+                    const auto rect = integer_letterbox(ww, wh, static_cast<int>(fb.width),
+                                                        static_cast<int>(fb.height));
+                    const int rx = static_cast<int>(mx) - rect.x;
+                    const int ry = static_cast<int>(my) - rect.y;
+                    if (rx >= 0 && ry >= 0 && rx < rect.w && ry < rect.h) {
+                        pointer.aim_x =
+                            static_cast<std::int16_t>(rx * static_cast<int>(fb.width) / rect.w);
+                        pointer.aim_y =
+                            static_cast<std::int16_t>(ry * static_cast<int>(fb.height) / rect.h);
+                    }
+                }
+                system->apply_input(mouse_port, pointer);
             }
         }
 
@@ -581,37 +1043,40 @@ int main(int argc, char* argv[]) {
         // and just re-presents the same VDP framebuffer -- keeping the game
         // and its audio at the right rate. While paused we skip stepping
         // entirely but keep rendering / accepting input.
-        // Vertical (TATE) systems are rotated 90 degrees clockwise at the
-        // transfer-buffer copy; downstream (upload/letterbox/blit) then sees
-        // the swapped dimensions.
-        const bool rotate_vertical =
-            system != nullptr &&
-            system->region().orientation == mnemos::frontend_sdk::display_orientation::vertical;
+        // Vertical (TATE) systems are rotated at the transfer-buffer copy;
+        // downstream (upload/letterbox/blit) then sees the swapped dimensions.
+        const auto display_orientation =
+            system != nullptr ? system->region().orientation
+                              : mnemos::frontend_sdk::display_orientation::horizontal;
+        const bool rotate_vertical_cw =
+            display_orientation == mnemos::frontend_sdk::display_orientation::vertical_clockwise;
+        const bool rotate_vertical_ccw =
+            display_orientation ==
+            mnemos::frontend_sdk::display_orientation::vertical_counterclockwise;
+        const bool rotate_vertical = rotate_vertical_cw || rotate_vertical_ccw;
         std::uint32_t src_w = 0U;
         std::uint32_t src_h = 0U;
         const Uint64 now_ticks = SDL_GetPerformanceCounter();
-        const bool frame_due = !paused && now_ticks >= next_frame_at;
-        if (frame_due) {
-            next_frame_at += static_cast<Uint64>(frame_ticks);
-            // If we drifted far behind (e.g. window dragged), don't try to
-            // catch up infinitely -- skip ahead.
-            if (now_ticks > next_frame_at + static_cast<Uint64>(frame_ticks * 4)) {
+        int frames_due = 0;
+        if (!paused) {
+            while (now_ticks >= next_frame_at && frames_due < kAudioMaxCatchupFrames) {
+                ++frames_due;
+                next_frame_at += static_cast<Uint64>(frame_ticks);
+            }
+            // If the emulator is still far behind after the bounded catch-up
+            // pass, resync to wall clock instead of accumulating unbounded debt.
+            if (frames_due == kAudioMaxCatchupFrames &&
+                now_ticks > next_frame_at + static_cast<Uint64>(frame_ticks * 4)) {
                 next_frame_at = now_ticks + static_cast<Uint64>(frame_ticks);
             }
         }
         if (system) {
-            if (frame_due) {
+            for (int step = 0; step < frames_due; ++step) {
                 system->step_one_frame();
                 ++fps_window_frames;
                 ++total_frames;
-                if (audio_stream != nullptr) {
-                    const auto audio = system->drain_audio();
-                    if (audio.samples != nullptr && audio.frame_count > 0U) {
-                        SDL_PutAudioStreamData(
-                            audio_stream, audio.samples,
-                            static_cast<int>(audio.frame_count * 2U * sizeof(std::int16_t)));
-                    }
-                }
+                queue_audio_chunk(audio_stream, audio_started, audio_prime_threshold,
+                                  system->drain_audio());
             }
             const auto fb = system->current_frame();
             src_w = fb.width;
@@ -647,11 +1112,11 @@ int main(int argc, char* argv[]) {
                 // Copy framebuffer into the transfer buffer as a packed
                 // image. When stride > width (H32 mode etc.) the per-row copy
                 // avoids bleeding the stale stride tail. A vertical (TATE)
-                // system is rotated 90 degrees clockwise here, so everything
-                // downstream just sees a src_h x src_w image.
+                // system is rotated here, so everything downstream just sees
+                // a src_h x src_w image.
                 void* mapped = SDL_MapGPUTransferBuffer(device, xfer, true);
                 if (mapped != nullptr) {
-                    if (rotate_vertical) {
+                    if (rotate_vertical_cw) {
                         auto* out = static_cast<std::uint32_t*>(mapped);
                         for (std::uint32_t y = 0; y < src_w; ++y) {
                             for (std::uint32_t x = 0; x < src_h; ++x) {
@@ -659,6 +1124,15 @@ int main(int argc, char* argv[]) {
                                     fb.pixels[static_cast<std::size_t>(src_h - 1U - x) *
                                                   src_stride +
                                               y];
+                            }
+                        }
+                    } else if (rotate_vertical_ccw) {
+                        auto* out = static_cast<std::uint32_t*>(mapped);
+                        for (std::uint32_t y = 0; y < src_w; ++y) {
+                            for (std::uint32_t x = 0; x < src_h; ++x) {
+                                out[static_cast<std::size_t>(y) * src_h + x] =
+                                    fb.pixels[static_cast<std::size_t>(x) * src_stride +
+                                              (src_w - 1U - y)];
                             }
                         }
                     } else if (src_stride == src_w) {

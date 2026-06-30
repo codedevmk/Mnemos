@@ -1,0 +1,54 @@
+# Air Duel (US, M82 hardware) -- Irem M82 clone of airduel.
+
+[set]
+schema      = "mnemos-romset/1"
+name        = "airduelu"
+parent      = "airduel"
+board       = "irem_m82"
+orientation = "vertical"
+
+[[region]]
+name = "maincpu"
+size = 0x100000
+
+[[region.file]]
+name   = "r10-m82a-h0.ic52"
+offset = 0x00001
+stride = 2
+size   = 0x20000
+crc32  = 0x17f19965
+
+[[region.file]]
+name   = "r10-m82a-l0.ic60"
+offset = 0x00000
+stride = 2
+size   = 0x20000
+crc32  = 0xf8b54d6c
+
+[[region.file]]
+name   = "ad_=m82=_a-h1-d.ic51"
+offset = 0x40001
+stride = 2
+size   = 0x20000
+crc32  = 0xbafc152a
+
+[[region.file]]
+name   = "ad_=m82=_a-l1-d.ic59"
+offset = 0x40000
+stride = 2
+size   = 0x20000
+crc32  = 0x9e2b1ae7
+
+[[region.file]]
+name   = "ad_=m82=_a-h1-d.ic51"
+offset = 0xC0001
+stride = 2
+size   = 0x20000
+crc32  = 0xbafc152a
+
+[[region.file]]
+name   = "ad_=m82=_a-l1-d.ic59"
+offset = 0xC0000
+stride = 2
+size   = 0x20000
+crc32  = 0x9e2b1ae7

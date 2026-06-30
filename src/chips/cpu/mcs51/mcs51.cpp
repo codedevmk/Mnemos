@@ -15,6 +15,7 @@ namespace mnemos::chips::cpu {
         constexpr std::uint8_t sfr_sp = 0x81U;
         constexpr std::uint8_t sfr_dpl = 0x82U;
         constexpr std::uint8_t sfr_dph = 0x83U;
+        constexpr std::uint8_t sfr_pcon = 0x87U;
         constexpr std::uint8_t sfr_tcon = 0x88U;
         constexpr std::uint8_t sfr_tmod = 0x89U;
         constexpr std::uint8_t sfr_tl0 = 0x8AU;
@@ -22,9 +23,12 @@ namespace mnemos::chips::cpu {
         constexpr std::uint8_t sfr_th0 = 0x8CU;
         constexpr std::uint8_t sfr_th1 = 0x8DU;
         constexpr std::uint8_t sfr_p1 = 0x90U;
+        constexpr std::uint8_t sfr_scon = 0x98U;
+        constexpr std::uint8_t sfr_sbuf = 0x99U;
         constexpr std::uint8_t sfr_p2 = 0xA0U;
         constexpr std::uint8_t sfr_ie = 0xA8U;
         constexpr std::uint8_t sfr_p3 = 0xB0U;
+        constexpr std::uint8_t sfr_ip = 0xB8U;
         constexpr std::uint8_t sfr_psw = 0xD0U;
         constexpr std::uint8_t sfr_acc = 0xE0U;
         constexpr std::uint8_t sfr_b = 0xF0U;
@@ -39,12 +43,41 @@ namespace mnemos::chips::cpu {
         constexpr std::uint8_t tcon_tr1 = 0x40U;
         constexpr std::uint8_t tcon_tf1 = 0x80U;
 
+        // TMOD bits.
+        constexpr std::uint8_t tmod_t0_ct = 0x04U;
+        constexpr std::uint8_t tmod_t0_gate = 0x08U;
+        constexpr std::uint8_t tmod_t1_ct = 0x40U;
+        constexpr std::uint8_t tmod_t1_gate = 0x80U;
+
+        // SCON bits.
+        constexpr std::uint8_t scon_ri = 0x01U;
+        constexpr std::uint8_t scon_ti = 0x02U;
+        constexpr std::uint8_t scon_rb8 = 0x04U;
+        constexpr std::uint8_t scon_ren = 0x10U;
+        constexpr std::uint8_t scon_sm1 = 0x40U;
+        constexpr std::uint8_t scon_sm0 = 0x80U;
+
+        // PCON bits.
+        constexpr std::uint8_t pcon_smod = 0x80U;
+
         // IE bits.
         constexpr std::uint8_t ie_ex0 = 0x01U;
         constexpr std::uint8_t ie_et0 = 0x02U;
         constexpr std::uint8_t ie_ex1 = 0x04U;
         constexpr std::uint8_t ie_et1 = 0x08U;
+        constexpr std::uint8_t ie_es = 0x10U;
         constexpr std::uint8_t ie_ea = 0x80U;
+
+        // IP bits for the classic five-source 8051 priority register.
+        constexpr std::uint8_t ip_px0 = 0x01U;
+        constexpr std::uint8_t ip_pt0 = 0x02U;
+        constexpr std::uint8_t ip_px1 = 0x04U;
+        constexpr std::uint8_t ip_pt1 = 0x08U;
+        constexpr std::uint8_t ip_ps = 0x10U;
+
+        constexpr std::uint8_t active_interrupt_low = 0x01U;
+        constexpr std::uint8_t active_interrupt_high = 0x02U;
+        constexpr std::uint16_t oscillator_clocks_per_machine_cycle = 12U;
 
         [[nodiscard]] constexpr bool odd_parity(std::uint8_t value) noexcept {
             unsigned bits = value;
@@ -52,6 +85,57 @@ namespace mnemos::chips::cpu {
             bits ^= bits >> 2U;
             bits ^= bits >> 1U;
             return (bits & 1U) != 0U;
+        }
+
+        [[nodiscard]] bool tick_13_bit(std::uint8_t& tcon,
+                                       std::uint8_t& tl,
+                                       std::uint8_t& th,
+                                       std::uint8_t overflow_flag) noexcept {
+            const std::uint8_t upper_tl = static_cast<std::uint8_t>(tl & 0xE0U);
+            std::uint16_t counter =
+                static_cast<std::uint16_t>((static_cast<std::uint16_t>(th) << 5U) |
+                                           (tl & 0x1FU));
+            counter = static_cast<std::uint16_t>((counter + 1U) & 0x1FFFU);
+            th = static_cast<std::uint8_t>(counter >> 5U);
+            tl = static_cast<std::uint8_t>(upper_tl | (counter & 0x1FU));
+            if (counter == 0U) {
+                tcon = static_cast<std::uint8_t>(tcon | overflow_flag);
+                return true;
+            }
+            return false;
+        }
+
+        [[nodiscard]] bool tick_16_bit(std::uint8_t& tcon,
+                                       std::uint8_t& tl,
+                                       std::uint8_t& th,
+                                       std::uint8_t overflow_flag) noexcept {
+            if (++tl == 0U && ++th == 0U) {
+                tcon = static_cast<std::uint8_t>(tcon | overflow_flag);
+                return true;
+            }
+            return false;
+        }
+
+        [[nodiscard]] bool tick_8_bit(std::uint8_t& tcon,
+                                      std::uint8_t& tl,
+                                      std::uint8_t overflow_flag) noexcept {
+            if (++tl == 0U) {
+                tcon = static_cast<std::uint8_t>(tcon | overflow_flag);
+                return true;
+            }
+            return false;
+        }
+
+        [[nodiscard]] bool tick_8_bit_reload(std::uint8_t& tcon,
+                                             std::uint8_t& tl,
+                                             std::uint8_t th,
+                                             std::uint8_t overflow_flag) noexcept {
+            if (++tl == 0U) {
+                tl = th;
+                tcon = static_cast<std::uint8_t>(tcon | overflow_flag);
+                return true;
+            }
+            return false;
         }
     } // namespace
 
@@ -81,7 +165,19 @@ namespace mnemos::chips::cpu {
         pc_ = 0U;
         int0_line_ = false;
         int1_line_ = false;
-        in_interrupt_ = false;
+        t0_line_ = false;
+        t1_line_ = false;
+        active_interrupt_priorities_ = 0U;
+        interrupt_poll_inhibit_ = false;
+        track_interrupt_control_access_ = false;
+        interrupt_control_accessed_ = false;
+        instruction_blocks_interrupt_poll_ = false;
+        serial_rx_buffer_ = 0U;
+        serial_tx_buffer_ = 0U;
+        serial_tx_bits_remaining_ = 0U;
+        serial_tx_timer1_divider_ = 0U;
+        serial_tx_oscillator_accum_ = 0U;
+        serial_tx_active_ = false;
         step_cycles_ = 0;
         cycle_debt_ = 0;
         elapsed_ = 0U;
@@ -106,6 +202,7 @@ namespace mnemos::chips::cpu {
     }
 
     std::uint8_t mcs51::read_direct(std::uint8_t address) noexcept {
+        mark_interrupt_control_access(address);
         if (address < 0x80U) {
             return iram_[address];
         }
@@ -123,6 +220,8 @@ namespace mnemos::chips::cpu {
             return static_cast<std::uint8_t>(dptr_);
         case sfr_dph:
             return static_cast<std::uint8_t>(dptr_ >> 8U);
+        case sfr_sbuf:
+            return serial_rx_buffer_;
         case sfr_p0:
         case sfr_p1:
         case sfr_p2:
@@ -139,7 +238,33 @@ namespace mnemos::chips::cpu {
         }
     }
 
+    std::uint8_t mcs51::read_direct_latch(std::uint8_t address) noexcept {
+        mark_interrupt_control_access(address);
+        if (address < 0x80U) {
+            return iram_[address];
+        }
+        switch (address) {
+        case sfr_acc:
+            return acc_;
+        case sfr_b:
+            return b_;
+        case sfr_psw:
+            return static_cast<std::uint8_t>((psw_ & ~psw_p) | (odd_parity(acc_) ? psw_p : 0U));
+        case sfr_sp:
+            return sp_;
+        case sfr_dpl:
+            return static_cast<std::uint8_t>(dptr_);
+        case sfr_dph:
+            return static_cast<std::uint8_t>(dptr_ >> 8U);
+        case sfr_sbuf:
+            return serial_rx_buffer_;
+        default:
+            return sfr_[address - 0x80U];
+        }
+    }
+
     void mcs51::write_direct(std::uint8_t address, std::uint8_t value) noexcept {
+        mark_interrupt_control_access(address);
         if (address < 0x80U) {
             iram_[address] = value;
             return;
@@ -163,6 +288,9 @@ namespace mnemos::chips::cpu {
         case sfr_dph:
             dptr_ = static_cast<std::uint16_t>((dptr_ & 0x00FFU) | (value << 8U));
             return;
+        case sfr_sbuf:
+            serial_begin_transmit(value);
+            return;
         case sfr_p0:
         case sfr_p1:
         case sfr_p2:
@@ -175,6 +303,12 @@ namespace mnemos::chips::cpu {
         default:
             sfr_[address - 0x80U] = value;
             return;
+        }
+    }
+
+    void mcs51::mark_interrupt_control_access(std::uint8_t address) noexcept {
+        if (track_interrupt_control_access_ && (address == sfr_ie || address == sfr_ip)) {
+            interrupt_control_accessed_ = true;
         }
     }
 
@@ -196,8 +330,19 @@ namespace mnemos::chips::cpu {
         return read_direct(static_cast<std::uint8_t>(bit & 0xF8U));
     }
 
+    std::uint8_t mcs51::read_bit_latch_source(std::uint8_t bit) noexcept {
+        if (bit < 0x80U) {
+            return iram_[0x20U + (bit >> 3U)];
+        }
+        return read_direct_latch(static_cast<std::uint8_t>(bit & 0xF8U));
+    }
+
     bool mcs51::read_bit(std::uint8_t bit) noexcept {
         return (read_bit_source(bit) & (1U << (bit & 7U))) != 0U;
+    }
+
+    bool mcs51::read_bit_latch(std::uint8_t bit) noexcept {
+        return (read_bit_latch_source(bit) & (1U << (bit & 7U))) != 0U;
     }
 
     void mcs51::write_bit(std::uint8_t bit, bool value) noexcept {
@@ -209,7 +354,7 @@ namespace mnemos::chips::cpu {
             return;
         }
         const auto address = static_cast<std::uint8_t>(bit & 0xF8U);
-        const std::uint8_t byte = read_direct(address);
+        const std::uint8_t byte = read_direct_latch(address);
         write_direct(address, value ? static_cast<std::uint8_t>(byte | mask)
                                     : static_cast<std::uint8_t>(byte & ~mask));
     }
@@ -279,96 +424,344 @@ namespace mnemos::chips::cpu {
         int1_line_ = asserted;
     }
 
-    void mcs51::interrupt(std::uint16_t vector) noexcept {
+    void mcs51::set_t0_line(bool high) noexcept {
+        const bool falling_edge = t0_line_ && !high;
+        t0_line_ = high;
+        if (falling_edge && timer0_external_counter() && timer0_gate_open() &&
+            (sfr_[sfr_tcon - 0x80U] & tcon_tr0) != 0U) {
+            tick_timer0_once();
+        }
+    }
+
+    void mcs51::set_t1_line(bool high) noexcept {
+        const bool falling_edge = t1_line_ && !high;
+        t1_line_ = high;
+        const std::uint8_t timer0_mode = sfr_[sfr_tmod - 0x80U] & 0x03U;
+        if (falling_edge && timer0_mode != 3U && timer1_external_counter() &&
+            timer1_gate_open() && (sfr_[sfr_tcon - 0x80U] & tcon_tr1) != 0U) {
+            tick_timer1_once();
+        }
+    }
+
+    void mcs51::interrupt(std::uint16_t vector, bool high_priority) noexcept {
         push8(static_cast<std::uint8_t>(pc_));
         push8(static_cast<std::uint8_t>(pc_ >> 8U));
         pc_ = vector;
-        in_interrupt_ = true;
+        active_interrupt_priorities_ = static_cast<std::uint8_t>(
+            active_interrupt_priorities_ |
+            (high_priority ? active_interrupt_high : active_interrupt_low));
         step_cycles_ += 2;
+    }
+
+    bool mcs51::serviceable_interrupt_pending() const noexcept {
+        const std::uint8_t ie = sfr_[sfr_ie - 0x80U];
+        if ((ie & ie_ea) == 0U ||
+            (active_interrupt_priorities_ & active_interrupt_high) != 0U) {
+            return false;
+        }
+        const std::uint8_t tcon = sfr_[sfr_tcon - 0x80U];
+        const std::uint8_t ip = sfr_[sfr_ip - 0x80U];
+        const auto priority_pending = [&](bool high_priority) {
+            if (!high_priority &&
+                (active_interrupt_priorities_ & active_interrupt_low) != 0U) {
+                return false;
+            }
+            return (((ip & ip_px0) != 0U) == high_priority && (tcon & tcon_ie0) != 0U &&
+                    (ie & ie_ex0) != 0U) ||
+                   (((ip & ip_pt0) != 0U) == high_priority && (tcon & tcon_tf0) != 0U &&
+                    (ie & ie_et0) != 0U) ||
+                   (((ip & ip_px1) != 0U) == high_priority && (tcon & tcon_ie1) != 0U &&
+                    (ie & ie_ex1) != 0U) ||
+                   (((ip & ip_pt1) != 0U) == high_priority && (tcon & tcon_tf1) != 0U &&
+                    (ie & ie_et1) != 0U) ||
+                   (((ip & ip_ps) != 0U) == high_priority &&
+                    (sfr_[sfr_scon - 0x80U] & (scon_ri | scon_ti)) != 0U &&
+                    (ie & ie_es) != 0U);
+        };
+        return priority_pending(true) || priority_pending(false);
     }
 
     bool mcs51::service_interrupts() noexcept {
         const std::uint8_t ie = sfr_[sfr_ie - 0x80U];
-        if (in_interrupt_ || (ie & ie_ea) == 0U) {
+        if ((ie & ie_ea) == 0U ||
+            (active_interrupt_priorities_ & active_interrupt_high) != 0U) {
             return false;
         }
         std::uint8_t& tcon = sfr_[sfr_tcon - 0x80U];
-        // Fixed polling order: INT0, timer 0, INT1, timer 1.
-        if ((tcon & tcon_ie0) != 0U && (ie & ie_ex0) != 0U) {
-            if ((tcon & tcon_it0) != 0U) {
-                tcon = static_cast<std::uint8_t>(tcon & ~tcon_ie0); // edge flag self-clears
+        const std::uint8_t ip = sfr_[sfr_ip - 0x80U];
+        // Two hardware priority levels; within each level the fixed polling
+        // order is INT0, timer 0, INT1, timer 1, serial. A low-priority ISR
+        // masks further low-priority requests but can be preempted by high
+        // priority.
+        const auto try_priority = [&](bool high_priority) -> bool {
+            if (!high_priority &&
+                (active_interrupt_priorities_ & active_interrupt_low) != 0U) {
+                return false;
             }
-            interrupt(0x0003U);
-            return true;
-        }
-        if ((tcon & tcon_tf0) != 0U && (ie & ie_et0) != 0U) {
-            tcon = static_cast<std::uint8_t>(tcon & ~tcon_tf0);
-            interrupt(0x000BU);
-            return true;
-        }
-        if ((tcon & tcon_ie1) != 0U && (ie & ie_ex1) != 0U) {
-            if ((tcon & tcon_it1) != 0U) {
-                tcon = static_cast<std::uint8_t>(tcon & ~tcon_ie1);
+            if (((ip & ip_px0) != 0U) == high_priority && (tcon & tcon_ie0) != 0U &&
+                (ie & ie_ex0) != 0U) {
+                if ((tcon & tcon_it0) != 0U) {
+                    tcon =
+                        static_cast<std::uint8_t>(tcon & ~tcon_ie0); // edge flag self-clears
+                }
+                interrupt(0x0003U, high_priority);
+                return true;
             }
-            interrupt(0x0013U);
-            return true;
+            if (((ip & ip_pt0) != 0U) == high_priority && (tcon & tcon_tf0) != 0U &&
+                (ie & ie_et0) != 0U) {
+                tcon = static_cast<std::uint8_t>(tcon & ~tcon_tf0);
+                interrupt(0x000BU, high_priority);
+                return true;
+            }
+            if (((ip & ip_px1) != 0U) == high_priority && (tcon & tcon_ie1) != 0U &&
+                (ie & ie_ex1) != 0U) {
+                if ((tcon & tcon_it1) != 0U) {
+                    tcon = static_cast<std::uint8_t>(tcon & ~tcon_ie1);
+                }
+                interrupt(0x0013U, high_priority);
+                return true;
+            }
+            if (((ip & ip_pt1) != 0U) == high_priority && (tcon & tcon_tf1) != 0U &&
+                (ie & ie_et1) != 0U) {
+                tcon = static_cast<std::uint8_t>(tcon & ~tcon_tf1);
+                interrupt(0x001BU, high_priority);
+                return true;
+            }
+            const std::uint8_t scon = sfr_[sfr_scon - 0x80U];
+            if (((ip & ip_ps) != 0U) == high_priority &&
+                (scon & (scon_ri | scon_ti)) != 0U && (ie & ie_es) != 0U) {
+                interrupt(0x0023U, high_priority);
+                return true;
+            }
+            return false;
+        };
+        return try_priority(true) || try_priority(false);
+    }
+
+    std::uint8_t mcs51::serial_mode() const noexcept {
+        const std::uint8_t scon = sfr_[sfr_scon - 0x80U];
+        return static_cast<std::uint8_t>(((scon & scon_sm0) != 0U ? 2U : 0U) |
+                                         ((scon & scon_sm1) != 0U ? 1U : 0U));
+    }
+
+    std::uint8_t mcs51::serial_frame_bits() const noexcept {
+        switch (serial_mode()) {
+        case 0U:
+            return 8U;
+        case 1U:
+            return 10U;
+        default:
+            return 11U;
         }
-        if ((tcon & tcon_tf1) != 0U && (ie & ie_et1) != 0U) {
-            tcon = static_cast<std::uint8_t>(tcon & ~tcon_tf1);
-            interrupt(0x001BU);
-            return true;
+    }
+
+    void mcs51::serial_begin_transmit(std::uint8_t value) noexcept {
+        sfr_[sfr_sbuf - 0x80U] = value;
+        serial_tx_buffer_ = value;
+        serial_tx_bits_remaining_ = serial_frame_bits();
+        serial_tx_timer1_divider_ = 0U;
+        serial_tx_oscillator_accum_ = 0U;
+        serial_tx_active_ = true;
+    }
+
+    void mcs51::serial_transmit_bit_elapsed() noexcept {
+        if (!serial_tx_active_ || serial_tx_bits_remaining_ == 0U) {
+            return;
         }
-        return false;
+        --serial_tx_bits_remaining_;
+        if (serial_tx_bits_remaining_ != 0U) {
+            return;
+        }
+
+        serial_tx_active_ = false;
+        sfr_[sfr_scon - 0x80U] = static_cast<std::uint8_t>(sfr_[sfr_scon - 0x80U] | scon_ti);
+        if (serial_tx_) {
+            serial_tx_(serial_tx_buffer_);
+        }
+    }
+
+    void mcs51::serial_timer1_overflow() noexcept {
+        if (!serial_tx_active_) {
+            return;
+        }
+        const std::uint8_t mode = serial_mode();
+        if (mode != 1U && mode != 3U) {
+            return;
+        }
+        const std::uint8_t divider =
+            (sfr_[sfr_pcon - 0x80U] & pcon_smod) != 0U ? 16U : 32U;
+        ++serial_tx_timer1_divider_;
+        if (serial_tx_timer1_divider_ < divider) {
+            return;
+        }
+        serial_tx_timer1_divider_ = 0U;
+        serial_transmit_bit_elapsed();
+    }
+
+    bool mcs51::timer0_gate_open() const noexcept {
+        const std::uint8_t tmod = sfr_[sfr_tmod - 0x80U];
+        return (tmod & tmod_t0_gate) == 0U || int0_line_;
+    }
+
+    bool mcs51::timer1_gate_open() const noexcept {
+        const std::uint8_t tmod = sfr_[sfr_tmod - 0x80U];
+        return (tmod & tmod_t1_gate) == 0U || int1_line_;
+    }
+
+    bool mcs51::timer0_external_counter() const noexcept {
+        return (sfr_[sfr_tmod - 0x80U] & tmod_t0_ct) != 0U;
+    }
+
+    bool mcs51::timer1_external_counter() const noexcept {
+        return (sfr_[sfr_tmod - 0x80U] & tmod_t1_ct) != 0U;
+    }
+
+    void mcs51::tick_timer0_once() noexcept {
+        std::uint8_t& tcon = sfr_[sfr_tcon - 0x80U];
+        const std::uint8_t mode = sfr_[sfr_tmod - 0x80U] & 0x03U;
+        std::uint8_t& tl = sfr_[sfr_tl0 - 0x80U];
+        std::uint8_t& th = sfr_[sfr_th0 - 0x80U];
+        switch (mode) {
+        case 0U:
+            (void)tick_13_bit(tcon, tl, th, tcon_tf0);
+            break;
+        case 1U:
+            (void)tick_16_bit(tcon, tl, th, tcon_tf0);
+            break;
+        case 2U:
+            (void)tick_8_bit_reload(tcon, tl, th, tcon_tf0);
+            break;
+        case 3U:
+            (void)tick_8_bit(tcon, tl, tcon_tf0);
+            break;
+        default:
+            break;
+        }
+    }
+
+    void mcs51::tick_timer0_high_once() noexcept {
+        std::uint8_t& tcon = sfr_[sfr_tcon - 0x80U];
+        std::uint8_t& th = sfr_[sfr_th0 - 0x80U];
+        (void)tick_8_bit(tcon, th, tcon_tf1);
+    }
+
+    void mcs51::tick_timer1_once() noexcept {
+        std::uint8_t& tcon = sfr_[sfr_tcon - 0x80U];
+        const std::uint8_t mode = (sfr_[sfr_tmod - 0x80U] >> 4U) & 0x03U;
+        std::uint8_t& tl = sfr_[sfr_tl1 - 0x80U];
+        std::uint8_t& th = sfr_[sfr_th1 - 0x80U];
+        bool overflowed = false;
+        switch (mode) {
+        case 0U:
+            overflowed = tick_13_bit(tcon, tl, th, tcon_tf1);
+            break;
+        case 1U:
+            overflowed = tick_16_bit(tcon, tl, th, tcon_tf1);
+            break;
+        case 2U:
+            overflowed = tick_8_bit_reload(tcon, tl, th, tcon_tf1);
+            break;
+        default:
+            break;
+        }
+        if (overflowed) {
+            serial_timer1_overflow();
+        }
+    }
+
+    void mcs51::serial_tick(std::uint32_t machine_cycles) noexcept {
+        for (std::uint32_t c = 0; c < machine_cycles && serial_tx_active_; ++c) {
+            const std::uint8_t mode = serial_mode();
+            std::uint16_t bit_period = 0U;
+            if (mode == 0U) {
+                bit_period = oscillator_clocks_per_machine_cycle;
+            } else if (mode == 2U) {
+                bit_period =
+                    (sfr_[sfr_pcon - 0x80U] & pcon_smod) != 0U ? 32U : 64U;
+            } else {
+                return;
+            }
+
+            serial_tx_oscillator_accum_ = static_cast<std::uint16_t>(
+                serial_tx_oscillator_accum_ + oscillator_clocks_per_machine_cycle);
+            while (serial_tx_active_ && serial_tx_oscillator_accum_ >= bit_period) {
+                serial_tx_oscillator_accum_ =
+                    static_cast<std::uint16_t>(serial_tx_oscillator_accum_ - bit_period);
+                serial_transmit_bit_elapsed();
+            }
+        }
+    }
+
+    void mcs51::serial_receive_byte(std::uint8_t value, bool ninth_bit) noexcept {
+        std::uint8_t& scon = sfr_[sfr_scon - 0x80U];
+        if ((scon & scon_ren) == 0U) {
+            return;
+        }
+
+        serial_rx_buffer_ = value;
+        sfr_[sfr_sbuf - 0x80U] = value;
+        if (ninth_bit) {
+            scon = static_cast<std::uint8_t>(scon | scon_rb8);
+        } else {
+            scon = static_cast<std::uint8_t>(scon & ~scon_rb8);
+        }
+        scon = static_cast<std::uint8_t>(scon | scon_ri);
     }
 
     void mcs51::timers_tick(std::uint32_t machine_cycles) noexcept {
-        std::uint8_t& tcon = sfr_[sfr_tcon - 0x80U];
-        const std::uint8_t tmod = sfr_[sfr_tmod - 0x80U];
         for (std::uint32_t c = 0; c < machine_cycles; ++c) {
-            if ((tcon & tcon_tr0) != 0U) {
-                std::uint8_t& tl = sfr_[sfr_tl0 - 0x80U];
-                std::uint8_t& th = sfr_[sfr_th0 - 0x80U];
-                const std::uint8_t mode = tmod & 0x03U;
-                if (mode == 2U) { // 8-bit auto-reload
-                    if (++tl == 0U) {
-                        tl = th;
-                        tcon |= tcon_tf0;
-                    }
-                } else { // 16-bit (mode 0's 13-bit prescale folded in, first cut)
-                    if (++tl == 0U && ++th == 0U) {
-                        tcon |= tcon_tf0;
-                    }
+            const std::uint8_t& tcon = sfr_[sfr_tcon - 0x80U];
+            const std::uint8_t tmod = sfr_[sfr_tmod - 0x80U];
+            const std::uint8_t timer0_mode = tmod & 0x03U;
+            if (timer0_mode == 3U) {
+                if ((tcon & tcon_tr0) != 0U && timer0_gate_open() &&
+                    !timer0_external_counter()) {
+                    tick_timer0_once();
                 }
+                if ((tcon & tcon_tr1) != 0U) {
+                    tick_timer0_high_once();
+                }
+                continue;
             }
-            if ((tcon & tcon_tr1) != 0U) {
-                std::uint8_t& tl = sfr_[sfr_tl1 - 0x80U];
-                std::uint8_t& th = sfr_[sfr_th1 - 0x80U];
-                const std::uint8_t mode = (tmod >> 4U) & 0x03U;
-                if (mode == 2U) {
-                    if (++tl == 0U) {
-                        tl = th;
-                        tcon |= tcon_tf1;
-                    }
-                } else {
-                    if (++tl == 0U && ++th == 0U) {
-                        tcon |= tcon_tf1;
-                    }
-                }
+            if ((tcon & tcon_tr0) != 0U && timer0_gate_open() &&
+                !timer0_external_counter()) {
+                tick_timer0_once();
+            }
+            const std::uint8_t timer1_mode = (tmod >> 4U) & 0x03U;
+            if ((tcon & tcon_tr1) != 0U && timer1_mode != 3U &&
+                timer1_gate_open() && !timer1_external_counter()) {
+                tick_timer1_once();
             }
         }
+        serial_tick(machine_cycles);
     }
 
     // ---- execution ----------------------------------------------------------------
 
     int mcs51::step_instruction() {
         step_cycles_ = 0;
-        if (!service_interrupts()) {
+        bool interrupt_serviced = false;
+        if (interrupt_poll_inhibit_) {
+            interrupt_poll_inhibit_ = false;
+        } else {
+            interrupt_serviced = service_interrupts();
+        }
+        if (!interrupt_serviced) {
             if (trace_callback_) {
                 trace_callback_(pc_);
             }
+            interrupt_control_accessed_ = false;
+            instruction_blocks_interrupt_poll_ = false;
+            track_interrupt_control_access_ = true;
             step_cycles_ += exec_one();
+            track_interrupt_control_access_ = false;
         }
         timers_tick(static_cast<std::uint32_t>(step_cycles_));
+        if (!interrupt_serviced &&
+            (interrupt_control_accessed_ || instruction_blocks_interrupt_poll_) &&
+            serviceable_interrupt_pending()) {
+            interrupt_poll_inhibit_ = true;
+        }
         elapsed_ += static_cast<std::uint64_t>(step_cycles_);
         return step_cycles_;
     }
@@ -491,7 +884,16 @@ namespace mnemos::chips::cpu {
             const std::uint8_t hi = pop8();
             const std::uint8_t lo = pop8();
             pc_ = static_cast<std::uint16_t>((hi << 8U) | lo);
-            in_interrupt_ = false;
+            if ((active_interrupt_priorities_ & active_interrupt_high) != 0U) {
+                active_interrupt_priorities_ =
+                    static_cast<std::uint8_t>(active_interrupt_priorities_ &
+                                              ~active_interrupt_high);
+            } else {
+                active_interrupt_priorities_ =
+                    static_cast<std::uint8_t>(active_interrupt_priorities_ &
+                                              ~active_interrupt_low);
+            }
+            instruction_blocks_interrupt_poll_ = true;
             return 2;
         }
         case 0x03U: // RR A
@@ -517,7 +919,7 @@ namespace mnemos::chips::cpu {
             return 1;
         case 0x05U: { // INC direct
             const std::uint8_t address = fetch8();
-            write_direct(address, static_cast<std::uint8_t>(read_direct(address) + 1U));
+            write_direct(address, static_cast<std::uint8_t>(read_direct_latch(address) + 1U));
             return 1;
         }
         case 0x06U:
@@ -542,7 +944,7 @@ namespace mnemos::chips::cpu {
             return 1;
         case 0x15U: { // DEC direct
             const std::uint8_t address = fetch8();
-            write_direct(address, static_cast<std::uint8_t>(read_direct(address) - 1U));
+            write_direct(address, static_cast<std::uint8_t>(read_direct_latch(address) - 1U));
             return 1;
         }
         case 0x16U:
@@ -565,7 +967,7 @@ namespace mnemos::chips::cpu {
         case 0x10U: { // JBC bit, rel
             const std::uint8_t bit = fetch8();
             const auto rel = static_cast<std::int8_t>(fetch8());
-            if (read_bit(bit)) {
+            if (read_bit_latch(bit)) {
                 write_bit(bit, false);
                 pc_ = static_cast<std::uint16_t>(pc_ + static_cast<std::uint16_t>(rel));
             }
@@ -622,35 +1024,35 @@ namespace mnemos::chips::cpu {
         }
         case 0x42U: { // ORL direct, A
             const std::uint8_t address = fetch8();
-            write_direct(address, static_cast<std::uint8_t>(read_direct(address) | acc_));
+            write_direct(address, static_cast<std::uint8_t>(read_direct_latch(address) | acc_));
             return 1;
         }
         case 0x43U: { // ORL direct, #imm
             const std::uint8_t address = fetch8();
             const std::uint8_t imm = fetch8();
-            write_direct(address, static_cast<std::uint8_t>(read_direct(address) | imm));
+            write_direct(address, static_cast<std::uint8_t>(read_direct_latch(address) | imm));
             return 2;
         }
         case 0x52U: { // ANL direct, A
             const std::uint8_t address = fetch8();
-            write_direct(address, static_cast<std::uint8_t>(read_direct(address) & acc_));
+            write_direct(address, static_cast<std::uint8_t>(read_direct_latch(address) & acc_));
             return 1;
         }
         case 0x53U: { // ANL direct, #imm
             const std::uint8_t address = fetch8();
             const std::uint8_t imm = fetch8();
-            write_direct(address, static_cast<std::uint8_t>(read_direct(address) & imm));
+            write_direct(address, static_cast<std::uint8_t>(read_direct_latch(address) & imm));
             return 2;
         }
         case 0x62U: { // XRL direct, A
             const std::uint8_t address = fetch8();
-            write_direct(address, static_cast<std::uint8_t>(read_direct(address) ^ acc_));
+            write_direct(address, static_cast<std::uint8_t>(read_direct_latch(address) ^ acc_));
             return 1;
         }
         case 0x63U: { // XRL direct, #imm
             const std::uint8_t address = fetch8();
             const std::uint8_t imm = fetch8();
-            write_direct(address, static_cast<std::uint8_t>(read_direct(address) ^ imm));
+            write_direct(address, static_cast<std::uint8_t>(read_direct_latch(address) ^ imm));
             return 2;
         }
         case 0x72U: { // ORL C, bit
@@ -779,7 +1181,7 @@ namespace mnemos::chips::cpu {
             return 2;
         case 0xB2U: { // CPL bit
             const std::uint8_t bit = fetch8();
-            write_bit(bit, !read_bit(bit));
+            write_bit(bit, !read_bit_latch(bit));
             return 1;
         }
         case 0xB3U: // CPL C
@@ -901,7 +1303,7 @@ namespace mnemos::chips::cpu {
         case 0xD5U: { // DJNZ direct, rel
             const std::uint8_t address = fetch8();
             const auto rel = static_cast<std::int8_t>(fetch8());
-            const auto value = static_cast<std::uint8_t>(read_direct(address) - 1U);
+            const auto value = static_cast<std::uint8_t>(read_direct_latch(address) - 1U);
             write_direct(address, value);
             if (value != 0U) {
                 pc_ = static_cast<std::uint16_t>(pc_ + static_cast<std::uint16_t>(rel));
@@ -1001,7 +1403,16 @@ namespace mnemos::chips::cpu {
         writer.u16(pc_);
         writer.boolean(int0_line_);
         writer.boolean(int1_line_);
-        writer.boolean(in_interrupt_);
+        writer.boolean(t0_line_);
+        writer.boolean(t1_line_);
+        writer.u8(active_interrupt_priorities_);
+        writer.boolean(interrupt_poll_inhibit_);
+        writer.u8(serial_rx_buffer_);
+        writer.u8(serial_tx_buffer_);
+        writer.u8(serial_tx_bits_remaining_);
+        writer.u8(serial_tx_timer1_divider_);
+        writer.u16(serial_tx_oscillator_accum_);
+        writer.boolean(serial_tx_active_);
         writer.u64(static_cast<std::uint64_t>(cycle_debt_));
         writer.u64(elapsed_);
     }
@@ -1017,7 +1428,23 @@ namespace mnemos::chips::cpu {
         pc_ = reader.u16();
         int0_line_ = reader.boolean();
         int1_line_ = reader.boolean();
-        in_interrupt_ = reader.boolean();
+        t0_line_ = reader.boolean();
+        t1_line_ = reader.boolean();
+        active_interrupt_priorities_ =
+            static_cast<std::uint8_t>(reader.u8() & (active_interrupt_low | active_interrupt_high));
+        interrupt_poll_inhibit_ = reader.boolean();
+        track_interrupt_control_access_ = false;
+        interrupt_control_accessed_ = false;
+        instruction_blocks_interrupt_poll_ = false;
+        serial_rx_buffer_ = reader.u8();
+        serial_tx_buffer_ = reader.u8();
+        serial_tx_bits_remaining_ = reader.u8();
+        serial_tx_timer1_divider_ = reader.u8();
+        serial_tx_oscillator_accum_ = reader.u16();
+        serial_tx_active_ = reader.boolean();
+        if (serial_tx_bits_remaining_ == 0U) {
+            serial_tx_active_ = false;
+        }
         cycle_debt_ = static_cast<std::int64_t>(reader.u64());
         elapsed_ = reader.u64();
     }

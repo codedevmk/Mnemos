@@ -1,6 +1,11 @@
 #include "eeprom_93c46.hpp"
 
+#include "state.hpp"
+
 namespace mnemos::chips::storage {
+    namespace {
+        constexpr std::uint32_t eeprom_93c46_state_version = 1U;
+    } // namespace
 
     void eeprom_93c46::reset() noexcept {
         stage_ = stage::wait_start;
@@ -115,6 +120,49 @@ namespace mnemos::chips::storage {
 
         cs_ = cs;
         clk_ = clk;
+    }
+
+    void eeprom_93c46::save_state(chips::state_writer& writer) const {
+        writer.u32(eeprom_93c46_state_version);
+        writer.u8(static_cast<std::uint8_t>(org_));
+        writer.bytes(store_);
+        writer.u8(static_cast<std::uint8_t>(stage_));
+        writer.boolean(cs_);
+        writer.boolean(clk_);
+        writer.boolean(data_out_);
+        writer.boolean(write_enable_);
+        writer.u8(cycles_);
+        writer.u16(opcode_);
+        writer.u16(buffer_);
+    }
+
+    void eeprom_93c46::load_state(chips::state_reader& reader) noexcept {
+        if (reader.u32() != eeprom_93c46_state_version) {
+            reader.fail();
+            return;
+        }
+
+        const std::uint8_t org = reader.u8();
+        if (org > static_cast<std::uint8_t>(organization::byte8)) {
+            reader.fail();
+            return;
+        }
+        org_ = static_cast<organization>(org);
+        reader.bytes(store_);
+
+        const std::uint8_t stage_raw = reader.u8();
+        if (stage_raw > static_cast<std::uint8_t>(stage::read_word)) {
+            reader.fail();
+            return;
+        }
+        stage_ = static_cast<stage>(stage_raw);
+        cs_ = reader.boolean();
+        clk_ = reader.boolean();
+        data_out_ = reader.boolean();
+        write_enable_ = reader.boolean();
+        cycles_ = reader.u8();
+        opcode_ = reader.u16();
+        buffer_ = reader.u16();
     }
 
 } // namespace mnemos::chips::storage
