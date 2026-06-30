@@ -697,7 +697,8 @@ namespace mnemos::chips::cpu {
             } else {
                 exec_group(opcode, address, true);
             }
-        } else if ((opcode >= 0xB0U && opcode <= 0xBFU) || opcode >= 0xF0U) {
+        } else if ((opcode >= 0xB0U && opcode <= 0xBFU) ||
+                   (opcode >= 0xF0U && opcode <= 0xFFU)) {
             const std::uint16_t address = extended_address();
             if (opcode == 0xBDU) {
                 push16(regs_.pc);
