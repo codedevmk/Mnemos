@@ -282,8 +282,8 @@ namespace mnemos::chips::cpu {
     void m6803::branch_if(bool condition) noexcept {
         const auto displacement = static_cast<std::int8_t>(fetch8());
         if (condition) {
-            regs_.pc = static_cast<std::uint16_t>(
-                static_cast<std::uint32_t>(regs_.pc) + static_cast<std::int32_t>(displacement));
+            regs_.pc = static_cast<std::uint16_t>(static_cast<std::uint32_t>(regs_.pc) +
+                                                  static_cast<std::int32_t>(displacement));
         }
     }
 
@@ -620,9 +620,8 @@ namespace mnemos::chips::cpu {
             if (opcode == 0x8DU) {
                 const std::int8_t displacement = static_cast<std::int8_t>(fetch8());
                 push16(regs_.pc);
-                regs_.pc = static_cast<std::uint16_t>(
-                    static_cast<std::uint32_t>(regs_.pc) +
-                    static_cast<std::int32_t>(displacement));
+                regs_.pc = static_cast<std::uint16_t>(static_cast<std::uint32_t>(regs_.pc) +
+                                                      static_cast<std::int32_t>(displacement));
             } else {
                 branch_if(branch_condition(opcode));
             }
@@ -632,11 +631,9 @@ namespace mnemos::chips::cpu {
             exec_memory_mutate(opcode, indexed_address());
         } else if ((opcode >= 0x70U && opcode <= 0x7FU)) {
             exec_memory_mutate(opcode, extended_address());
-        } else if ((opcode >= 0x80U && opcode <= 0x8FU) ||
-                   (opcode >= 0xC0U && opcode <= 0xCFU)) {
+        } else if ((opcode >= 0x80U && opcode <= 0x8FU) || (opcode >= 0xC0U && opcode <= 0xCFU)) {
             exec_immediate(opcode);
-        } else if ((opcode >= 0x90U && opcode <= 0x9FU) ||
-                   (opcode >= 0xD0U && opcode <= 0xDFU)) {
+        } else if ((opcode >= 0x90U && opcode <= 0x9FU) || (opcode >= 0xD0U && opcode <= 0xDFU)) {
             const std::uint16_t address = direct_address();
             if (opcode == 0x9DU) {
                 push16(regs_.pc);
@@ -666,8 +663,7 @@ namespace mnemos::chips::cpu {
             } else {
                 exec_group(opcode, address, true);
             }
-        } else if ((opcode >= 0xA0U && opcode <= 0xAFU) ||
-                   (opcode >= 0xE0U && opcode <= 0xEFU)) {
+        } else if ((opcode >= 0xA0U && opcode <= 0xAFU) || (opcode >= 0xE0U && opcode <= 0xEFU)) {
             const std::uint16_t address = indexed_address();
             if (opcode == 0xADU) {
                 push16(regs_.pc);
@@ -697,8 +693,7 @@ namespace mnemos::chips::cpu {
             } else {
                 exec_group(opcode, address, true);
             }
-        } else if ((opcode >= 0xB0U && opcode <= 0xBFU) ||
-                   (opcode >= 0xF0U && opcode <= 0xFFU)) {
+        } else if ((opcode >= 0xB0U && opcode <= 0xBFU) || opcode >= 0xF0U) {
             const std::uint16_t address = extended_address();
             if (opcode == 0xBDU) {
                 push16(regs_.pc);

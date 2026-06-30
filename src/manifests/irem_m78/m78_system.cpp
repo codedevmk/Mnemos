@@ -16,9 +16,10 @@ namespace mnemos::manifests::irem_m78 {
     namespace {
         inline constexpr std::uint32_t max_saved_dac_write_events = 1U << 20U;
 
-        [[nodiscard]] std::vector<std::uint8_t>&
-        pinned_region(common::rom_set_image& image, std::string_view name, std::size_t size,
-                      std::uint8_t fill = 0xFFU) {
+        [[nodiscard]] std::vector<std::uint8_t>& pinned_region(common::rom_set_image& image,
+                                                               std::string_view name,
+                                                               std::size_t size,
+                                                               std::uint8_t fill = 0xFFU) {
             auto& bytes = image.regions[std::string{name}];
             if (bytes.size() < size) {
                 bytes.resize(size, fill);
@@ -35,27 +36,21 @@ namespace mnemos::manifests::irem_m78 {
             return data[static_cast<std::size_t>(index % data.size())];
         }
 
-        [[nodiscard]] std::uint32_t rgb(std::uint8_t r, std::uint8_t g,
-                                        std::uint8_t b) noexcept {
-            return (static_cast<std::uint32_t>(r) << 16U) |
-                   (static_cast<std::uint32_t>(g) << 8U) | b;
+        [[nodiscard]] std::uint32_t rgb(std::uint8_t r, std::uint8_t g, std::uint8_t b) noexcept {
+            return (static_cast<std::uint32_t>(r) << 16U) | (static_cast<std::uint32_t>(g) << 8U) |
+                   b;
         }
 
         [[nodiscard]] std::uint8_t expand_2bit(std::uint8_t value) noexcept {
             return static_cast<std::uint8_t>((value & 0x03U) * 0x55U);
         }
 
-        [[nodiscard]] std::uint8_t expand_3bit(std::uint8_t value) noexcept {
-            return static_cast<std::uint8_t>((value & 0x07U) * 0x24U);
-        }
-
         [[nodiscard]] std::uint32_t prom_color(std::span<const std::uint8_t> proms,
                                                std::uint16_t index,
                                                std::uint8_t fallback) noexcept {
             const std::uint8_t lo = sample_byte(proms, index & 0xFFU, fallback);
-            const std::uint8_t hi =
-                sample_byte(proms, 0x100U | (index & 0xFFU),
-                            static_cast<std::uint8_t>(fallback ^ 0x5AU));
+            const std::uint8_t hi = sample_byte(proms, 0x100U | (index & 0xFFU),
+                                                static_cast<std::uint8_t>(fallback ^ 0x5AU));
             const std::uint8_t packed =
                 static_cast<std::uint8_t>(((hi & 0x0FU) << 4U) | (lo & 0x0FU));
             const std::uint8_t intensity = static_cast<std::uint8_t>((packed & 0x03U) * 12U);
@@ -72,9 +67,8 @@ namespace mnemos::manifests::irem_m78 {
         }
 
         [[nodiscard]] std::uint8_t tile_pen(std::span<const std::uint8_t> graphics,
-                                            std::uint16_t code, std::uint32_t x,
-                                            std::uint32_t y, bool flip_x,
-                                            bool flip_y) noexcept {
+                                            std::uint16_t code, std::uint32_t x, std::uint32_t y,
+                                            bool flip_x, bool flip_y) noexcept {
             if (graphics.empty()) {
                 return static_cast<std::uint8_t>(((code >> 1U) ^ x ^ y) & 0x07U);
             }
@@ -122,17 +116,16 @@ namespace mnemos::manifests::irem_m78 {
                     const std::uint32_t base_y = tile_y * 8U;
                     for (std::uint32_t py = 0; py < 8U; ++py) {
                         for (std::uint32_t px = 0; px < 8U; ++px) {
-                            const std::uint8_t pen = tile_pen(graphics, code, px, py, flip_x,
-                                                              flip_y);
+                            const std::uint8_t pen =
+                                tile_pen(graphics, code, px, py, flip_x, flip_y);
                             if (transparent_zero && pen == 0U) {
                                 continue;
                             }
-                            const std::uint16_t color_index = static_cast<std::uint16_t>(
-                                ((color & 0x0FU) << 4U) | pen);
-                            pixels[static_cast<std::size_t>(base_y + py) * visible_width +
-                                   base_x + px] =
-                                prom_color(proms, color_index,
-                                           static_cast<std::uint8_t>(color ^ layer_tint));
+                            const std::uint16_t color_index =
+                                static_cast<std::uint16_t>(((color & 0x0FU) << 4U) | pen);
+                            pixels[static_cast<std::size_t>(base_y + py) * visible_width + base_x +
+                                   px] = prom_color(proms, color_index,
+                                                    static_cast<std::uint8_t>(color ^ layer_tint));
                         }
                     }
                 }
@@ -195,28 +188,23 @@ namespace mnemos::manifests::irem_m78 {
                 .stride = visible_width};
     }
 
-    void m78_video::compose(std::span<const std::uint8_t> tiles0,
-                            std::span<const std::uint8_t> tiles1,
-                            std::span<const std::uint8_t> proms,
-                            std::span<const std::uint8_t> layer0_tile,
-                            std::span<const std::uint8_t> layer0_attr,
-                            std::span<const std::uint8_t> layer0_color,
-                            std::span<const std::uint8_t> layer1_tile,
-                            std::span<const std::uint8_t> layer1_attr,
-                            std::span<const std::uint8_t> layer1_color,
-                            std::span<const std::uint8_t> vregs,
-                            std::span<const std::uint8_t> layer_control) {
-        const std::uint8_t scroll_mix =
-            static_cast<std::uint8_t>(sample_byte(vregs, 0U, 0U) ^
-                                      sample_byte(layer_control, 0U, 0U) ^ frame_index_);
+    void m78_video::compose(
+        std::span<const std::uint8_t> tiles0, std::span<const std::uint8_t> tiles1,
+        std::span<const std::uint8_t> proms, std::span<const std::uint8_t> layer0_tile,
+        std::span<const std::uint8_t> layer0_attr, std::span<const std::uint8_t> layer0_color,
+        std::span<const std::uint8_t> layer1_tile, std::span<const std::uint8_t> layer1_attr,
+        std::span<const std::uint8_t> layer1_color, std::span<const std::uint8_t> vregs,
+        std::span<const std::uint8_t> layer_control) {
+        const std::uint8_t scroll_mix = static_cast<std::uint8_t>(
+            sample_byte(vregs, 0U, 0U) ^ sample_byte(layer_control, 0U, 0U) ^ frame_index_);
         for (std::uint32_t y = 0; y < visible_height; ++y) {
             for (std::uint32_t x = 0; x < visible_width; ++x) {
                 const std::uint64_t linear =
                     static_cast<std::uint64_t>(y) * visible_width + x + scroll_mix;
                 const std::uint8_t gfx0 =
                     sample_byte(tiles0, linear >> 3U, static_cast<std::uint8_t>(x ^ y));
-                const std::uint8_t gfx1 = sample_byte(
-                    tiles1, (linear >> 2U) + x, static_cast<std::uint8_t>((x + y) & 0xFFU));
+                const std::uint8_t gfx1 = sample_byte(tiles1, (linear >> 2U) + x,
+                                                      static_cast<std::uint8_t>((x + y) & 0xFFU));
                 const std::uint8_t color =
                     static_cast<std::uint8_t>((gfx0 ^ gfx1 ^ (x >> 3U) ^ (y >> 3U)) & 0xFFU);
                 pixels_[static_cast<std::size_t>(y) * visible_width + x] =
@@ -255,27 +243,24 @@ namespace mnemos::manifests::irem_m78 {
         (void)pinned_region(roms, "m72_audio", m72_audio_rom_size, 0x00U);
         (void)pinned_region(roms, "proms", proms_size);
 
-        main_bus.map_rom(0x0000U, std::span<const std::uint8_t>(main_prog).first(main_rom_mapped_size));
+        main_bus.map_rom(0x0000U,
+                         std::span<const std::uint8_t>(main_prog).first(main_rom_mapped_size));
         main_bus.map_ram(work_ram_base, work_ram, 1);
         main_cpu.attach_bus(main_bus);
-        main_cpu.set_port_in([this](std::uint16_t port) -> std::uint8_t {
-            return main_port_read(port);
-        });
-        main_cpu.set_port_out([this](std::uint16_t port, std::uint8_t value) {
-            main_port_write(port, value);
-        });
+        main_cpu.set_port_in(
+            [this](std::uint16_t port) -> std::uint8_t { return main_port_read(port); });
+        main_cpu.set_port_out(
+            [this](std::uint16_t port, std::uint8_t value) { main_port_write(port, value); });
 
         sound_bus.map_rom(sound_rom_base,
                           std::span<const std::uint8_t>(sound_prog).first(sound_rom_mapped_size),
                           0);
         sound_bus.map_ram(sound_work_ram_base, sound_ram, 1);
         sound_cpu.attach_bus(sound_bus);
-        sound_cpu.set_port_in([this](std::uint16_t port) -> std::uint8_t {
-            return sound_port_read(port);
-        });
-        sound_cpu.set_port_out([this](std::uint16_t port, std::uint8_t value) {
-            sound_port_write(port, value);
-        });
+        sound_cpu.set_port_in(
+            [this](std::uint16_t port) -> std::uint8_t { return sound_port_read(port); });
+        sound_cpu.set_port_out(
+            [this](std::uint16_t port, std::uint8_t value) { sound_port_write(port, value); });
         sound_cpu.set_irq_vector([this]() -> std::uint8_t {
             std::uint8_t vector = z80_rst_idle;
             if (sound_latch_irq) {
@@ -401,8 +386,7 @@ namespace mnemos::manifests::irem_m78 {
             sample_address = (sample_address & 0xFF00U) | value;
             break;
         case z80_port_sample_addr_hi:
-            sample_address =
-                (sample_address & 0x00FFU) | (static_cast<std::uint32_t>(value) << 8U);
+            sample_address = (sample_address & 0x00FFU) | (static_cast<std::uint32_t>(value) << 8U);
             break;
         case z80_port_dac:
             record_dac_write(value);

@@ -227,8 +227,9 @@ namespace {
             if (!known.contains(set_id)) {
                 return std::nullopt;
             }
-            return identified_m82_source{.set_id = set_id,
-                                         .rank = set_id == "dkgensanm82" ? 0U : 2U};
+            return identified_m82_source{
+                .set_id = set_id,
+                .rank = static_cast<std::uint8_t>(set_id == "dkgensanm82" ? 0U : 2U)};
         }
         if (!std::filesystem::is_regular_file(path, ec) ||
             !ends_with_zip(path.filename().string())) {
@@ -368,8 +369,7 @@ namespace {
         rom[0x0000U] = 0x3EU; // LD A,$F0
         rom[0x0001U] = 0xF0U;
         rom[0x0002U] = 0xD3U; // OUT ($82),A
-        rom[0x0003U] =
-            static_cast<std::uint8_t>(mnemos::manifests::irem_m82::z80_port_dac);
+        rom[0x0003U] = static_cast<std::uint8_t>(mnemos::manifests::irem_m82::z80_port_dac);
         rom[0x0004U] = 0x76U; // HALT
         return rom;
     }
@@ -467,9 +467,9 @@ TEST_CASE("m82 checked-in game manifests parse and cover local M82 corpus", "[m8
         declarations.emplace(std::move(set_name), std::move(*parsed.value));
     }
 
-    const std::set<std::string, std::less<>> expected_names{
-        "airduel", "airduelu", "dkgensanm82", "majtitle", "majtitlej",
-        "rtype2",  "rtype2j",  "rtype2jc",  "rtype2m82b"};
+    const std::set<std::string, std::less<>> expected_names{"airduel",  "airduelu",  "dkgensanm82",
+                                                            "majtitle", "majtitlej", "rtype2",
+                                                            "rtype2j",  "rtype2jc",  "rtype2m82b"};
     std::set<std::string, std::less<>> names;
     for (const auto& [set_name, raw_decl] : declarations) {
         INFO("set=" << set_name);
