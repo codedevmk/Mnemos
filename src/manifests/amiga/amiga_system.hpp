@@ -1,12 +1,16 @@
 #pragma once
 
+#include "amiga_memory_sizes.hpp"
 #include "agnus.hpp"
 #include "bus.hpp"
 #include "cia8520.hpp"
 #include "denise.hpp"
+#include "devices/amiga_input.hpp"
+#include "drives/amiga_floppy.hpp"
+#include "expansions/zorro2.hpp"
 #include "m68000.hpp"
+#include "models/amiga_models.hpp"
 #include "paula.hpp"
-#include "region.hpp"
 #include "state.hpp"
 
 #include <array>
@@ -16,49 +20,40 @@
 #include <span>
 #include <vector>
 
-namespace mnemos::manifests::amiga500 {
+namespace mnemos::manifests::amiga {
 
-    enum class amiga500_keyboard_layout : std::uint8_t { us, qwerty_international, german, azerty };
+    // Shared classic Amiga machine assembly: MC68000 + Agnus + Denise + Paula +
+    // two CIA 8520s over a 24-bit, big-endian 68K bus, configured by model
+    // descriptors for A500/A500+/A600/A2000-style boards. The reusable silicon
+    // stays in src/chips; this type owns board wiring, Kickstart overlay, chip
+    // RAM, custom register routing, CIA glue, drives, input, and expansions.
+    struct amiga_system final {
+        static constexpr std::size_t size_256k = amiga_size_256k;
+        static constexpr std::size_t size_512k = amiga_size_512k;
+        static constexpr std::size_t size_1m = amiga_size_1m;
+        static constexpr std::size_t size_2m = amiga_size_2m;
+        static constexpr std::size_t size_4m = amiga_size_4m;
+        static constexpr std::size_t size_8m = amiga_size_8m;
 
-    enum class amiga500_model : std::uint8_t {
-        amiga500,
-        amiga500_plus,
-        amiga600,
-        amiga2000,
-        amiga2000_ecs_1m
-    };
-
-    struct amiga500_config final {
-        mnemos::video_region video_region{mnemos::video_region::pal};
-        amiga500_keyboard_layout keyboard_layout{amiga500_keyboard_layout::us};
-        amiga500_model model{amiga500_model::amiga500};
-        std::size_t fast_ram_size{};
-    };
-
-    // Commodore Amiga 500, OCS baseline: MC68000 + Agnus + Denise + Paula +
-    // two CIA 8520s over a 24-bit, big-endian 68K bus. The implementation is a
-    // bootable integration path around the existing clean-room OCS chips:
-    // Kickstart reset overlay, chip RAM, custom registers, CIA overlay control,
-    // frame IRQ generation, and Paula audio DMA register routing.
-    struct amiga500_system final {
-        static constexpr std::size_t chip_ram_size = 512U * 1024U;
-        static constexpr std::size_t chip_ram_size_1m = 1024U * 1024U;
-        static constexpr std::size_t fast_ram_size_512k = 512U * 1024U;
-        static constexpr std::size_t fast_ram_size_1m = 1024U * 1024U;
-        static constexpr std::size_t fast_ram_size_2m = 2U * 1024U * 1024U;
-        static constexpr std::size_t fast_ram_size_4m = 4U * 1024U * 1024U;
-        static constexpr std::size_t fast_ram_max_size = 8U * 1024U * 1024U;
-        static constexpr std::size_t kickstart_window_size = 512U * 1024U;
-        static constexpr std::size_t floppy_cylinders = 80U;
-        static constexpr std::size_t floppy_heads = 2U;
-        static constexpr std::size_t floppy_track_count = floppy_cylinders * floppy_heads;
-        static constexpr std::size_t floppy_sectors_per_track = 11U;
-        static constexpr std::size_t floppy_sector_size = 512U;
-        static constexpr std::size_t floppy_dd_size =
-            floppy_cylinders * floppy_heads * floppy_sectors_per_track * floppy_sector_size;
-        static constexpr std::size_t floppy_drive_count = 4U;
-        static constexpr std::uint8_t no_floppy_drive = 0xFFU;
-        static constexpr std::uint32_t floppy_index_pulses_per_second = 5U;
+        static constexpr std::size_t chip_ram_size = size_512k;
+        static constexpr std::size_t chip_ram_size_1m = size_1m;
+        static constexpr std::size_t fast_ram_size_512k = size_512k;
+        static constexpr std::size_t fast_ram_size_1m = size_1m;
+        static constexpr std::size_t fast_ram_size_2m = size_2m;
+        static constexpr std::size_t fast_ram_size_4m = size_4m;
+        static constexpr std::size_t fast_ram_max_size = size_8m;
+        static constexpr std::size_t kickstart_window_size = size_512k;
+        static constexpr std::size_t floppy_cylinders = amiga_floppy_cylinders;
+        static constexpr std::size_t floppy_heads = amiga_floppy_heads;
+        static constexpr std::size_t floppy_track_count = amiga_floppy_track_count;
+        static constexpr std::size_t floppy_sectors_per_track =
+            amiga_floppy_sectors_per_track;
+        static constexpr std::size_t floppy_sector_size = amiga_floppy_sector_size;
+        static constexpr std::size_t floppy_dd_size = amiga_floppy_dd_size;
+        static constexpr std::size_t floppy_drive_count = amiga_floppy_drive_count;
+        static constexpr std::uint8_t no_floppy_drive = amiga_no_floppy_drive;
+        static constexpr std::uint32_t floppy_index_pulses_per_second =
+            amiga_floppy_index_pulses_per_second;
         static constexpr std::size_t keyboard_raw_key_count = 128U;
         static constexpr std::size_t keyboard_queue_capacity = 16U;
         static constexpr std::uint8_t keyboard_reset_warning_code = 0x78U;
@@ -70,6 +65,11 @@ namespace mnemos::manifests::amiga500 {
 
         static constexpr std::uint32_t chip_ram_base = 0x000000U;
         static constexpr std::uint32_t fast_ram_base = 0x200000U;
+        static constexpr std::uint32_t zorro2_expansion_ram_base = fast_ram_base;
+        static constexpr std::uint32_t zorro2_expansion_ram_size =
+            static_cast<std::uint32_t>(fast_ram_max_size);
+        static constexpr std::uint32_t zorro2_autoconfig_base = 0xE80000U;
+        static constexpr std::uint32_t zorro2_autoconfig_size = 0x10000U;
         static constexpr std::uint32_t kickstart_base = 0xF80000U;
         static constexpr std::uint32_t custom_base = 0xDFF000U;
         static constexpr std::uint32_t cia_a_base = 0xBFE000U;
@@ -91,13 +91,13 @@ namespace mnemos::manifests::amiga500 {
         static constexpr std::uint16_t int_exter = 1U << 13U;
         static constexpr std::uint16_t int_master = 1U << 14U;
         static constexpr std::uint16_t setclr_bit = 1U << 15U;
-        static constexpr std::uint8_t joy_up = 1U << 0U;
-        static constexpr std::uint8_t joy_down = 1U << 1U;
-        static constexpr std::uint8_t joy_left = 1U << 2U;
-        static constexpr std::uint8_t joy_right = 1U << 3U;
-        static constexpr std::uint8_t joy_fire = 1U << 4U;
-        static constexpr std::uint8_t joy_secondary_fire = 1U << 5U;
-        static constexpr std::uint8_t joy_middle_fire = 1U << 6U;
+        static constexpr std::uint8_t joy_up = amiga_joy_up;
+        static constexpr std::uint8_t joy_down = amiga_joy_down;
+        static constexpr std::uint8_t joy_left = amiga_joy_left;
+        static constexpr std::uint8_t joy_right = amiga_joy_right;
+        static constexpr std::uint8_t joy_fire = amiga_joy_fire;
+        static constexpr std::uint8_t joy_secondary_fire = amiga_joy_secondary_fire;
+        static constexpr std::uint8_t joy_middle_fire = amiga_joy_middle_fire;
 
         chips::cpu::m68000 cpu;
         chips::video::agnus agnus;
@@ -110,6 +110,11 @@ namespace mnemos::manifests::amiga500 {
         std::vector<std::uint8_t> chip_ram = std::vector<std::uint8_t>(chip_ram_size, 0U);
         std::vector<std::uint8_t> fast_ram{};
         std::array<std::uint8_t, kickstart_window_size> kickstart_rom{};
+
+        std::vector<zorro2_expansion_board> zorro2_boards{};
+        std::size_t zorro2_autoconfig_index{};
+        std::uint8_t zorro2_base_low_nibble{};
+        bool zorro2_base_low_nibble_valid{};
 
         std::array<std::uint16_t, chips::video::agnus::palette_entries> palette_words{};
         std::array<std::uint8_t, chips::video::agnus::palette_entries * 2U> palette_bytes{};
@@ -139,10 +144,10 @@ namespace mnemos::manifests::amiga500 {
         bool disk_byte_valid{};
         bool disk_sync_match{};
         bool disk_wordsync_waiting{};
-        std::array<std::uint16_t, 2> joydat{};
-        std::array<std::uint8_t, 2> joystick_state{};
-        std::array<std::uint16_t, 2> pot_counter{0xFFFFU, 0xFFFFU};
-        std::array<std::uint16_t, 2> pot_target{0xFFFFU, 0xFFFFU};
+        std::array<std::uint16_t, amiga_controller_port_count> joydat{};
+        std::array<std::uint8_t, amiga_controller_port_count> joystick_state{};
+        std::array<std::uint16_t, amiga_controller_port_count> pot_counter{0xFFFFU, 0xFFFFU};
+        std::array<std::uint16_t, amiga_controller_port_count> pot_target{0xFFFFU, 0xFFFFU};
         std::uint64_t beam_line_epoch{};
         std::uint64_t pot_start_line_epoch{};
         std::uint16_t potgo{};
@@ -155,31 +160,7 @@ namespace mnemos::manifests::amiga500 {
         bool cia_b_irq{};
         std::uint64_t frame_index{};
 
-        struct floppy_drive_state final {
-            std::vector<std::uint8_t> image{};
-            std::vector<std::uint8_t> track_stream{};
-            std::vector<std::uint8_t> weak_bit_stream{};
-            std::array<std::vector<std::uint8_t>, floppy_track_count> raw_track_cache{};
-            std::array<std::vector<std::uint8_t>, floppy_track_count> weak_bit_cache{};
-            std::size_t stream_offset{};
-            std::size_t track_stream_track_index{};
-            std::uint8_t stream_bit_offset{};
-            std::uint8_t stream_read_shift{};
-            std::uint8_t stream_read_bit_count{};
-            std::uint8_t stream_write_latch{};
-            std::uint8_t stream_write_shift{};
-            std::uint8_t stream_write_bits_remaining{};
-            std::uint16_t weak_bit_lfsr{0xACE1U};
-            std::uint8_t cylinder_pos{};
-            bool connected{};
-            bool motor_on{};
-            bool write_protected{true};
-            bool change_latch{true};
-            bool track_stream_dirty{};
-            std::uint32_t index_line_accumulator{};
-            std::uint64_t byte_clock_accumulator{};
-        };
-
+        using floppy_drive_state = amiga_floppy_drive_state;
         std::array<floppy_drive_state, floppy_drive_count> floppy_drives{};
         std::uint8_t floppy_selected_mask{};
         std::uint8_t floppy_active_drive{no_floppy_drive};
@@ -214,6 +195,11 @@ namespace mnemos::manifests::amiga500 {
         [[nodiscard]] bool keyboard_caps_lock_led_on() const noexcept {
             return keyboard_caps_lock_led;
         }
+        [[nodiscard]] zorro2_expansion_board* active_zorro2_autoconfig_board() noexcept;
+        [[nodiscard]] const zorro2_expansion_board*
+        active_zorro2_autoconfig_board() const noexcept;
+        [[nodiscard]] bool zorro2_autoconfig_pending() const noexcept;
+        void reset_zorro2_autoconfig() noexcept;
 
         [[nodiscard]] bool mount_floppy(std::span<const std::uint8_t> adf_image);
         [[nodiscard]] bool mount_floppy(std::size_t drive, std::span<const std::uint8_t> adf_image);
@@ -274,7 +260,7 @@ namespace mnemos::manifests::amiga500 {
         void load_state(chips::state_reader& reader);
     };
 
-    [[nodiscard]] std::unique_ptr<amiga500_system>
-    assemble_amiga500(std::vector<std::uint8_t> kickstart_rom, const amiga500_config& config = {});
+    [[nodiscard]] std::unique_ptr<amiga_system>
+    assemble_amiga(std::vector<std::uint8_t> kickstart_rom, const amiga_config& config = {});
 
-} // namespace mnemos::manifests::amiga500
+} // namespace mnemos::manifests::amiga

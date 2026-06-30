@@ -1,6 +1,6 @@
 #pragma once
 
-#include "amiga500_system.hpp"
+#include "amiga_system.hpp"
 #include "introspection_views.hpp"
 #include "player_system.hpp"
 #include "save_state.hpp"
@@ -14,20 +14,20 @@
 #include <string>
 #include <vector>
 
-namespace mnemos::apps::player::adapters::amiga500 {
+namespace mnemos::apps::player::adapters::amiga {
 
-    class amiga500_adapter;
+    class amiga_adapter;
     void force_link() noexcept;
-    [[nodiscard]] runtime::save_target build_save_target(amiga500_adapter& adapter);
+    [[nodiscard]] runtime::save_target build_save_target(amiga_adapter& adapter);
 
-    class amiga500_adapter final : public frontend_sdk::player_system {
+    class amiga_adapter final : public frontend_sdk::player_system {
       public:
-        explicit amiga500_adapter(std::vector<std::uint8_t> kickstart_rom,
-                                  const manifests::amiga500::amiga500_config& config = {},
+        explicit amiga_adapter(std::vector<std::uint8_t> kickstart_rom,
+                                  const manifests::amiga::amiga_config& config = {},
                                   std::string display_name = {},
                                   frontend_sdk::scheduler_factory* scheduler_factory = nullptr);
-        explicit amiga500_adapter(std::vector<std::uint8_t> kickstart_rom,
-                                  const manifests::amiga500::amiga500_config& config,
+        explicit amiga_adapter(std::vector<std::uint8_t> kickstart_rom,
+                                  const manifests::amiga::amiga_config& config,
                                   std::string display_name,
                                   std::vector<std::vector<std::uint8_t>> disks,
                                   frontend_sdk::scheduler_factory* scheduler_factory = nullptr);
@@ -67,18 +67,18 @@ namespace mnemos::apps::player::adapters::amiga500 {
         [[nodiscard]] std::vector<std::uint8_t> save_state() override;
         [[nodiscard]] runtime::load_result load_state(std::span<const std::uint8_t> data) override;
 
-        [[nodiscard]] manifests::amiga500::amiga500_system& system() noexcept { return *sys_; }
+        [[nodiscard]] manifests::amiga::amiga_system& system() noexcept { return *sys_; }
         [[nodiscard]] runtime::scheduler& scheduler() noexcept { return scheduler_; }
 
       private:
-        friend runtime::save_target build_save_target(amiga500_adapter& adapter);
+        friend runtime::save_target build_save_target(amiga_adapter& adapter);
 
         void save_adapter_state(chips::state_writer& writer) const;
         void load_adapter_state(chips::state_reader& reader);
 
         frontend_sdk::session_capability_info session_{};
         frontend_sdk::media_capability_info media_{};
-        std::unique_ptr<manifests::amiga500::amiga500_system> sys_;
+        std::unique_ptr<manifests::amiga::amiga_system> sys_;
         std::unique_ptr<chips::ichip> board_debug_chip_;
         instrumentation::span_memory_view chip_ram_view_;
         instrumentation::span_memory_view fast_ram_view_;
@@ -87,12 +87,12 @@ namespace mnemos::apps::player::adapters::amiga500 {
         std::array<chips::ichip*, 7> chip_view_{};
         runtime::scheduler scheduler_;
         mnemos::video_region region_;
-        manifests::amiga500::amiga500_keyboard_layout keyboard_layout_;
-        manifests::amiga500::amiga500_model model_;
+        manifests::amiga::amiga_keyboard_layout keyboard_layout_;
+        manifests::amiga::amiga_model model_;
         double target_fps_;
         std::vector<frontend_sdk::spec_field> spec_{};
         std::array<frontend_sdk::controller_state, 6> ports_{};
-        std::array<bool, manifests::amiga500::amiga500_system::keyboard_raw_key_count>
+        std::array<bool, manifests::amiga::amiga_system::keyboard_raw_key_count>
             reported_keyboard_keys_{};
         std::vector<std::vector<std::uint8_t>> disks_{};
         std::size_t disk_index_{};
@@ -105,4 +105,4 @@ namespace mnemos::apps::player::adapters::amiga500 {
         double audio_frac_{0.0};
     };
 
-} // namespace mnemos::apps::player::adapters::amiga500
+} // namespace mnemos::apps::player::adapters::amiga

@@ -35,7 +35,7 @@ add_subdirectory(capcom_cps2)
 add_subdirectory(spectrum)
 add_subdirectory(nes)
 add_subdirectory(msx)
-add_subdirectory(amiga500)
+add_subdirectory(amiga)
 add_subdirectory(msx2)
 
 add_library(mnemos_manifests INTERFACE)

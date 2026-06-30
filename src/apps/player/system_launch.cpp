@@ -378,7 +378,7 @@ namespace {
     }
 
     [[nodiscard]] std::string
-    amiga500_keyboard_layout_override(const std::optional<std::string>& override) {
+    amiga_keyboard_layout_override(const std::optional<std::string>& override) {
         std::string layout = override.value_or(std::string{});
         if (!layout.empty()) {
             return layout;
@@ -410,14 +410,14 @@ namespace {
     }
 
     [[nodiscard]] bool
-    is_amiga500_family(mnemos::apps::player::adapters::system_family family) noexcept {
+    is_amiga_family(mnemos::apps::player::adapters::system_family family) noexcept {
         using mnemos::apps::player::adapters::system_family;
         return family == system_family::amiga500 || family == system_family::amiga500_plus ||
                family == system_family::amiga600 || family == system_family::amiga2000;
     }
 
     [[nodiscard]] const char*
-    amiga500_kickstart_env_var(mnemos::apps::player::adapters::system_family family) noexcept {
+    amiga_kickstart_env_var(mnemos::apps::player::adapters::system_family family) noexcept {
         using mnemos::apps::player::adapters::system_family;
         switch (family) {
         case system_family::amiga500_plus:
@@ -432,8 +432,8 @@ namespace {
     }
 
     [[nodiscard]] const char*
-    amiga500_kickstart_env(mnemos::apps::player::adapters::system_family family) noexcept {
-        return getenv_nonempty(amiga500_kickstart_env_var(family));
+    amiga_kickstart_env(mnemos::apps::player::adapters::system_family family) noexcept {
+        return getenv_nonempty(amiga_kickstart_env_var(family));
     }
 } // namespace
 
@@ -456,16 +456,16 @@ namespace mnemos::apps::player {
                 return outcome;
             }
             const auto family_opt = family_from_name(*options.system_arg);
-            if (!family_opt || !is_amiga500_family(*family_opt)) {
+            if (!family_opt || !is_amiga_family(*family_opt)) {
                 return outcome;
             }
 
             const system_family family = *family_opt;
-            const char* kickstart_env = amiga500_kickstart_env(family);
+            const char* kickstart_env = amiga_kickstart_env(family);
             if (kickstart_env == nullptr || kickstart_env[0] == '\0') {
                 std::fprintf(stderr, "[mnemos_player] %s BIOS-only launch needs "
                                      "%s set to a Kickstart ROM\n",
-                             family_label(family), amiga500_kickstart_env_var(family));
+                             family_label(family), amiga_kickstart_env_var(family));
                 outcome.exit_code = 1;
                 return outcome;
             }
@@ -500,7 +500,7 @@ namespace mnemos::apps::player {
             adapter_options.rtc = options.rtc;
             adapter_options.msx2 = options.msx2;
             adapter_options.keyboard_layout_override =
-                amiga500_keyboard_layout_override(options.keyboard_layout_override);
+                amiga_keyboard_layout_override(options.keyboard_layout_override);
             adapter_options.amiga_model_override =
                 amiga_model_override(options.amiga_model_override, family);
             outcome.system = frontend_sdk::adapter_registry::instance().create(
@@ -862,16 +862,16 @@ namespace mnemos::apps::player {
             }
         }
 
-        if (is_amiga500_family(family)) {
+        if (is_amiga_family(family)) {
             keyboard_layout_override =
-                amiga500_keyboard_layout_override(options.keyboard_layout_override);
+                amiga_keyboard_layout_override(options.keyboard_layout_override);
             const std::string ext = lowercase_extension(loaded->name);
             if (ext == ".adf") {
-                const char* kickstart_env = amiga500_kickstart_env(family);
+                const char* kickstart_env = amiga_kickstart_env(family);
                 if (kickstart_env == nullptr || kickstart_env[0] == '\0') {
                     std::fprintf(stderr, "[mnemos_player] a %s ADF needs "
                                          "%s set to a Kickstart ROM\n",
-                                 family_label(family), amiga500_kickstart_env_var(family));
+                                 family_label(family), amiga_kickstart_env_var(family));
                     outcome.exit_code = 1;
                     return outcome;
                 }

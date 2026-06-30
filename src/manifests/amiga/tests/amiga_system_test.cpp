@@ -1,4 +1,4 @@
-#include "amiga500_system.hpp"
+#include "amiga_system.hpp"
 
 #include "scheduler.hpp"
 
@@ -11,10 +11,33 @@
 #include <vector>
 
 namespace {
-    using mnemos::manifests::amiga500::amiga500_config;
-    using mnemos::manifests::amiga500::amiga500_model;
-    using mnemos::manifests::amiga500::amiga500_system;
-    using mnemos::manifests::amiga500::assemble_amiga500;
+    using mnemos::manifests::amiga::amiga_config;
+    using mnemos::manifests::amiga::amiga_chipset;
+    using mnemos::manifests::amiga::amiga_chipset_profile;
+    using mnemos::manifests::amiga::amiga_floppy_dd_size;
+    using mnemos::manifests::amiga::amiga_floppy_drive_count;
+    using mnemos::manifests::amiga::amiga_floppy_heads;
+    using mnemos::manifests::amiga::amiga_floppy_sector_size;
+    using mnemos::manifests::amiga::amiga_floppy_sectors_per_track;
+    using mnemos::manifests::amiga::amiga_floppy_track_count;
+    using mnemos::manifests::amiga::amiga_fast_ram_size_for_config;
+    using mnemos::manifests::amiga::amiga_encode_joystick;
+    using mnemos::manifests::amiga::amiga_joy_fire;
+    using mnemos::manifests::amiga::amiga_joy_middle_fire;
+    using mnemos::manifests::amiga::amiga_joy_secondary_fire;
+    using mnemos::manifests::amiga::amiga_joy_up;
+    using mnemos::manifests::amiga::amiga_mouse_button_mask;
+    using mnemos::manifests::amiga::amiga_pack_pot_target;
+    using mnemos::manifests::amiga::amiga_pot_axis_value;
+    using mnemos::manifests::amiga::amiga_pot_counter_value;
+    using mnemos::manifests::amiga::amiga_pot_full_scale_scanlines;
+    using mnemos::manifests::amiga::amiga_pot_reset_scanlines;
+    using mnemos::manifests::amiga::amiga_sanitize_controller_mask;
+    using mnemos::manifests::amiga::amiga_wrap_mouse_counter;
+    using mnemos::manifests::amiga::amiga_model;
+    using mnemos::manifests::amiga::amiga_model_profile;
+    using mnemos::manifests::amiga::amiga_system;
+    using mnemos::manifests::amiga::assemble_amiga;
     using agnus = mnemos::chips::video::agnus;
 
     constexpr std::uint32_t pal_vblank_end_line = 24U;
@@ -22,7 +45,7 @@ namespace {
         static_cast<std::uint64_t>(agnus::color_clocks_per_line) * pal_vblank_end_line;
 
     [[nodiscard]] std::vector<std::uint8_t> tiny_kickstart() {
-        std::vector<std::uint8_t> rom(amiga500_system::kickstart_window_size, 0x00U);
+        std::vector<std::uint8_t> rom(amiga_system::kickstart_window_size, 0x00U);
         const auto w16 = [&](std::size_t off, std::uint16_t v) {
             rom[off] = static_cast<std::uint8_t>(v >> 8U);
             rom[off + 1U] = static_cast<std::uint8_t>(v);
@@ -34,7 +57,7 @@ namespace {
             rom[off + 3U] = static_cast<std::uint8_t>(v);
         };
         w32(0x0000U, 0x0007F000U); // SSP inside chip RAM
-        w32(0x0004U, amiga500_system::kickstart_base + 0x0008U);
+        w32(0x0004U, amiga_system::kickstart_base + 0x0008U);
         w16(0x0008U, 0x46FCU); // MOVE.W #$2700,SR
         w16(0x000AU, 0x2700U);
         w16(0x000CU, 0x60FEU); // BRA.S *
@@ -42,19 +65,19 @@ namespace {
     }
 
     [[nodiscard]] std::vector<std::uint8_t> tiny_adf() {
-        std::vector<std::uint8_t> adf(amiga500_system::floppy_dd_size, 0x00U);
-        for (std::size_t i = 0; i < amiga500_system::floppy_sector_size; ++i) {
+        std::vector<std::uint8_t> adf(amiga_system::floppy_dd_size, 0x00U);
+        for (std::size_t i = 0; i < amiga_system::floppy_sector_size; ++i) {
             adf[i] = static_cast<std::uint8_t>(i);
         }
         return adf;
     }
 
-    void select_df0(amiga500_system& sys) {
+    void select_df0(amiga_system& sys) {
         sys.cia_b.write(0x03U, 0xFFU); // DDRB: disk control lines are outputs.
         sys.cia_b.write(0x01U, 0x75U); // /MTR=0, /SEL0=0, /SIDE=1, /STEP=1.
     }
 
-    void select_df1(amiga500_system& sys) {
+    void select_df1(amiga_system& sys) {
         sys.cia_b.write(0x03U, 0xFFU);
         sys.cia_b.write(0x01U, 0x6DU); // /MTR=0, /SEL1=0, /SIDE=1, /STEP=1.
     }
@@ -74,30 +97,37 @@ namespace {
         return static_cast<std::uint8_t>((inverted << 1U) | (inverted >> 7U));
     }
 
-    void write_chip_word(amiga500_system& sys, std::uint32_t address, std::uint16_t value) {
+    void write_chip_word(amiga_system& sys, std::uint32_t address, std::uint16_t value) {
         sys.bus.write8(address, static_cast<std::uint8_t>(value >> 8U));
         sys.bus.write8(address + 1U, static_cast<std::uint8_t>(value));
     }
 
-    void write_kickstart_word(amiga500_system& sys, std::uint32_t offset, std::uint16_t value) {
+    void assign_first_zorro2_board(amiga_system& sys, std::uint8_t base_page = 0x20U) {
+        REQUIRE(sys.zorro2_autoconfig_pending());
+        sys.bus.write8(amiga_system::zorro2_autoconfig_base + 0x4AU,
+                       static_cast<std::uint8_t>(base_page & 0x0FU));
+        sys.bus.write8(amiga_system::zorro2_autoconfig_base + 0x48U, base_page);
+    }
+
+    void write_kickstart_word(amiga_system& sys, std::uint32_t offset, std::uint16_t value) {
         sys.kickstart_rom[offset] = static_cast<std::uint8_t>(value >> 8U);
         sys.kickstart_rom[offset + 1U] = static_cast<std::uint8_t>(value);
     }
 
-    void write_kickstart_long(amiga500_system& sys, std::uint32_t offset, std::uint32_t value) {
+    void write_kickstart_long(amiga_system& sys, std::uint32_t offset, std::uint32_t value) {
         sys.kickstart_rom[offset + 0U] = static_cast<std::uint8_t>(value >> 24U);
         sys.kickstart_rom[offset + 1U] = static_cast<std::uint8_t>(value >> 16U);
         sys.kickstart_rom[offset + 2U] = static_cast<std::uint8_t>(value >> 8U);
         sys.kickstart_rom[offset + 3U] = static_cast<std::uint8_t>(value);
     }
 
-    [[nodiscard]] std::uint16_t read_chip_word(const amiga500_system& sys,
+    [[nodiscard]] std::uint16_t read_chip_word(const amiga_system& sys,
                                                std::uint32_t address) noexcept {
         return static_cast<std::uint16_t>((sys.chip_ram[address] << 8U) |
                                           sys.chip_ram[address + 1U]);
     }
 
-    void program_one_plane_display(amiga500_system& sys) {
+    void program_one_plane_display(amiga_system& sys) {
         sys.write_custom_word(0x180U, 0x000FU); // COLOR00 = blue backdrop
         sys.write_custom_word(0x182U, 0x0F00U); // COLOR01 = red foreground
         sys.write_custom_word(0x100U, 0x1000U); // BPU = 1
@@ -107,27 +137,20 @@ namespace {
         sys.write_custom_word(0x094U, 0x00D0U);
         sys.write_custom_word(0x0E0U, 0x0000U); // BPL1PTH
         sys.write_custom_word(0x0E2U, 0x0000U); // BPL1PTL
-        sys.write_custom_word(0x096U, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+        sys.write_custom_word(0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                                  agnus::dmacon_dmaen |
                                                                  agnus::dmacon_bplen));
     }
 
     void run_frame(mnemos::runtime::scheduler& scheduler) { scheduler.run_frame(); }
 
-    void run_scanlines(amiga500_system& sys, std::uint32_t lines) {
+    void run_scanlines(amiga_system& sys, std::uint32_t lines) {
         sys.agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) * lines);
     }
 
-    void reset_floppy_stream_phase(amiga500_system::floppy_drive_state& drive,
+    void reset_floppy_stream_phase(amiga_system::floppy_drive_state& drive,
                                    std::size_t offset = 0U, std::uint8_t bit_offset = 0U) {
-        drive.stream_offset = offset;
-        drive.stream_bit_offset = static_cast<std::uint8_t>(bit_offset & 0x07U);
-        drive.stream_read_shift = 0U;
-        drive.stream_read_bit_count = 0U;
-        drive.stream_write_latch = 0U;
-        drive.stream_write_shift = 0U;
-        drive.stream_write_bits_remaining = 0U;
-        drive.byte_clock_accumulator = 0U;
+        mnemos::manifests::amiga::amiga_reset_floppy_stream_phase(drive, offset, bit_offset);
     }
 
     [[nodiscard]] std::uint8_t next_expected_weak_bit(std::uint16_t& state) noexcept {
@@ -153,7 +176,7 @@ namespace {
         return value;
     }
 
-    void run_blitter_to_idle(amiga500_system& sys) {
+    void run_blitter_to_idle(amiga_system& sys) {
         for (std::uint32_t cycle = 0U; cycle < 1'000'000U; ++cycle) {
             if ((sys.read_custom_word(0x002U) & agnus::dmacon_bbusy) == 0U) {
                 return;
@@ -163,7 +186,7 @@ namespace {
         FAIL("Amiga500 blitter did not retire within the bounded test window");
     }
 
-    void acknowledge_keyboard(amiga500_system& sys) {
+    void acknowledge_keyboard(amiga_system& sys) {
         sys.cia_a.write(0x04U, 0x01U); // Timer A latch = 1 for a short SP pulse.
         sys.cia_a.write(0x05U, 0x00U);
         sys.cia_a.write(0x0EU, 0x41U); // CRA: START | SPMODE output.
@@ -174,13 +197,121 @@ namespace {
     }
 } // namespace
 
+TEST_CASE("amiga memory size constants share a binary size vocabulary",
+          "[manifests][amiga][memory]") {
+    CHECK(amiga_system::size_256k == 256U * 1024U);
+    CHECK(amiga_system::size_512k == amiga_system::size_256k * 2U);
+    CHECK(amiga_system::size_1m == amiga_system::size_512k * 2U);
+    CHECK(amiga_system::size_2m == amiga_system::size_1m * 2U);
+    CHECK(amiga_system::size_4m == amiga_system::size_2m * 2U);
+    CHECK(amiga_system::size_8m == amiga_system::size_4m * 2U);
+
+    CHECK(amiga_system::chip_ram_size == amiga_system::size_512k);
+    CHECK(amiga_system::chip_ram_size_1m == amiga_system::size_1m);
+    CHECK(amiga_system::fast_ram_size_512k == amiga_system::size_512k);
+    CHECK(amiga_system::fast_ram_size_1m == amiga_system::size_1m);
+    CHECK(amiga_system::fast_ram_size_2m == amiga_system::size_2m);
+    CHECK(amiga_system::fast_ram_size_4m == amiga_system::size_4m);
+    CHECK(amiga_system::fast_ram_max_size == amiga_system::size_8m);
+    CHECK(amiga_system::kickstart_window_size == amiga_system::size_512k);
+}
+
+TEST_CASE("amiga model descriptors capture base chipset and expansion policy",
+          "[manifests][amiga][models]") {
+    const auto& a500 = amiga_model_profile(amiga_model::amiga500);
+    CHECK(a500.chipset == amiga_chipset::ocs);
+    CHECK(a500.chip_ram_size == amiga_system::chip_ram_size);
+    CHECK_FALSE(a500.zorro2_expansion_bus);
+    CHECK_FALSE(a500.fast_ram_configurable);
+
+    const auto& a500plus = amiga_model_profile(amiga_model::amiga500_plus);
+    CHECK(a500plus.chipset == amiga_chipset::ecs_1m);
+    CHECK(a500plus.chip_ram_size == amiga_system::chip_ram_size_1m);
+    CHECK_FALSE(a500plus.fast_ram_configurable);
+
+    const auto& a600 = amiga_model_profile(amiga_model::amiga600);
+    CHECK(a600.chipset == amiga_chipset::ecs_1m);
+    CHECK(a600.chip_ram_size == amiga_system::chip_ram_size_1m);
+    CHECK_FALSE(a600.fast_ram_configurable);
+
+    const auto& a2000 = amiga_model_profile(amiga_model::amiga2000);
+    CHECK(a2000.chipset == amiga_chipset::ocs);
+    CHECK(a2000.chip_ram_size == amiga_system::chip_ram_size);
+    CHECK(a2000.zorro2_expansion_bus);
+    CHECK(a2000.fast_ram_configurable);
+
+    const auto& a2000_ecs = amiga_model_profile(amiga_model::amiga2000_ecs_1m);
+    CHECK(a2000_ecs.chipset == amiga_chipset::ecs_1m);
+    CHECK(a2000_ecs.chip_ram_size == amiga_system::chip_ram_size_1m);
+    CHECK(a2000_ecs.zorro2_expansion_bus);
+    CHECK(a2000_ecs.fast_ram_configurable);
+}
+
+TEST_CASE("amiga chipset descriptors own Copper address width policy",
+          "[manifests][amiga][chipsets]") {
+    CHECK(amiga_chipset_profile(amiga_chipset::ocs).copper_address_mask ==
+          agnus::ocs_copper_address_mask);
+    CHECK(amiga_chipset_profile(amiga_chipset::ecs_1m).copper_address_mask ==
+          agnus::ecs_1m_copper_address_mask);
+}
+
+TEST_CASE("amiga model descriptors gate configurable Fast RAM",
+          "[manifests][amiga][models][memory]") {
+    const amiga_config a500_fast{.model = amiga_model::amiga500,
+                                 .fast_ram_size = amiga_system::fast_ram_size_2m};
+    CHECK(amiga_fast_ram_size_for_config(a500_fast, amiga_system::fast_ram_max_size) == 0U);
+
+    const amiga_config a2000_fast{.model = amiga_model::amiga2000,
+                                  .fast_ram_size = amiga_system::fast_ram_size_2m};
+    CHECK(amiga_fast_ram_size_for_config(a2000_fast, amiga_system::fast_ram_max_size) ==
+          amiga_system::fast_ram_size_2m);
+
+    const amiga_config a2000_oversized{.model = amiga_model::amiga2000_ecs_1m,
+                                       .fast_ram_size =
+                                           amiga_system::fast_ram_max_size + 512U};
+    CHECK(amiga_fast_ram_size_for_config(a2000_oversized, amiga_system::fast_ram_max_size) ==
+          amiga_system::fast_ram_max_size);
+}
+
+TEST_CASE("amiga floppy drive profile preserves public DD geometry",
+          "[manifests][amiga][drives]") {
+    CHECK(amiga_system::floppy_heads == amiga_floppy_heads);
+    CHECK(amiga_system::floppy_track_count == amiga_floppy_track_count);
+    CHECK(amiga_system::floppy_sectors_per_track == amiga_floppy_sectors_per_track);
+    CHECK(amiga_system::floppy_sector_size == amiga_floppy_sector_size);
+    CHECK(amiga_system::floppy_dd_size == amiga_floppy_dd_size);
+    CHECK(amiga_system::floppy_drive_count == amiga_floppy_drive_count);
+}
+
+TEST_CASE("amiga input helpers preserve public controller semantics",
+          "[manifests][amiga][devices]") {
+    CHECK(amiga_system::joy_up == amiga_joy_up);
+    CHECK(amiga_system::joy_fire == amiga_joy_fire);
+    CHECK(amiga_system::joy_secondary_fire == amiga_joy_secondary_fire);
+    CHECK(amiga_system::joy_middle_fire == amiga_joy_middle_fire);
+    CHECK(amiga_sanitize_controller_mask(0xFFU) == 0x7FU);
+    CHECK(amiga_encode_joystick(amiga_system::joy_up) == 0x0100U);
+    CHECK(amiga_encode_joystick(amiga_system::joy_right) == 0x0003U);
+    CHECK(amiga_wrap_mouse_counter(0xFEU, 3) == 0x01U);
+    CHECK(amiga_wrap_mouse_counter(0x01U, -3) == 0xFEU);
+    CHECK(amiga_mouse_button_mask(true, true, true) ==
+          (amiga_system::joy_fire | amiga_system::joy_secondary_fire |
+           amiga_system::joy_middle_fire));
+    CHECK(amiga_pack_pot_target(3U, 5U) == 0x0503U);
+    CHECK(amiga_pot_axis_value(0xFFU, amiga_pot_reset_scanlines) == 0U);
+    CHECK(amiga_pot_axis_value(0xFFU,
+                               amiga_pot_reset_scanlines + amiga_pot_full_scale_scanlines + 1U) ==
+          0xFFU);
+    CHECK(amiga_pot_counter_value(0x0503U, amiga_pot_reset_scanlines + 2U) == 0x0202U);
+}
+
 TEST_CASE("amiga500 boots through the Kickstart reset overlay", "[manifests][amiga500]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     const auto regs = sys->cpu.cpu_registers();
     CHECK(regs.a[7] == 0x0007F000U);
-    CHECK(regs.pc == amiga500_system::kickstart_base + 0x0008U);
+    CHECK(regs.pc == amiga_system::kickstart_base + 0x0008U);
     CHECK(sys->kickstart_overlay_active());
 
     // Writes under the overlay still land in chip RAM, but reads see Kickstart
@@ -201,7 +332,7 @@ TEST_CASE("amiga500 boots through the Kickstart reset overlay", "[manifests][ami
 
 TEST_CASE("amiga500 CPU RESET pulse warm-resets the board and reasserts the Kickstart overlay",
           "[manifests][amiga500]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->bus.write8(0x00BFE201U, 0x03U);
@@ -214,16 +345,16 @@ TEST_CASE("amiga500 CPU RESET pulse warm-resets the board and reasserts the Kick
     sys->bus.write8(0x000007U, 0x76U);
     CHECK(sys->bus.read8(0x000007U) == 0x76U);
 
-    sys->write_custom_word(0x09AU, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
-                                                             amiga500_system::int_master |
-                                                             amiga500_system::int_vertb));
+    sys->write_custom_word(0x09AU, static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                             amiga_system::int_master |
+                                                             amiga_system::int_vertb));
     CHECK(sys->read_custom_word(0x01CU) != 0U);
     sys->write_custom_word(0x080U, 0x0001U);
     sys->write_custom_word(0x082U, 0x2340U);
     sys->write_custom_word(0x084U, 0x0002U);
     sys->write_custom_word(0x086U, 0x4680U);
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_copen |
                                                       agnus::dmacon_dsken));
     sys->write_custom_word(0x024U, 0x8004U);
@@ -244,7 +375,7 @@ TEST_CASE("amiga500 CPU RESET pulse warm-resets the board and reasserts the Kick
     write_kickstart_word(*sys, 0x0008U, 0x4E70U); // RESET
     write_kickstart_word(*sys, 0x000AU, 0x4E71U); // NOP after RESET
     auto regs = sys->cpu.cpu_registers();
-    regs.pc = amiga500_system::kickstart_base + 0x0008U;
+    regs.pc = amiga_system::kickstart_base + 0x0008U;
     regs.sr = static_cast<std::uint16_t>(mnemos::chips::cpu::m68000::sr_s |
                                          mnemos::chips::cpu::m68000::sr_ipm);
     sys->cpu.set_registers(regs);
@@ -260,7 +391,7 @@ TEST_CASE("amiga500 CPU RESET pulse warm-resets the board and reasserts the Kick
     CHECK(sys->cop2lc == 0U);
     CHECK(sys->frame_index == 0U);
     CHECK(sys->floppy_loaded());
-    CHECK(sys->selected_floppy_drive() == amiga500_system::no_floppy_drive);
+    CHECK(sys->selected_floppy_drive() == amiga_system::no_floppy_drive);
     CHECK_FALSE(sys->floppy_motor_on);
     CHECK(sys->bus.read8(0x000004U) == 0x00U);
     CHECK(sys->bus.read8(0x000005U) == 0xF8U);
@@ -268,17 +399,17 @@ TEST_CASE("amiga500 CPU RESET pulse warm-resets the board and reasserts the Kick
     CHECK(sys->bus.read8(0x000007U) == 0x34U);
 
     regs = sys->cpu.cpu_registers();
-    CHECK(regs.pc == amiga500_system::kickstart_base + 0x000AU);
+    CHECK(regs.pc == amiga_system::kickstart_base + 0x000AU);
 }
 
 TEST_CASE("amiga500 joystick registers and CIA fire lines expose gamepad input",
           "[manifests][amiga500][input]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->set_joystick(1U, static_cast<std::uint8_t>(
-                              amiga500_system::joy_up | amiga500_system::joy_left |
-                              amiga500_system::joy_fire | amiga500_system::joy_secondary_fire));
+                              amiga_system::joy_up | amiga_system::joy_left |
+                              amiga_system::joy_fire | amiga_system::joy_secondary_fire));
     const std::uint16_t joy1 = sys->read_custom_word(0x00CU);
     CHECK(joy_up(joy1));
     CHECK_FALSE(joy_down(joy1));
@@ -288,9 +419,9 @@ TEST_CASE("amiga500 joystick registers and CIA fire lines expose gamepad input",
     CHECK((sys->cia_a.read(0x00U) & 0x40U) != 0U);
     CHECK((sys->read_custom_word(0x016U) & 0x4000U) == 0U);
 
-    sys->set_joystick(0U, static_cast<std::uint8_t>(amiga500_system::joy_down |
-                                                    amiga500_system::joy_right |
-                                                    amiga500_system::joy_fire));
+    sys->set_joystick(0U, static_cast<std::uint8_t>(amiga_system::joy_down |
+                                                    amiga_system::joy_right |
+                                                    amiga_system::joy_fire));
     const std::uint16_t joy0 = sys->read_custom_word(0x00AU);
     CHECK_FALSE(joy_up(joy0));
     CHECK(joy_down(joy0));
@@ -301,7 +432,7 @@ TEST_CASE("amiga500 joystick registers and CIA fire lines expose gamepad input",
 
 TEST_CASE("amiga500 mouse counters and buttons expose controller port input",
           "[manifests][amiga500][input]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->set_mouse(0U, 3, -2, true, true, true);
@@ -319,7 +450,7 @@ TEST_CASE("amiga500 mouse counters and buttons expose controller port input",
 
 TEST_CASE("amiga500 POTGO starts RC-calibrated pot counters by raster line",
           "[manifests][amiga500][input]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->set_pot_position(0U, 3U, 5U);
@@ -362,7 +493,7 @@ TEST_CASE("amiga500 POTGO starts RC-calibrated pot counters by raster line",
 
 TEST_CASE("amiga500 keyboard events arrive through CIA-A serial input",
           "[manifests][amiga500][input]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->cia_a.write(0x0DU, 0x88U);                  // Enable CIA serial interrupt mask.
@@ -376,7 +507,7 @@ TEST_CASE("amiga500 keyboard events arrive through CIA-A serial input",
 
 TEST_CASE("amiga500 keyboard queue waits for CIA serial acknowledgement",
           "[manifests][amiga500][input]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     REQUIRE(sys->enqueue_keyboard_key(0x4CU, true));  // Cursor up down.
@@ -396,7 +527,7 @@ TEST_CASE("amiga500 keyboard queue waits for CIA serial acknowledgement",
 
 TEST_CASE("amiga500 keyboard matrix filters duplicate raw-key edges",
           "[manifests][amiga500][input]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     REQUIRE(sys->enqueue_keyboard_key(0x20U, true)); // A down.
@@ -417,14 +548,14 @@ TEST_CASE("amiga500 keyboard matrix filters duplicate raw-key edges",
 
 TEST_CASE("amiga500 keyboard matrix ignores rejected queue-full edges",
           "[manifests][amiga500][input]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     REQUIRE(sys->enqueue_keyboard_key(0x20U, true)); // In flight.
-    for (std::uint8_t key = 0x21U; key < 0x21U + amiga500_system::keyboard_queue_capacity; ++key) {
+    for (std::uint8_t key = 0x21U; key < 0x21U + amiga_system::keyboard_queue_capacity; ++key) {
         REQUIRE(sys->enqueue_keyboard_key(key, true));
     }
-    REQUIRE(sys->keyboard_pending_count() == amiga500_system::keyboard_queue_capacity);
+    REQUIRE(sys->keyboard_pending_count() == amiga_system::keyboard_queue_capacity);
 
     CHECK_FALSE(sys->enqueue_keyboard_key(0x40U, true));
     acknowledge_keyboard(*sys);
@@ -433,7 +564,7 @@ TEST_CASE("amiga500 keyboard matrix ignores rejected queue-full edges",
 
 TEST_CASE("amiga500 keyboard matrix survives system save state",
           "[manifests][amiga500][input][save]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     REQUIRE(sys->enqueue_keyboard_key(0x20U, true)); // A down.
@@ -459,11 +590,11 @@ TEST_CASE("amiga500 keyboard matrix survives system save state",
 
 TEST_CASE("amiga500 keyboard control codes and caps-lock LED use raw serial codes",
           "[manifests][amiga500][input]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
-    REQUIRE(sys->enqueue_keyboard_control_code(amiga500_system::keyboard_reset_warning_code));
-    CHECK(sys->cia_a.read(0x0CU) == keyboard_sdr(amiga500_system::keyboard_reset_warning_code));
+    REQUIRE(sys->enqueue_keyboard_control_code(amiga_system::keyboard_reset_warning_code));
+    CHECK(sys->cia_a.read(0x0CU) == keyboard_sdr(amiga_system::keyboard_reset_warning_code));
 
     acknowledge_keyboard(*sys);
     REQUIRE(sys->press_caps_lock());
@@ -477,7 +608,7 @@ TEST_CASE("amiga500 keyboard control codes and caps-lock LED use raw serial code
 }
 
 TEST_CASE("amiga500 custom registers drive OCS bitplane rendering", "[manifests][amiga500]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->bus.write8(0x000000U, 0x80U); // BPL1 first word = 0x8000
@@ -503,7 +634,7 @@ TEST_CASE("amiga500 custom registers drive OCS bitplane rendering", "[manifests]
 
 TEST_CASE("amiga500 BPLCON1 custom register delays the Agnus bitplane serializer",
           "[manifests][amiga500][video]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->bus.write8(0x000000U, 0x80U); // BPL1 first word = 0x8000
@@ -521,25 +652,25 @@ TEST_CASE("amiga500 BPLCON1 custom register delays the Agnus bitplane serializer
 
 TEST_CASE("amiga500 custom byte writes preserve the opposite register lane",
           "[manifests][amiga500][custom]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->write_custom_word(0x100U, 0x1200U);
-    sys->write_custom_byte(amiga500_system::custom_base + 0x101U, 0x34U);
+    sys->write_custom_byte(amiga_system::custom_base + 0x101U, 0x34U);
     CHECK(sys->read_custom_word(0x100U) == 0x1234U);
-    sys->write_custom_byte(amiga500_system::custom_base + 0x100U, 0x56U);
+    sys->write_custom_byte(amiga_system::custom_base + 0x100U, 0x56U);
     CHECK(sys->read_custom_word(0x100U) == 0x5634U);
 
     sys->write_custom_word(0x084U, 0x0000U);
-    sys->write_custom_byte(amiga500_system::custom_base + 0x086U, 0x24U);
-    sys->write_custom_byte(amiga500_system::custom_base + 0x087U, 0x08U);
+    sys->write_custom_byte(amiga_system::custom_base + 0x086U, 0x24U);
+    sys->write_custom_byte(amiga_system::custom_base + 0x087U, 0x08U);
     CHECK(sys->cop2lc == 0x002408U);
     CHECK(sys->agnus.cop2lc() == 0x002408U);
 }
 
 TEST_CASE("amiga500 Copper location pointers are clipped to OCS chip address width",
           "[manifests][amiga500][custom]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->write_custom_word(0x080U, 0x001FU); // COP1LCH
@@ -555,9 +686,11 @@ TEST_CASE("amiga500 Copper location pointers are clipped to OCS chip address wid
 
 TEST_CASE("amiga2000 Copper location pointers are clipped to OCS chip address width",
           "[manifests][amiga500][custom][amiga2000]") {
-    const amiga500_config config{.model = amiga500_model::amiga2000};
-    auto sys = assemble_amiga500(tiny_kickstart(), config);
+    const amiga_config config{.model = amiga_model::amiga2000};
+    auto sys = assemble_amiga(tiny_kickstart(), config);
     REQUIRE(sys != nullptr);
+    CHECK(sys->zorro2_boards.empty());
+    CHECK_FALSE(sys->zorro2_autoconfig_pending());
 
     sys->write_custom_word(0x080U, 0x001FU); // COP1LCH
     sys->write_custom_word(0x082U, 0x1235U); // COP1LCL, low bit ignored.
@@ -572,8 +705,8 @@ TEST_CASE("amiga2000 Copper location pointers are clipped to OCS chip address wi
 
 TEST_CASE("amiga2000 ECS upgrade Copper location pointers use the ECS 1 MiB address width",
           "[manifests][amiga500][custom][amiga2000]") {
-    const amiga500_config config{.model = amiga500_model::amiga2000_ecs_1m};
-    auto sys = assemble_amiga500(tiny_kickstart(), config);
+    const amiga_config config{.model = amiga_model::amiga2000_ecs_1m};
+    auto sys = assemble_amiga(tiny_kickstart(), config);
     REQUIRE(sys != nullptr);
 
     sys->write_custom_word(0x080U, 0x001FU); // COP1LCH
@@ -589,29 +722,38 @@ TEST_CASE("amiga2000 ECS upgrade Copper location pointers use the ECS 1 MiB addr
 
 TEST_CASE("amiga2000 Fast RAM maps as CPU-visible expansion memory",
           "[manifests][amiga500][memory][amiga2000]") {
-    const amiga500_config config{.model = amiga500_model::amiga2000,
-                                 .fast_ram_size = amiga500_system::fast_ram_size_2m};
-    auto sys = assemble_amiga500(tiny_kickstart(), config);
+    const amiga_config config{.model = amiga_model::amiga2000,
+                                 .fast_ram_size = amiga_system::fast_ram_size_2m};
+    auto sys = assemble_amiga(tiny_kickstart(), config);
     REQUIRE(sys != nullptr);
 
-    REQUIRE(sys->chip_ram.size() == amiga500_system::chip_ram_size);
-    REQUIRE(sys->fast_ram.size() == amiga500_system::fast_ram_size_2m);
+    REQUIRE(sys->chip_ram.size() == amiga_system::chip_ram_size);
+    REQUIRE(sys->fast_ram.size() == amiga_system::fast_ram_size_2m);
+    REQUIRE(sys->zorro2_boards.size() == 1U);
+    CHECK(sys->zorro2_autoconfig_pending());
+    CHECK(sys->bus.read8(amiga_system::fast_ram_base) == 0xFFU);
+    CHECK(sys->bus.read8(amiga_system::zorro2_autoconfig_base + 0x00U) == 0xEEU);
+    CHECK(sys->bus.read8(amiga_system::zorro2_autoconfig_base + 0x02U) == 0x66U);
+    assign_first_zorro2_board(*sys);
+    REQUIRE_FALSE(sys->zorro2_autoconfig_pending());
+    REQUIRE(sys->zorro2_boards[0].configured);
+    CHECK(sys->zorro2_boards[0].assigned_base == amiga_system::fast_ram_base);
 
     constexpr std::uint32_t fast_offset = 0x001234U;
-    sys->bus.write8(amiga500_system::fast_ram_base + fast_offset, 0xA6U);
-    CHECK(sys->bus.read8(amiga500_system::fast_ram_base + fast_offset) == 0xA6U);
+    sys->bus.write8(amiga_system::fast_ram_base + fast_offset, 0xA6U);
+    CHECK(sys->bus.read8(amiga_system::fast_ram_base + fast_offset) == 0xA6U);
     CHECK(sys->fast_ram[fast_offset] == 0xA6U);
     CHECK(sys->paula.chipram()[fast_offset] == 0x00U);
-    CHECK(sys->cpu_bus_wait_cycles(amiga500_system::fast_ram_base + fast_offset, false, false, 0U,
+    CHECK(sys->cpu_bus_wait_cycles(amiga_system::fast_ram_base + fast_offset, false, false, 0U,
                                    0U) == 0U);
-    CHECK(sys->bus.read8(amiga500_system::fast_ram_base +
+    CHECK(sys->bus.read8(amiga_system::fast_ram_base +
                          static_cast<std::uint32_t>(sys->fast_ram.size())) == 0xFFU);
 }
 
 TEST_CASE("amiga500plus Copper location pointers use the ECS 1 MiB address width",
           "[manifests][amiga500][custom][amiga500plus]") {
-    const amiga500_config config{.model = amiga500_model::amiga500_plus};
-    auto sys = assemble_amiga500(tiny_kickstart(), config);
+    const amiga_config config{.model = amiga_model::amiga500_plus};
+    auto sys = assemble_amiga(tiny_kickstart(), config);
     REQUIRE(sys != nullptr);
 
     sys->write_custom_word(0x080U, 0x001FU); // COP1LCH
@@ -627,8 +769,8 @@ TEST_CASE("amiga500plus Copper location pointers use the ECS 1 MiB address width
 
 TEST_CASE("amiga600 Copper location pointers use the ECS 1 MiB address width",
           "[manifests][amiga500][custom][amiga600]") {
-    const amiga500_config config{.model = amiga500_model::amiga600};
-    auto sys = assemble_amiga500(tiny_kickstart(), config);
+    const amiga_config config{.model = amiga_model::amiga600};
+    auto sys = assemble_amiga(tiny_kickstart(), config);
     REQUIRE(sys != nullptr);
 
     sys->write_custom_word(0x080U, 0x001FU); // COP1LCH
@@ -644,7 +786,7 @@ TEST_CASE("amiga600 Copper location pointers use the ECS 1 MiB address width",
 
 TEST_CASE("amiga500 BPLCON0 HIRES custom register exposes 640-pixel OCS rows",
           "[manifests][amiga500][video]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     write_chip_word(*sys, 0x0000U, 0x8000U);
@@ -659,7 +801,7 @@ TEST_CASE("amiga500 BPLCON0 HIRES custom register exposes 640-pixel OCS rows",
     sys->write_custom_word(0x0E0U, 0x0000U); // BPL1PTH
     sys->write_custom_word(0x0E2U, 0x0000U); // BPL1PTL
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_bplen));
 
     sys->agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) *
@@ -673,7 +815,7 @@ TEST_CASE("amiga500 BPLCON0 HIRES custom register exposes 640-pixel OCS rows",
 }
 
 TEST_CASE("amiga500 DMACON routes audio DMA to Paula", "[manifests][amiga500]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->bus.write8(0x000100U, 0x10U);
@@ -684,7 +826,7 @@ TEST_CASE("amiga500 DMACON routes audio DMA to Paula", "[manifests][amiga500]") 
     sys->write_custom_word(0x0A6U, 0x0001U); // AUD0PER
     sys->write_custom_word(0x0A8U, 0x0040U); // AUD0VOL
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_aud0en));
 
     REQUIRE(sys->paula.channel_active(0));
@@ -695,7 +837,7 @@ TEST_CASE("amiga500 DMACON routes audio DMA to Paula", "[manifests][amiga500]") 
 
 TEST_CASE("amiga500 disk DMA streams a mounted ADF track into chip RAM",
           "[manifests][amiga500][disk]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -704,7 +846,7 @@ TEST_CASE("amiga500 disk DMA streams a mounted ADF track into chip RAM",
     sys->write_custom_word(0x022U, 0x0200U); // DSKPTL
     sys->write_custom_word(0x07EU, 0x4489U); // DSKSYNC
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_dsken));
 
     constexpr std::uint16_t words_to_read = 8U;
@@ -713,13 +855,13 @@ TEST_CASE("amiga500 disk DMA streams a mounted ADF track into chip RAM",
     sys->write_custom_word(0x024U, dsklen);
 
     CHECK(sys->chip_ram[0x0200U] == 0x00U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_dskblk) == 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) == 0U);
 
     run_scanlines(*sys, 2U);
     CHECK(sys->chip_ram[0x0200U] == 0x44U);
     CHECK(sys->chip_ram[0x0201U] == 0x89U);
     CHECK(sys->chip_ram[0x0202U] == 0x44U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_dskblk) == 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) == 0U);
     CHECK((sys->read_custom_word(0x01AU) & 0x8000U) != 0U);
 
     run_scanlines(*sys, sys->floppy_index_lines_per_revolution());
@@ -727,12 +869,12 @@ TEST_CASE("amiga500 disk DMA streams a mounted ADF track into chip RAM",
     CHECK(sys->chip_ram[0x0201U] == 0x89U);
     CHECK(sys->chip_ram[0x0202U] == 0x44U);
     CHECK(sys->chip_ram[0x0203U] == 0x89U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_dskblk) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
 }
 
 TEST_CASE("amiga500 Copper cannot arm disk DMA pointer or length registers",
           "[manifests][amiga500][disk][copper]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -748,7 +890,7 @@ TEST_CASE("amiga500 Copper cannot arm disk DMA pointer or length registers",
     write_chip_word(*sys, list + 10U, 0x4489U);
     write_chip_word(*sys, list + 12U, 0x0096U); // DMACON: enable disk DMA.
     write_chip_word(*sys, list + 14U,
-                    static_cast<std::uint16_t>(amiga500_system::setclr_bit | agnus::dmacon_dmaen |
+                    static_cast<std::uint16_t>(amiga_system::setclr_bit | agnus::dmacon_dmaen |
                                                agnus::dmacon_dsken));
     write_chip_word(*sys, list + 16U, 0x0024U); // First DSKLEN write arms DMA.
     write_chip_word(*sys, list + 18U, dsklen);
@@ -761,13 +903,13 @@ TEST_CASE("amiga500 Copper cannot arm disk DMA pointer or length registers",
     sys->write_custom_word(0x080U, 0x0000U); // COP1LCH
     sys->write_custom_word(0x082U, static_cast<std::uint16_t>(list));
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_copen));
 
     sys->agnus.tick(32U);
     CHECK(sys->read_custom_word(0x07EU) == 0x4489U);
     CHECK(sys->chip_ram[0x0200U] == 0x00U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_dskblk) == 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) == 0U);
 
     run_scanlines(*sys, 2U);
     CHECK(sys->chip_ram[0x0200U] == 0x00U);
@@ -776,11 +918,11 @@ TEST_CASE("amiga500 Copper cannot arm disk DMA pointer or length registers",
 
     run_scanlines(*sys, sys->floppy_index_lines_per_revolution());
     CHECK(sys->chip_ram[0x0203U] == 0x00U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_dskblk) == 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) == 0U);
 }
 
 TEST_CASE("amiga500 disk byte ready is paced across color clocks", "[manifests][amiga500][disk]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -821,7 +963,7 @@ TEST_CASE("amiga500 disk byte ready is paced across color clocks", "[manifests][
 
 TEST_CASE("amiga500 ADKCON WORDSYNC gates disk read DMA until DSKSYNC",
           "[manifests][amiga500][disk]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -844,9 +986,9 @@ TEST_CASE("amiga500 ADKCON WORDSYNC gates disk read DMA until DSKSYNC",
     sys->write_custom_word(0x022U, 0x0600U);
     sys->write_custom_word(0x07EU, 0x4489U);
     sys->write_custom_word(0x09EU,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit | 0x0400U));
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit | 0x0400U));
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_dsken));
 
     constexpr std::uint16_t words_to_read = 2U;
@@ -872,7 +1014,7 @@ TEST_CASE("amiga500 ADKCON WORDSYNC gates disk read DMA until DSKSYNC",
 
     run_scanlines(*sys, 2U);
     CHECK_FALSE(sys->disk_wordsync_waiting);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_dsksyn) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dsksyn) != 0U);
     CHECK(sys->chip_ram[0x0600U] == 0x00U);
 
     run_scanlines(*sys, 4U);
@@ -880,12 +1022,12 @@ TEST_CASE("amiga500 ADKCON WORDSYNC gates disk read DMA until DSKSYNC",
     CHECK(sys->chip_ram[0x0601U] == 0xBBU);
     CHECK(sys->chip_ram[0x0602U] == 0xCCU);
     CHECK(sys->chip_ram[0x0603U] == 0xDDU);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_dskblk) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
 }
 
 TEST_CASE("amiga500 disk write DMA patches and saves the raw track stream",
           "[manifests][amiga500][disk]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -898,7 +1040,7 @@ TEST_CASE("amiga500 disk write DMA patches and saves the raw track stream",
     sys->write_custom_word(0x020U, 0x0000U);
     sys->write_custom_word(0x022U, 0x0400U);
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_dsken));
 
     constexpr std::uint16_t words = 2U;
@@ -910,7 +1052,7 @@ TEST_CASE("amiga500 disk write DMA patches and saves the raw track stream",
     CHECK((dskbytr & 0x6000U) == 0x6000U);
 
     run_scanlines(*sys, 2U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_dskblk) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
 
     std::vector<std::uint8_t> blob;
     mnemos::chips::state_writer writer(blob);
@@ -922,7 +1064,7 @@ TEST_CASE("amiga500 disk write DMA patches and saves the raw track stream",
     sys->load_state(reader);
     REQUIRE(reader.ok());
 
-    sys->write_custom_word(0x09CU, amiga500_system::int_dskblk);
+    sys->write_custom_word(0x09CU, amiga_system::int_dskblk);
     reset_floppy_stream_phase(sys->floppy_drives[0]);
     sys->write_custom_word(0x020U, 0x0000U);
     sys->write_custom_word(0x022U, 0x0500U);
@@ -935,12 +1077,12 @@ TEST_CASE("amiga500 disk write DMA patches and saves the raw track stream",
     CHECK(sys->chip_ram[0x0501U] == 0xADU);
     CHECK(sys->chip_ram[0x0502U] == 0xBEU);
     CHECK(sys->chip_ram[0x0503U] == 0xEFU);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_dskblk) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
 }
 
 TEST_CASE("amiga500 disk read DMA samples raw tracks at sub-byte phase",
           "[manifests][amiga500][disk]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -969,7 +1111,7 @@ TEST_CASE("amiga500 disk read DMA samples raw tracks at sub-byte phase",
     sys->write_custom_word(0x020U, 0x0000U);
     sys->write_custom_word(0x022U, 0x0700U);
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_dsken));
 
     constexpr std::uint16_t words = 1U;
@@ -982,12 +1124,12 @@ TEST_CASE("amiga500 disk read DMA samples raw tracks at sub-byte phase",
     CHECK(sys->chip_ram[0x0701U] == 0xDEU);
     CHECK(sys->floppy_drives[0].stream_offset == 2U);
     CHECK(sys->floppy_drives[0].stream_bit_offset == 4U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_dskblk) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
 }
 
 TEST_CASE("amiga500 floppy side changes preserve rotational bit phase",
           "[manifests][amiga500][disk]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -1014,7 +1156,7 @@ TEST_CASE("amiga500 floppy side changes preserve rotational bit phase",
 
 TEST_CASE("amiga500 floppy side changes preserve in-flight raw byte shifter",
           "[manifests][amiga500][disk]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -1055,7 +1197,7 @@ TEST_CASE("amiga500 floppy side changes preserve in-flight raw byte shifter",
 
 TEST_CASE("amiga500 floppy track steps preserve in-flight raw byte shifter",
           "[manifests][amiga500][disk]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -1093,7 +1235,7 @@ TEST_CASE("amiga500 floppy track steps preserve in-flight raw byte shifter",
 
 TEST_CASE("amiga500 weak raw-track masks sample unstable bits deterministically",
           "[manifests][amiga500][disk][save]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -1143,7 +1285,7 @@ TEST_CASE("amiga500 weak raw-track masks sample unstable bits deterministically"
 
 TEST_CASE("amiga500 load state ignores stale active weak raw-track masks",
           "[manifests][amiga500][disk][save]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -1191,7 +1333,7 @@ TEST_CASE("amiga500 load state ignores stale active weak raw-track masks",
 
 TEST_CASE("amiga500 disk write DMA patches raw tracks at sub-byte phase",
           "[manifests][amiga500][disk]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -1208,7 +1350,7 @@ TEST_CASE("amiga500 disk write DMA patches raw tracks at sub-byte phase",
     sys->write_custom_word(0x020U, 0x0000U);
     sys->write_custom_word(0x022U, 0x0740U);
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_dsken));
 
     constexpr std::uint16_t words = 1U;
@@ -1222,12 +1364,12 @@ TEST_CASE("amiga500 disk write DMA patches raw tracks at sub-byte phase",
     CHECK(drive.track_stream[2] == 0xDAU);
     CHECK(drive.stream_offset == 2U);
     CHECK(drive.stream_bit_offset == 4U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_dskblk) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
 }
 
 TEST_CASE("amiga500 disk write DMA clears weak raw-track bits",
           "[manifests][amiga500][disk][save]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -1245,7 +1387,7 @@ TEST_CASE("amiga500 disk write DMA clears weak raw-track bits",
     sys->write_custom_word(0x020U, 0x0000U);
     sys->write_custom_word(0x022U, 0x0760U);
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_dsken));
 
     constexpr std::uint16_t words = 1U;
@@ -1259,7 +1401,7 @@ TEST_CASE("amiga500 disk write DMA clears weak raw-track bits",
     CHECK(drive.weak_bit_stream[0] == 0x00U);
     CHECK(drive.weak_bit_stream[1] == 0x00U);
     CHECK(drive.weak_bit_stream[2] == 0xFFU);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_dskblk) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
 
     std::vector<std::uint8_t> blob;
     mnemos::chips::state_writer writer(blob);
@@ -1280,7 +1422,7 @@ TEST_CASE("amiga500 disk write DMA clears weak raw-track bits",
 
 TEST_CASE("amiga500 disk read DMA resumes within a raw bitcell byte after save state",
           "[manifests][amiga500][disk][save]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -1301,7 +1443,7 @@ TEST_CASE("amiga500 disk read DMA resumes within a raw bitcell byte after save s
     sys->write_custom_word(0x020U, 0x0000U);
     sys->write_custom_word(0x022U, 0x0790U);
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_dsken));
 
     constexpr std::uint16_t words = 1U;
@@ -1334,16 +1476,16 @@ TEST_CASE("amiga500 disk read DMA resumes within a raw bitcell byte after save s
 
     sys->agnus.tick(4U);
     CHECK(sys->chip_ram[0x0790U] == 0xA5U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_dskblk) == 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) == 0U);
 
     sys->agnus.tick(8U);
     CHECK(sys->chip_ram[0x0791U] == 0x5AU);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_dskblk) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
 }
 
 TEST_CASE("amiga500 disk write DMA resumes within a raw bitcell byte after save state",
           "[manifests][amiga500][disk][save]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -1365,7 +1507,7 @@ TEST_CASE("amiga500 disk write DMA resumes within a raw bitcell byte after save 
     sys->write_custom_word(0x020U, 0x0000U);
     sys->write_custom_word(0x022U, 0x07A0U);
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_dsken));
 
     constexpr std::uint16_t words = 1U;
@@ -1404,18 +1546,18 @@ TEST_CASE("amiga500 disk write DMA resumes within a raw bitcell byte after save 
     sys->agnus.tick(4U);
     CHECK(loaded_drive.track_stream[0] == 0xA5U);
     CHECK(sys->disk_dma_bytes_remaining == 1U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_dskblk) == 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) == 0U);
 
     sys->agnus.tick(8U);
     CHECK(loaded_drive.track_stream[1] == 0x5AU);
     CHECK(loaded_drive.stream_offset == 2U);
     CHECK(loaded_drive.stream_bit_offset == 0U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_dskblk) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
 }
 
 TEST_CASE("amiga500 disk write DMA keeps custom raw tracks across movement and save state",
           "[manifests][amiga500][disk][save]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -1434,7 +1576,7 @@ TEST_CASE("amiga500 disk write DMA keeps custom raw tracks across movement and s
     sys->write_custom_word(0x020U, 0x0000U);
     sys->write_custom_word(0x022U, 0x0780U);
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_dsken));
 
     constexpr std::uint16_t words = 1U;
@@ -1494,7 +1636,7 @@ TEST_CASE("amiga500 disk write DMA keeps custom raw tracks across movement and s
 
 TEST_CASE("amiga500 disk write DMA decodes AmigaDOS sectors back into the ADF image",
           "[manifests][amiga500][disk]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -1503,12 +1645,12 @@ TEST_CASE("amiga500 disk write DMA decodes AmigaDOS sectors back into the ADF im
     std::vector<std::uint8_t> patched = tiny_adf();
     patched[0x0000U] = 0xA5U;
     patched[0x01FFU] = 0x5AU;
-    auto reference = assemble_amiga500(tiny_kickstart());
+    auto reference = assemble_amiga(tiny_kickstart());
     REQUIRE(reference != nullptr);
     REQUIRE(reference->mount_floppy(patched));
 
     constexpr std::size_t raw_sector_bytes =
-        4U + 10U * 4U + 2U * 8U + amiga500_system::floppy_sector_size * 2U;
+        4U + 10U * 4U + 2U * 8U + amiga_system::floppy_sector_size * 2U;
     REQUIRE(reference->floppy_drives[0].track_stream.size() >= raw_sector_bytes);
     std::copy_n(reference->floppy_drives[0].track_stream.begin(), raw_sector_bytes,
                 sys->chip_ram.begin() + 0x0800U);
@@ -1517,7 +1659,7 @@ TEST_CASE("amiga500 disk write DMA decodes AmigaDOS sectors back into the ADF im
     sys->write_custom_word(0x020U, 0x0000U);
     sys->write_custom_word(0x022U, 0x0800U);
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_dsken));
 
     constexpr std::uint16_t words = static_cast<std::uint16_t>(raw_sector_bytes / 2U);
@@ -1527,8 +1669,8 @@ TEST_CASE("amiga500 disk write DMA decodes AmigaDOS sectors back into the ADF im
 
     run_scanlines(*sys, sys->floppy_index_lines_per_revolution());
 
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_dskblk) != 0U);
-    REQUIRE(sys->floppy_drives[0].image.size() == amiga500_system::floppy_dd_size);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
+    REQUIRE(sys->floppy_drives[0].image.size() == amiga_system::floppy_dd_size);
     CHECK(sys->floppy_drives[0].image[0x0000U] == 0xA5U);
     CHECK(sys->floppy_drives[0].image[0x01FFU] == 0x5AU);
 
@@ -1544,13 +1686,13 @@ TEST_CASE("amiga500 disk write DMA decodes AmigaDOS sectors back into the ADF im
     mnemos::chips::state_reader reader(blob);
     sys->load_state(reader);
     REQUIRE(reader.ok());
-    REQUIRE(sys->floppy_drives[0].image.size() == amiga500_system::floppy_dd_size);
+    REQUIRE(sys->floppy_drives[0].image.size() == amiga_system::floppy_dd_size);
     CHECK(sys->floppy_drives[0].image[0x0000U] == 0xA5U);
     CHECK(sys->floppy_drives[0].image[0x01FFU] == 0x5AU);
 }
 
 TEST_CASE("amiga500 paced disk DMA survives system save state", "[manifests][amiga500][disk]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -1558,7 +1700,7 @@ TEST_CASE("amiga500 paced disk DMA survives system save state", "[manifests][ami
     sys->write_custom_word(0x020U, 0x0000U);
     sys->write_custom_word(0x022U, 0x0300U);
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_dsken));
     constexpr std::uint16_t words_to_read = 8U;
     const std::uint16_t dsklen = static_cast<std::uint16_t>(0x8000U | words_to_read);
@@ -1584,11 +1726,11 @@ TEST_CASE("amiga500 paced disk DMA survives system save state", "[manifests][ami
     CHECK(sys->chip_ram[0x0301U] == 0x89U);
     CHECK(sys->chip_ram[0x0302U] == 0x44U);
     CHECK(sys->chip_ram[0x0303U] == 0x89U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_dskblk) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
 }
 
 TEST_CASE("amiga500 CIAB disk control steps the mounted ADF drive", "[manifests][amiga500][disk]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
 
@@ -1609,12 +1751,12 @@ TEST_CASE("amiga500 CIAB disk control steps the mounted ADF drive", "[manifests]
 
 TEST_CASE("amiga500 CIAB disk control only follows PRB lines driven by DDRB",
           "[manifests][amiga500][disk][cia]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
 
     sys->cia_b.write(0x01U, 0x75U);
-    CHECK(sys->selected_floppy_drive() == amiga500_system::no_floppy_drive);
+    CHECK(sys->selected_floppy_drive() == amiga_system::no_floppy_drive);
     CHECK_FALSE(sys->floppy_motor_on);
 
     sys->cia_b.write(0x03U, 0xFFU);
@@ -1624,14 +1766,14 @@ TEST_CASE("amiga500 CIAB disk control only follows PRB lines driven by DDRB",
 
 TEST_CASE("amiga500 CIAB disk motor state latches when a drive is selected",
           "[manifests][amiga500][disk][cia][save]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
 
     sys->cia_b.write(0x01U, 0xFFU);
     sys->cia_b.write(0x03U, 0xFFU);
     sys->cia_b.write(0x01U, 0x7FU); // /MTR=0 with no drive selected.
-    CHECK(sys->selected_floppy_drive() == amiga500_system::no_floppy_drive);
+    CHECK(sys->selected_floppy_drive() == amiga_system::no_floppy_drive);
     CHECK_FALSE(sys->floppy_drives[0].motor_on);
     CHECK_FALSE(sys->floppy_motor_on);
 
@@ -1642,7 +1784,7 @@ TEST_CASE("amiga500 CIAB disk motor state latches when a drive is selected",
     CHECK((sys->cia_a.read(0x00U) & 0x20U) == 0U);
 
     sys->cia_b.write(0x01U, 0xFFU); // Deselecting all drives does not relatch /MTR=1.
-    CHECK(sys->selected_floppy_drive() == amiga500_system::no_floppy_drive);
+    CHECK(sys->selected_floppy_drive() == amiga_system::no_floppy_drive);
     CHECK(sys->floppy_drives[0].motor_on);
     CHECK_FALSE(sys->floppy_motor_on);
 
@@ -1659,7 +1801,7 @@ TEST_CASE("amiga500 CIAB disk motor state latches when a drive is selected",
     mnemos::chips::state_reader reader(blob);
     sys->load_state(reader);
     REQUIRE(reader.ok());
-    CHECK(sys->selected_floppy_drive() == amiga500_system::no_floppy_drive);
+    CHECK(sys->selected_floppy_drive() == amiga_system::no_floppy_drive);
     CHECK(sys->floppy_drives[0].motor_on);
     CHECK_FALSE(sys->floppy_motor_on);
 
@@ -1680,7 +1822,7 @@ TEST_CASE("amiga500 CIAB disk motor state latches when a drive is selected",
 
 TEST_CASE("amiga500 CIAB disk select lines address independent DF0-DF3 state",
           "[manifests][amiga500][disk]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(0U, tiny_adf()));
     REQUIRE(sys->mount_floppy(1U, tiny_adf()));
@@ -1709,7 +1851,7 @@ TEST_CASE("amiga500 CIAB disk select lines address independent DF0-DF3 state",
 
 TEST_CASE("amiga500 absent external floppy drives leave CIAA disk sense lines high",
           "[manifests][amiga500][disk][cia]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     select_df1(*sys);
@@ -1728,7 +1870,7 @@ TEST_CASE("amiga500 absent external floppy drives leave CIAA disk sense lines hi
 
 TEST_CASE("amiga500 multidrive selection survives system save state",
           "[manifests][amiga500][disk][save]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(0U, tiny_adf()));
     REQUIRE(sys->mount_floppy(1U, tiny_adf()));
@@ -1756,7 +1898,7 @@ TEST_CASE("amiga500 multidrive selection survives system save state",
 
 TEST_CASE("amiga500 CIAA disk change latch clears after a selected step",
           "[manifests][amiga500][disk]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     select_df0(*sys);
@@ -1778,7 +1920,7 @@ TEST_CASE("amiga500 CIAA disk change latch clears after a selected step",
 
 TEST_CASE("amiga500 selected disk rotation pulses CIAB FLAG at index",
           "[manifests][amiga500][disk]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -1803,7 +1945,7 @@ TEST_CASE("amiga500 selected disk rotation pulses CIAB FLAG at index",
 }
 
 TEST_CASE("amiga500 floppy index phase survives system save state", "[manifests][amiga500][disk]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
@@ -1828,64 +1970,64 @@ TEST_CASE("amiga500 floppy index phase survives system save state", "[manifests]
 }
 
 TEST_CASE("amiga500 vblank requests a level-3 interrupt source", "[manifests][amiga500]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
-    sys->write_custom_word(0x09AU, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
-                                                              amiga500_system::int_master |
-                                                              amiga500_system::int_vertb));
+    sys->write_custom_word(0x09AU, static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                              amiga_system::int_master |
+                                                              amiga_system::int_vertb));
     sys->agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) *
                     sys->agnus.active_height());
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_vertb) == 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_vertb) == 0U);
     CHECK(sys->frame_index == 0U);
 
     sys->agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) *
                     (agnus::scanlines_pal - sys->agnus.active_height()));
 
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_vertb) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_vertb) != 0U);
     CHECK(sys->frame_index == 1U);
 }
 
 TEST_CASE("amiga500 custom MMIO keeps word writes atomic and byte writes lane-local",
           "[manifests][amiga500][interrupt]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
-    constexpr std::uint32_t intena_addr = amiga500_system::custom_base + 0x09AU;
+    constexpr std::uint32_t intena_addr = amiga_system::custom_base + 0x09AU;
     constexpr std::uint16_t enabled =
-        amiga500_system::int_master | amiga500_system::int_exter |
-        amiga500_system::int_ports | amiga500_system::int_soft | amiga500_system::int_vertb;
+        amiga_system::int_master | amiga_system::int_exter |
+        amiga_system::int_ports | amiga_system::int_soft | amiga_system::int_vertb;
 
     sys->bus.write16_be(intena_addr,
-                        static_cast<std::uint16_t>(amiga500_system::setclr_bit | enabled));
+                        static_cast<std::uint16_t>(amiga_system::setclr_bit | enabled));
     CHECK(sys->read_custom_word(0x01CU) == enabled);
 
     sys->custom_high_latch = 0x4000U;
     sys->bus.write8(intena_addr + 1U,
-                    static_cast<std::uint8_t>(amiga500_system::int_vertb));
-    CHECK((sys->read_custom_word(0x01CU) & amiga500_system::int_master) != 0U);
-    CHECK((sys->read_custom_word(0x01CU) & amiga500_system::int_vertb) == 0U);
+                    static_cast<std::uint8_t>(amiga_system::int_vertb));
+    CHECK((sys->read_custom_word(0x01CU) & amiga_system::int_master) != 0U);
+    CHECK((sys->read_custom_word(0x01CU) & amiga_system::int_vertb) == 0U);
 
     sys->bus.write8(intena_addr, 0x40U);
-    CHECK((sys->read_custom_word(0x01CU) & amiga500_system::int_master) == 0U);
+    CHECK((sys->read_custom_word(0x01CU) & amiga_system::int_master) == 0U);
     sys->bus.write8(intena_addr, 0xC0U);
-    CHECK((sys->read_custom_word(0x01CU) & amiga500_system::int_master) != 0U);
+    CHECK((sys->read_custom_word(0x01CU) & amiga_system::int_master) != 0U);
 }
 
 TEST_CASE("amiga500 visible INTREQ exposes CIA lines and INTENA gates their CPU level",
           "[manifests][amiga500][cia][interrupt]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     constexpr std::uint32_t code_offset = 0x0100U;
     constexpr std::uint32_t level2_vector_offset = (24U + 2U) * 4U;
-    constexpr std::uint32_t level2_handler = amiga500_system::kickstart_base + 0x0200U;
+    constexpr std::uint32_t level2_handler = amiga_system::kickstart_base + 0x0200U;
     write_kickstart_word(*sys, code_offset, 0x4E71U); // NOP.
     write_kickstart_long(*sys, level2_vector_offset, level2_handler);
     write_kickstart_word(*sys, 0x0200U, 0x4E73U); // RTE if the handler is executed later.
 
     auto regs = sys->cpu.cpu_registers();
-    regs.pc = amiga500_system::kickstart_base + code_offset;
+    regs.pc = amiga_system::kickstart_base + code_offset;
     regs.sr = mnemos::chips::cpu::m68000::sr_s;
     sys->cpu.set_registers(regs);
 
@@ -1893,30 +2035,30 @@ TEST_CASE("amiga500 visible INTREQ exposes CIA lines and INTENA gates their CPU 
     sys->cia_a.flag_edge();
     sys->cia_a.tick(1U);
     REQUIRE(sys->cia_a.irq_asserted());
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_ports) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_ports) != 0U);
 
-    sys->write_custom_word(0x09AU, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
-                                                             amiga500_system::int_master));
+    sys->write_custom_word(0x09AU, static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                             amiga_system::int_master));
     sys->cpu.step_instruction();
-    CHECK(sys->cpu.cpu_registers().pc == amiga500_system::kickstart_base + code_offset + 2U);
+    CHECK(sys->cpu.cpu_registers().pc == amiga_system::kickstart_base + code_offset + 2U);
 
-    sys->write_custom_word(0x09AU, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
-                                                             amiga500_system::int_ports));
+    sys->write_custom_word(0x09AU, static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                             amiga_system::int_ports));
     sys->cpu.step_instruction();
     CHECK(sys->cpu.cpu_registers().pc == level2_handler);
 
     static_cast<void>(sys->cia_a.read(0x0DU));
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_ports) == 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_ports) == 0U);
 
     sys->cia_b.write(0x0DU, 0x90U);
     sys->cia_b.flag_edge();
     sys->cia_b.tick(1U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_exter) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_exter) != 0U);
 }
 
 TEST_CASE("amiga500 CIA-A Timer B one-shot reaches the custom PORTS interrupt",
           "[manifests][amiga500][cia][interrupt]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     mnemos::runtime::scheduler scheduler({{&sys->agnus, 2U},
@@ -1926,29 +2068,29 @@ TEST_CASE("amiga500 CIA-A Timer B one-shot reaches the custom PORTS interrupt",
                                           {&sys->cia_b, 10U}},
                                          &sys->agnus);
 
-    constexpr std::uint32_t ciaa = amiga500_system::cia_a_base;
+    constexpr std::uint32_t ciaa = amiga_system::cia_a_base;
     sys->bus.write8(ciaa + 0x0D01U, 0x82U); // ICR: enable Timer B mask.
     sys->bus.write8(ciaa + 0x0F01U, 0x08U); // CRB: one-shot, START clear.
     sys->bus.write8(ciaa + 0x0601U, 0xFFU);
     sys->bus.write8(ciaa + 0x0701U, 0xFFU); // 8520 high-byte write starts one-shot.
     sys->write_custom_word(0x09AU,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
-                                                      amiga500_system::int_master |
-                                                      amiga500_system::int_ports));
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                      amiga_system::int_master |
+                                                      amiga_system::int_ports));
 
     constexpr std::uint64_t one_shot_master_cycles = 65537ULL * 10ULL;
     scheduler.run_master_cycles(one_shot_master_cycles - 10ULL);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_ports) == 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_ports) == 0U);
 
     scheduler.run_master_cycles(20ULL);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_ports) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_ports) != 0U);
     CHECK((sys->bus.read8(ciaa + 0x0D01U) & 0x82U) == 0x82U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_ports) == 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_ports) == 0U);
 }
 
 TEST_CASE("amiga500 Copper MOVEs update board-owned custom registers",
           "[manifests][amiga500][copper]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     constexpr std::uint32_t list = 0x0100U;
@@ -1957,22 +2099,22 @@ TEST_CASE("amiga500 Copper MOVEs update board-owned custom registers",
     write_chip_word(*sys, list + 4U, 0x009CU); // INTREQ = COPER.
     write_chip_word(
         *sys, list + 6U,
-        static_cast<std::uint16_t>(amiga500_system::setclr_bit | amiga500_system::int_coper));
+        static_cast<std::uint16_t>(amiga_system::setclr_bit | amiga_system::int_coper));
     write_chip_word(*sys, list + 8U, 0xFFFFU);
     write_chip_word(*sys, list + 10U, 0xFFFEU);
 
     sys->write_custom_word(0x080U, 0x0000U); // COP1LCH
     sys->write_custom_word(0x082U, static_cast<std::uint16_t>(list));
-    sys->write_custom_word(0x09AU, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
-                                                              amiga500_system::int_master |
-                                                              amiga500_system::int_coper));
+    sys->write_custom_word(0x09AU, static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                              amiga_system::int_master |
+                                                              amiga_system::int_coper));
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_copen));
 
     sys->agnus.tick(pal_vblank_exit_ticks + 8U);
     CHECK(sys->read_custom_word(0x180U) == 0x00F0U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_coper) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_coper) != 0U);
 
     sys->agnus.tick((static_cast<std::uint64_t>(agnus::color_clocks_per_line) *
                      agnus::scanlines_pal) -
@@ -1982,7 +2124,7 @@ TEST_CASE("amiga500 Copper MOVEs update board-owned custom registers",
 
 TEST_CASE("amiga500 Copper can program blitter registers with CDANG",
           "[manifests][amiga500][copper][blitter]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     write_chip_word(*sys, 0x0100U, 0x1234U);
@@ -2000,7 +2142,7 @@ TEST_CASE("amiga500 Copper can program blitter registers with CDANG",
     write_chip_word(*sys, list + 18U, 0x09F0U);
     write_chip_word(*sys, list + 20U, 0x0096U); // DMACON: enable blitter DMA.
     write_chip_word(*sys, list + 22U,
-                    static_cast<std::uint16_t>(amiga500_system::setclr_bit | agnus::dmacon_dmaen |
+                    static_cast<std::uint16_t>(amiga_system::setclr_bit | agnus::dmacon_dmaen |
                                                agnus::dmacon_blten));
     write_chip_word(*sys, list + 24U, 0x0058U); // BLTSIZE: one row, one word.
     write_chip_word(*sys, list + 26U, 0x0041U);
@@ -2011,7 +2153,7 @@ TEST_CASE("amiga500 Copper can program blitter registers with CDANG",
     sys->write_custom_word(0x080U, 0x0000U); // COP1LCH
     sys->write_custom_word(0x082U, static_cast<std::uint16_t>(list));
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_copen));
 
     sys->agnus.tick(pal_vblank_exit_ticks + 40U);
@@ -2024,7 +2166,7 @@ TEST_CASE("amiga500 Copper can program blitter registers with CDANG",
 
 TEST_CASE("amiga500 Copper BFD waits hold behind the live board blitter",
           "[manifests][amiga500][copper][blitter][timing]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     constexpr std::uint32_t list = 0x0300U;
@@ -2038,7 +2180,7 @@ TEST_CASE("amiga500 Copper BFD waits hold behind the live board blitter",
     sys->write_custom_word(0x080U, 0x0000U);
     sys->write_custom_word(0x082U, static_cast<std::uint16_t>(list));
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_copen |
                                                       agnus::dmacon_blten));
     sys->blitter_cycles_remaining = 2U;
@@ -2067,7 +2209,7 @@ TEST_CASE("amiga500 Copper BFD waits hold behind the live board blitter",
 
 TEST_CASE("amiga500 blitter copies A channel words to D through BLTSIZE",
           "[manifests][amiga500][blitter]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     write_chip_word(*sys, 0x0100U, 0x1234U);
@@ -2077,28 +2219,28 @@ TEST_CASE("amiga500 blitter copies A channel words to D through BLTSIZE",
     sys->write_custom_word(0x056U, 0x0200U); // BLTDPTL
     sys->write_custom_word(0x040U, 0x09F0U); // USEA|USED, minterm D=A.
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_blten));
-    sys->write_custom_word(0x09AU, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
-                                                              amiga500_system::int_master |
-                                                              amiga500_system::int_blit));
+    sys->write_custom_word(0x09AU, static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                              amiga_system::int_master |
+                                                              amiga_system::int_blit));
 
     sys->write_custom_word(0x058U, 0x0041U); // one row, one word.
 
     CHECK((sys->read_custom_word(0x002U) & agnus::dmacon_bbusy) != 0U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_blit) == 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_blit) == 0U);
     run_blitter_to_idle(*sys);
 
     CHECK(read_chip_word(*sys, 0x0200U) == 0x1234U);
     CHECK(sys->read_custom_word(0x076U) == 0x1234U);
     CHECK((sys->read_custom_word(0x002U) & agnus::dmacon_bbusy) == 0U);
     CHECK((sys->read_custom_word(0x002U) & agnus::dmacon_bzero) == 0U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_blit) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_blit) != 0U);
 }
 
 TEST_CASE("amiga500 blitter keeps BBUSY and BLIT IRQ timing across save state",
           "[manifests][amiga500][blitter][state]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     write_chip_word(*sys, 0x0100U, 0x5678U);
@@ -2108,11 +2250,11 @@ TEST_CASE("amiga500 blitter keeps BBUSY and BLIT IRQ timing across save state",
     sys->write_custom_word(0x056U, 0x0200U);
     sys->write_custom_word(0x040U, 0x09F0U); // USEA|USED, minterm D=A.
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_blten));
-    sys->write_custom_word(0x09AU, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
-                                                              amiga500_system::int_master |
-                                                              amiga500_system::int_blit));
+    sys->write_custom_word(0x09AU, static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                              amiga_system::int_master |
+                                                              amiga_system::int_blit));
 
     sys->write_custom_word(0x058U, 0x0041U);
     REQUIRE((sys->read_custom_word(0x002U) & agnus::dmacon_bbusy) != 0U);
@@ -2124,23 +2266,23 @@ TEST_CASE("amiga500 blitter keeps BBUSY and BLIT IRQ timing across save state",
 
     sys->blitter_cycles_remaining = 0U;
     sys->agnus.set_blitter_busy(false);
-    sys->write_custom_word(0x09CU, static_cast<std::uint16_t>(amiga500_system::int_blit));
+    sys->write_custom_word(0x09CU, static_cast<std::uint16_t>(amiga_system::int_blit));
 
     mnemos::chips::state_reader reader(blob);
     sys->load_state(reader);
     REQUIRE(reader.ok());
     CHECK((sys->read_custom_word(0x002U) & agnus::dmacon_bbusy) != 0U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_blit) == 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_blit) == 0U);
 
     sys->agnus.tick(1U);
     CHECK((sys->read_custom_word(0x002U) & agnus::dmacon_bbusy) == 0U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_blit) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_blit) != 0U);
     CHECK(read_chip_word(*sys, 0x0200U) == 0x5678U);
 }
 
 TEST_CASE("amiga500 display DMA stalls blitter busy countdown",
           "[manifests][amiga500][blitter][timing]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->write_custom_word(0x100U, 0xC000U); // HIRES | BPU = 4.
@@ -2149,11 +2291,11 @@ TEST_CASE("amiga500 display DMA stalls blitter busy countdown",
     sys->write_custom_word(0x092U, 0x003CU);
     sys->write_custom_word(0x094U, 0x00D4U);
     sys->write_custom_word(
-        0x096U, static_cast<std::uint16_t>(amiga500_system::setclr_bit | agnus::dmacon_dmaen |
+        0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit | agnus::dmacon_dmaen |
                                            agnus::dmacon_bplen | agnus::dmacon_blten));
-    sys->write_custom_word(0x09AU, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
-                                                              amiga500_system::int_master |
-                                                              amiga500_system::int_blit));
+    sys->write_custom_word(0x09AU, static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                              amiga_system::int_master |
+                                                              amiga_system::int_blit));
 
     constexpr std::uint32_t blocked_clock = 0x50U;
     constexpr std::uint32_t display_fetch_end = 0x3CU + 40U * 4U;
@@ -2167,18 +2309,18 @@ TEST_CASE("amiga500 display DMA stalls blitter busy countdown",
     sys->agnus.tick(1U);
     CHECK(sys->blitter_cycles_remaining == 1U);
     CHECK((sys->read_custom_word(0x002U) & agnus::dmacon_bbusy) != 0U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_blit) == 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_blit) == 0U);
 
     sys->agnus.tick(display_fetch_end - blocked_clock);
     CHECK(sys->blitter_cycles_remaining == 0U);
     CHECK((sys->read_custom_word(0x002U) & agnus::dmacon_bbusy) == 0U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_blit) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_blit) != 0U);
 }
 
 TEST_CASE("amiga500 BLTPRI stalls CPU chip-RAM bus cycles while blitter DMA is busy",
           "[manifests][amiga500][blitter][timing]") {
     auto run_move_with_blitter_priority = [](bool blitter_priority) {
-        auto sys = assemble_amiga500(tiny_kickstart());
+        auto sys = assemble_amiga(tiny_kickstart());
         REQUIRE(sys != nullptr);
 
         constexpr std::uint32_t code_offset = 0x0100U;
@@ -2188,12 +2330,12 @@ TEST_CASE("amiga500 BLTPRI stalls CPU chip-RAM bus cycles while blitter DMA is b
         sys->overlay_active = false;
 
         auto regs = sys->cpu.cpu_registers();
-        regs.pc = amiga500_system::kickstart_base + code_offset;
+        regs.pc = amiga_system::kickstart_base + code_offset;
         regs.a[0] = data_address;
         sys->cpu.set_registers(regs);
 
         sys->write_custom_word(
-            0x096U, static_cast<std::uint16_t>(amiga500_system::setclr_bit | agnus::dmacon_dmaen |
+            0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit | agnus::dmacon_dmaen |
                                                agnus::dmacon_blten |
                                                (blitter_priority ? agnus::dmacon_bltpri : 0U)));
         sys->write_custom_word(0x040U, 0x0100U); // D channel only.
@@ -2217,7 +2359,7 @@ TEST_CASE("amiga500 BLTPRI stalls CPU chip-RAM bus cycles while blitter DMA is b
 
 TEST_CASE("amiga500 BLTPRI waits behind display-owned DMA slots",
           "[manifests][amiga500][blitter][timing]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->overlay_active = false;
@@ -2233,7 +2375,7 @@ TEST_CASE("amiga500 BLTPRI waits behind display-owned DMA slots",
                     blocked_clock);
 
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_bplen |
                                                       agnus::dmacon_blten | agnus::dmacon_bltpri));
     sys->write_custom_word(0x040U, 0x0100U); // D channel only.
@@ -2247,7 +2389,7 @@ TEST_CASE("amiga500 BLTPRI waits behind display-owned DMA slots",
 TEST_CASE("amiga500 BLTPRI charges one lockout across CPU longword chip-RAM transfers",
           "[manifests][amiga500][blitter][timing]") {
     auto run_move_long_with_blitter_priority = [](bool blitter_priority) {
-        auto sys = assemble_amiga500(tiny_kickstart());
+        auto sys = assemble_amiga(tiny_kickstart());
         REQUIRE(sys != nullptr);
 
         constexpr std::uint32_t code_offset = 0x0110U;
@@ -2258,12 +2400,12 @@ TEST_CASE("amiga500 BLTPRI charges one lockout across CPU longword chip-RAM tran
         sys->overlay_active = false;
 
         auto regs = sys->cpu.cpu_registers();
-        regs.pc = amiga500_system::kickstart_base + code_offset;
+        regs.pc = amiga_system::kickstart_base + code_offset;
         regs.a[0] = data_address;
         sys->cpu.set_registers(regs);
 
         sys->write_custom_word(
-            0x096U, static_cast<std::uint16_t>(amiga500_system::setclr_bit | agnus::dmacon_dmaen |
+            0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit | agnus::dmacon_dmaen |
                                                agnus::dmacon_blten |
                                                (blitter_priority ? agnus::dmacon_bltpri : 0U)));
         sys->write_custom_word(0x040U, 0x0100U); // D channel only.
@@ -2289,7 +2431,7 @@ TEST_CASE("amiga500 high-resolution display DMA stalls CPU chip-RAM bus cycles d
           "[manifests][amiga500][video][timing]") {
     auto run_move_during_display_fetch = [](std::uint16_t bplcon0, bool blitter_busy = false,
                                             std::uint16_t bplcon1 = 0U) {
-        auto sys = assemble_amiga500(tiny_kickstart());
+        auto sys = assemble_amiga(tiny_kickstart());
         REQUIRE(sys != nullptr);
 
         constexpr std::uint32_t code_offset = 0x0120U;
@@ -2305,21 +2447,21 @@ TEST_CASE("amiga500 high-resolution display DMA stalls CPU chip-RAM bus cycles d
         sys->write_custom_word(0x090U, 0xF4C1U);
         sys->write_custom_word(0x092U, 0x003CU);
         sys->write_custom_word(0x094U, 0x00D4U);
-        sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+        sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                                   agnus::dmacon_dmaen |
                                                                   agnus::dmacon_bplen));
         sys->agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) *
                             agnus::display_line_origin +
                         fetch_clock);
         if (blitter_busy) {
-            sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+            sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                                       agnus::dmacon_blten));
             sys->write_custom_word(0x040U, 0x0100U); // D channel only.
             sys->write_custom_word(0x058U, static_cast<std::uint16_t>((5U << 6U) | 4U));
         }
 
         auto regs = sys->cpu.cpu_registers();
-        regs.pc = amiga500_system::kickstart_base + code_offset;
+        regs.pc = amiga_system::kickstart_base + code_offset;
         regs.a[0] = data_address;
         sys->cpu.set_registers(regs);
 
@@ -2363,7 +2505,7 @@ TEST_CASE("amiga500 high-resolution display DMA stalls CPU chip-RAM bus cycles d
 TEST_CASE("amiga500 high-resolution display DMA charges one lockout across longword transfers",
           "[manifests][amiga500][video][timing]") {
     auto run_move_long_during_display_fetch = [](std::uint16_t bplcon0) {
-        auto sys = assemble_amiga500(tiny_kickstart());
+        auto sys = assemble_amiga(tiny_kickstart());
         REQUIRE(sys != nullptr);
 
         constexpr std::uint32_t code_offset = 0x0140U;
@@ -2379,7 +2521,7 @@ TEST_CASE("amiga500 high-resolution display DMA charges one lockout across longw
         sys->write_custom_word(0x090U, 0xF4C1U);
         sys->write_custom_word(0x092U, 0x003CU);
         sys->write_custom_word(0x094U, 0x00D4U);
-        sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+        sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                                   agnus::dmacon_dmaen |
                                                                   agnus::dmacon_bplen));
         sys->agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) *
@@ -2387,7 +2529,7 @@ TEST_CASE("amiga500 high-resolution display DMA charges one lockout across longw
                         fetch_clock);
 
         auto regs = sys->cpu.cpu_registers();
-        regs.pc = amiga500_system::kickstart_base + code_offset;
+        regs.pc = amiga_system::kickstart_base + code_offset;
         regs.a[0] = data_address;
         sys->cpu.set_registers(regs);
 
@@ -2418,7 +2560,7 @@ TEST_CASE("amiga500 high-resolution display DMA charges one lockout across longw
 
 TEST_CASE("amiga500 display DMA wait is already residual after prior instruction waits",
           "[manifests][amiga500][video][timing]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     constexpr std::uint32_t data_address = 0x0280U;
@@ -2433,7 +2575,7 @@ TEST_CASE("amiga500 display DMA wait is already residual after prior instruction
     sys->write_custom_word(0x092U, 0x003CU);
     sys->write_custom_word(0x094U, 0x00D4U);
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_bplen));
     sys->agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) *
                         agnus::display_line_origin +
@@ -2455,7 +2597,7 @@ TEST_CASE("amiga500 six-plane low-resolution display DMA steals CPU-open slots",
     auto run_move_during_display_fetch = [](std::uint16_t bplcon0, std::uint16_t opcode,
                                             std::uint32_t fetch_clock, bool blitter_busy = false,
                                             std::uint16_t bplcon1 = 0U) {
-        auto sys = assemble_amiga500(tiny_kickstart());
+        auto sys = assemble_amiga(tiny_kickstart());
         REQUIRE(sys != nullptr);
 
         constexpr std::uint32_t code_offset = 0x0160U;
@@ -2471,21 +2613,21 @@ TEST_CASE("amiga500 six-plane low-resolution display DMA steals CPU-open slots",
         sys->write_custom_word(0x090U, 0xF4C1U);
         sys->write_custom_word(0x092U, 0x0038U);
         sys->write_custom_word(0x094U, 0x00D0U);
-        sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+        sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                                   agnus::dmacon_dmaen |
                                                                   agnus::dmacon_bplen));
         sys->agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) *
                             agnus::display_line_origin +
                         fetch_clock);
         if (blitter_busy) {
-            sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+            sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                                       agnus::dmacon_blten));
             sys->write_custom_word(0x040U, 0x0100U); // D channel only.
             sys->write_custom_word(0x058U, static_cast<std::uint16_t>((5U << 6U) | 4U));
         }
 
         auto regs = sys->cpu.cpu_registers();
-        regs.pc = amiga500_system::kickstart_base + code_offset;
+        regs.pc = amiga_system::kickstart_base + code_offset;
         regs.a[0] = data_address;
         sys->cpu.set_registers(regs);
 
@@ -2536,7 +2678,7 @@ TEST_CASE("amiga500 sprite DMA stalls CPU chip-RAM bus cycles during sprite slot
           "[manifests][amiga500][video][timing]") {
     auto run_move_during_sprite_slot = [](bool sprite_dma_enabled, std::uint32_t fetch_clock,
                                           std::uint32_t visible_line = 0U) {
-        auto sys = assemble_amiga500(tiny_kickstart());
+        auto sys = assemble_amiga(tiny_kickstart());
         REQUIRE(sys != nullptr);
 
         constexpr std::uint32_t code_offset = 0x01A0U;
@@ -2555,7 +2697,7 @@ TEST_CASE("amiga500 sprite DMA stalls CPU chip-RAM bus cycles during sprite slot
         sys->write_custom_word(0x120U, 0x0000U);
         sys->write_custom_word(0x122U, static_cast<std::uint16_t>(sprite_base));
         sys->write_custom_word(
-            0x096U, static_cast<std::uint16_t>(amiga500_system::setclr_bit | agnus::dmacon_dmaen |
+            0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit | agnus::dmacon_dmaen |
                                                (sprite_dma_enabled ? agnus::dmacon_spren : 0U)));
 
         sys->agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) *
@@ -2563,7 +2705,7 @@ TEST_CASE("amiga500 sprite DMA stalls CPU chip-RAM bus cycles during sprite slot
                         fetch_clock);
 
         auto regs = sys->cpu.cpu_registers();
-        regs.pc = amiga500_system::kickstart_base + code_offset;
+        regs.pc = amiga_system::kickstart_base + code_offset;
         regs.a[0] = data_address;
         sys->cpu.set_registers(regs);
 
@@ -2596,7 +2738,7 @@ TEST_CASE("amiga500 three-plane high-resolution display DMA steals CPU-open slot
           "[manifests][amiga500][video][timing]") {
     auto run_move_during_display_fetch = [](std::uint16_t bplcon0, std::uint16_t opcode,
                                             std::uint32_t fetch_clock = 0x3CU) {
-        auto sys = assemble_amiga500(tiny_kickstart());
+        auto sys = assemble_amiga(tiny_kickstart());
         REQUIRE(sys != nullptr);
 
         constexpr std::uint32_t code_offset = 0x0180U;
@@ -2611,7 +2753,7 @@ TEST_CASE("amiga500 three-plane high-resolution display DMA steals CPU-open slot
         sys->write_custom_word(0x090U, 0xF4C1U);
         sys->write_custom_word(0x092U, 0x003CU);
         sys->write_custom_word(0x094U, 0x00D4U);
-        sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+        sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                                   agnus::dmacon_dmaen |
                                                                   agnus::dmacon_bplen));
         sys->agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) *
@@ -2619,7 +2761,7 @@ TEST_CASE("amiga500 three-plane high-resolution display DMA steals CPU-open slot
                         fetch_clock);
 
         auto regs = sys->cpu.cpu_registers();
-        regs.pc = amiga500_system::kickstart_base + code_offset;
+        regs.pc = amiga_system::kickstart_base + code_offset;
         regs.a[0] = data_address;
         sys->cpu.set_registers(regs);
 
@@ -2649,7 +2791,7 @@ TEST_CASE("amiga500 three-plane high-resolution display DMA steals CPU-open slot
 
 TEST_CASE("amiga500 blitter applies first-word masks and minterms",
           "[manifests][amiga500][blitter]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     write_chip_word(*sys, 0x0100U, 0xFFFFU); // A mask source, restricted by BLTAFWM.
@@ -2667,7 +2809,7 @@ TEST_CASE("amiga500 blitter applies first-word masks and minterms",
     sys->write_custom_word(0x056U, 0x0120U);
     sys->write_custom_word(0x040U, 0x0FCAU); // USEA|USEB|USEC|USED, D=(A&B)|(~A&C).
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_blten));
 
     sys->write_custom_word(0x058U, 0x0041U);
@@ -2680,7 +2822,7 @@ TEST_CASE("amiga500 blitter applies first-word masks and minterms",
 
 TEST_CASE("amiga500 blitter performs inclusive area fill from the right edge",
           "[manifests][amiga500][blitter]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     write_chip_word(*sys, 0x0100U, 0x2418U);
@@ -2693,7 +2835,7 @@ TEST_CASE("amiga500 blitter performs inclusive area fill from the right edge",
     sys->write_custom_word(0x040U, 0x09F0U); // USEA|USED, minterm D=A.
     sys->write_custom_word(0x042U, 0x000AU); // IFE|DESC: inclusive fill scans right-to-left.
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_blten));
 
     sys->write_custom_word(0x058U, 0x0041U);
@@ -2705,7 +2847,7 @@ TEST_CASE("amiga500 blitter performs inclusive area fill from the right edge",
 
 TEST_CASE("amiga500 blitter performs exclusive area fill from the right edge",
           "[manifests][amiga500][blitter]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     write_chip_word(*sys, 0x0100U, 0x2418U);
@@ -2718,7 +2860,7 @@ TEST_CASE("amiga500 blitter performs exclusive area fill from the right edge",
     sys->write_custom_word(0x040U, 0x09F0U); // USEA|USED, minterm D=A.
     sys->write_custom_word(0x042U, 0x0012U); // EFE|DESC: exclusive fill scans right-to-left.
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_blten));
 
     sys->write_custom_word(0x058U, 0x0041U);
@@ -2729,7 +2871,7 @@ TEST_CASE("amiga500 blitter performs exclusive area fill from the right edge",
 }
 
 TEST_CASE("amiga500 blitter area fill honors fill carry input", "[manifests][amiga500][blitter]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     write_chip_word(*sys, 0x0100U, 0x0000U);
@@ -2740,7 +2882,7 @@ TEST_CASE("amiga500 blitter area fill honors fill carry input", "[manifests][ami
     sys->write_custom_word(0x040U, 0x09F0U); // USEA|USED, minterm D=A.
     sys->write_custom_word(0x042U, 0x0016U); // EFE|FCI|DESC.
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_blten));
 
     sys->write_custom_word(0x058U, 0x0041U);
@@ -2752,7 +2894,7 @@ TEST_CASE("amiga500 blitter area fill honors fill carry input", "[manifests][ami
 
 TEST_CASE("amiga500 blitter masks latched A when A DMA is disabled",
           "[manifests][amiga500][blitter]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     write_chip_word(*sys, 0x0100U, 0x0000U);
@@ -2768,7 +2910,7 @@ TEST_CASE("amiga500 blitter masks latched A when A DMA is disabled",
     sys->write_custom_word(0x040U, 0x03CAU); // USEC|USED, D=(A&B)|(~A&C).
     sys->write_custom_word(0x042U, 0x0000U);
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_blten));
 
     sys->write_custom_word(0x058U, 0x0042U);
@@ -2780,7 +2922,7 @@ TEST_CASE("amiga500 blitter masks latched A when A DMA is disabled",
 
 TEST_CASE("amiga500 blitter line mode draws a shallow octant line",
           "[manifests][amiga500][blitter]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->write_custom_word(0x048U, 0x0000U); // BLTCPTH
@@ -2797,7 +2939,7 @@ TEST_CASE("amiga500 blitter line mode draws a shallow octant line",
     sys->write_custom_word(0x040U, 0x0BCAU); // USEA|USEC|USED, D=(A&B)|(~A&C).
     sys->write_custom_word(0x042U, 0x0051U); // SIGN|SUD|LINE: shallow right/down.
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_blten));
 
     sys->write_custom_word(0x058U, 0x0182U); // width=2, length=6 dots.
@@ -2808,12 +2950,12 @@ TEST_CASE("amiga500 blitter line mode draws a shallow octant line",
     CHECK(read_chip_word(*sys, 0x0240U) == 0x0C00U);
     CHECK((sys->read_custom_word(0x002U) & agnus::dmacon_bbusy) == 0U);
     CHECK((sys->read_custom_word(0x002U) & agnus::dmacon_bzero) == 0U);
-    CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_blit) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_blit) != 0U);
 }
 
 TEST_CASE("amiga500 blitter line mode steps destination rows with C modulo",
           "[manifests][amiga500][blitter]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->write_custom_word(0x048U, 0x0000U); // BLTCPTH
@@ -2830,7 +2972,7 @@ TEST_CASE("amiga500 blitter line mode steps destination rows with C modulo",
     sys->write_custom_word(0x040U, 0x0BCAU);
     sys->write_custom_word(0x042U, 0x0051U);
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_blten));
 
     sys->write_custom_word(0x058U, 0x0182U);
@@ -2843,7 +2985,7 @@ TEST_CASE("amiga500 blitter line mode steps destination rows with C modulo",
 
 TEST_CASE("amiga500 blitter line mode draws a steep octant line",
           "[manifests][amiga500][blitter]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->write_custom_word(0x048U, 0x0000U);
@@ -2860,7 +3002,7 @@ TEST_CASE("amiga500 blitter line mode draws a steep octant line",
     sys->write_custom_word(0x040U, 0x0BCAU); // USEA|USEC|USED, D=(A&B)|(~A&C).
     sys->write_custom_word(0x042U, 0x0041U); // SIGN|LINE: steep right/down.
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_blten));
 
     sys->write_custom_word(0x058U, 0x0182U);
@@ -2876,7 +3018,7 @@ TEST_CASE("amiga500 blitter line mode draws a steep octant line",
 
 TEST_CASE("amiga500 blitter line mode applies texture start and SING",
           "[manifests][amiga500][blitter]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->write_custom_word(0x048U, 0x0000U);
@@ -2893,7 +3035,7 @@ TEST_CASE("amiga500 blitter line mode applies texture start and SING",
     sys->write_custom_word(0x040U, 0x0BCAU); // USEA|USEC|USED, D=(A&B)|(~A&C).
     sys->write_custom_word(0x042U, 0x0051U); // SIGN|SUD|LINE.
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_blten));
 
     sys->write_custom_word(0x058U, 0x0102U); // Horizontal line, four dots.
@@ -2918,7 +3060,7 @@ TEST_CASE("amiga500 blitter line mode applies texture start and SING",
 }
 
 TEST_CASE("amiga500 blitter zero result updates DMACONR BZERO", "[manifests][amiga500][blitter]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     write_chip_word(*sys, 0x0200U, 0xFFFFU);
@@ -2926,7 +3068,7 @@ TEST_CASE("amiga500 blitter zero result updates DMACONR BZERO", "[manifests][ami
     sys->write_custom_word(0x056U, 0x0200U);
     sys->write_custom_word(0x040U, 0x0100U); // USED, minterm 0 => clear destination.
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_blten));
 
     sys->write_custom_word(0x058U, 0x0041U);
@@ -2937,7 +3079,7 @@ TEST_CASE("amiga500 blitter zero result updates DMACONR BZERO", "[manifests][ami
 }
 
 TEST_CASE("amiga500 custom sprite registers render through Agnus", "[manifests][amiga500][video]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->write_custom_word(0x1A2U, 0x0F00U); // COLOR17 = red
@@ -2957,7 +3099,7 @@ TEST_CASE("amiga500 custom sprite registers render through Agnus", "[manifests][
 
 TEST_CASE("amiga500 sprites stay low-resolution on high-resolution custom display",
           "[manifests][amiga500][video]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->write_custom_word(0x100U, 0x8000U); // HIRES with no bitplanes.
@@ -2983,7 +3125,7 @@ TEST_CASE("amiga500 sprites stay low-resolution on high-resolution custom displa
 
 TEST_CASE("amiga500 sprite DMA pointers advance until custom registers rewrite them",
           "[manifests][amiga500][video]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     constexpr std::uint32_t sprite_base = 0x0400U;
@@ -2998,7 +3140,7 @@ TEST_CASE("amiga500 sprite DMA pointers advance until custom registers rewrite t
     sys->write_custom_word(0x120U, 0x0000U);                                 // SPR0PTH.
     sys->write_custom_word(0x122U, static_cast<std::uint16_t>(sprite_base)); // SPR0PTL.
     sys->write_custom_word(0x096U,
-                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_spren));
 
     sys->agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) *
@@ -3018,7 +3160,7 @@ TEST_CASE("amiga500 sprite DMA pointers advance until custom registers rewrite t
 
 TEST_CASE("amiga500 bitplane DMA pointers advance until custom registers rewrite them",
           "[manifests][amiga500][video]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     write_chip_word(*sys, 0x0000U, 0x8000U);
@@ -3041,7 +3183,7 @@ TEST_CASE("amiga500 bitplane DMA pointers advance until custom registers rewrite
 
 TEST_CASE("amiga500 BPLCON2 custom priority places sprites ahead of a playfield",
           "[manifests][amiga500][video]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->bus.write8(0x000000U, 0x80U); // BPL1 first word = 0x8000.
@@ -3062,7 +3204,7 @@ TEST_CASE("amiga500 BPLCON2 custom priority places sprites ahead of a playfield"
 
 TEST_CASE("amiga500 CLXCON and CLXDAT expose OCS collision latches",
           "[manifests][amiga500][video]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
 
     sys->bus.write8(0x000000U, 0x80U); // BPL1 first word = 0x8000.
@@ -3087,7 +3229,7 @@ TEST_CASE("amiga500 CLXCON and CLXDAT expose OCS collision latches",
 }
 
 TEST_CASE("amiga500 save_state restores overlay and chip RAM", "[manifests][amiga500]") {
-    auto sys = assemble_amiga500(tiny_kickstart());
+    auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
     sys->bus.write8(0x000123U, 0x5AU);
     sys->bus.write8(0x00BFE201U, 0x03U);
@@ -3142,25 +3284,29 @@ TEST_CASE("amiga500 save_state restores overlay and chip RAM", "[manifests][amig
 
 TEST_CASE("amiga2000 save_state restores configured Fast RAM",
           "[manifests][amiga500][memory][amiga2000]") {
-    const amiga500_config config{.model = amiga500_model::amiga2000,
-                                 .fast_ram_size = amiga500_system::fast_ram_size_2m};
-    auto sys = assemble_amiga500(tiny_kickstart(), config);
+    const amiga_config config{.model = amiga_model::amiga2000,
+                                 .fast_ram_size = amiga_system::fast_ram_size_2m};
+    auto sys = assemble_amiga(tiny_kickstart(), config);
     REQUIRE(sys != nullptr);
-    REQUIRE(sys->fast_ram.size() == amiga500_system::fast_ram_size_2m);
+    REQUIRE(sys->fast_ram.size() == amiga_system::fast_ram_size_2m);
+    assign_first_zorro2_board(*sys);
 
     constexpr std::uint32_t fast_offset = 0x010123U;
-    sys->bus.write8(amiga500_system::fast_ram_base + fast_offset, 0x6DU);
+    sys->bus.write8(amiga_system::fast_ram_base + fast_offset, 0x6DU);
 
     std::vector<std::uint8_t> blob;
     mnemos::chips::state_writer writer(blob);
     sys->save_state(writer);
 
-    sys->bus.write8(amiga500_system::fast_ram_base + fast_offset, 0x00U);
+    sys->bus.write8(amiga_system::fast_ram_base + fast_offset, 0x00U);
     REQUIRE(sys->fast_ram[fast_offset] == 0x00U);
 
     mnemos::chips::state_reader reader(blob);
     sys->load_state(reader);
     REQUIRE(reader.ok());
-    CHECK(sys->bus.read8(amiga500_system::fast_ram_base + fast_offset) == 0x6DU);
+    REQUIRE(sys->zorro2_boards.size() == 1U);
+    CHECK(sys->zorro2_boards[0].configured);
+    CHECK(sys->zorro2_boards[0].assigned_base == amiga_system::fast_ram_base);
+    CHECK(sys->bus.read8(amiga_system::fast_ram_base + fast_offset) == 0x6DU);
     CHECK(sys->fast_ram[fast_offset] == 0x6DU);
 }

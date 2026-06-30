@@ -1,5 +1,5 @@
-#include "amiga500_adapter.hpp"
-#include "amiga500_system.hpp"
+#include "amiga_adapter.hpp"
+#include "amiga_system.hpp"
 #include "deflate.hpp"
 #include "system_launch.hpp"
 
@@ -23,8 +23,8 @@
 namespace {
     namespace fs = std::filesystem;
 
-    using mnemos::apps::player::adapters::amiga500::amiga500_adapter;
-    using mnemos::manifests::amiga500::amiga500_system;
+    using mnemos::apps::player::adapters::amiga::amiga_adapter;
+    using mnemos::manifests::amiga::amiga_system;
 
     [[nodiscard]] std::optional<std::string> read_env(const char* name) {
 #if defined(_MSC_VER)
@@ -342,7 +342,7 @@ namespace {
 
 
     [[nodiscard]] std::vector<std::uint8_t> tiny_kickstart() {
-        std::vector<std::uint8_t> rom(amiga500_system::kickstart_window_size, 0x00U);
+        std::vector<std::uint8_t> rom(amiga_system::kickstart_window_size, 0x00U);
         const auto w16 = [&](std::size_t offset, std::uint16_t value) {
             rom[offset] = static_cast<std::uint8_t>(value >> 8U);
             rom[offset + 1U] = static_cast<std::uint8_t>(value);
@@ -354,7 +354,7 @@ namespace {
             rom[offset + 3U] = static_cast<std::uint8_t>(value);
         };
         w32(0x0000U, 0x0007F000U);
-        w32(0x0004U, amiga500_system::kickstart_base + 0x0008U);
+        w32(0x0004U, amiga_system::kickstart_base + 0x0008U);
         w16(0x0008U, 0x46FCU); // MOVE #$2700,SR
         w16(0x000AU, 0x2700U);
         w16(0x000CU, 0x60FEU); // BRA.S self
@@ -362,7 +362,7 @@ namespace {
     }
 
     [[nodiscard]] std::vector<std::uint8_t> tiny_adf() {
-        std::vector<std::uint8_t> adf(amiga500_system::floppy_dd_size, 0x00U);
+        std::vector<std::uint8_t> adf(amiga_system::floppy_dd_size, 0x00U);
         adf[0] = 0x44U;
         adf[1] = 0x89U;
         return adf;
@@ -1577,9 +1577,9 @@ TEST_CASE("player launch boots Amiga500+ from its Kickstart env without disk med
     CHECK(outcome.system->media_count() == 0U);
     CHECK(has_spec(*outcome.system, "System", "Amiga 500+"));
     CHECK(has_spec(*outcome.system, "Chip RAM", "1 MiB"));
-    auto* adapter = dynamic_cast<amiga500_adapter*>(outcome.system.get());
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
     REQUIRE(adapter != nullptr);
-    CHECK(adapter->system().chip_ram.size() == amiga500_system::chip_ram_size_1m);
+    CHECK(adapter->system().chip_ram.size() == amiga_system::chip_ram_size_1m);
 
     fs::remove_all(dir);
 }
@@ -1600,9 +1600,9 @@ TEST_CASE("player launch boots Amiga600 from its Kickstart env without disk medi
     CHECK(outcome.system->media_count() == 0U);
     CHECK(has_spec(*outcome.system, "System", "Amiga 600"));
     CHECK(has_spec(*outcome.system, "Chip RAM", "1 MiB"));
-    auto* adapter = dynamic_cast<amiga500_adapter*>(outcome.system.get());
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
     REQUIRE(adapter != nullptr);
-    CHECK(adapter->system().chip_ram.size() == amiga500_system::chip_ram_size_1m);
+    CHECK(adapter->system().chip_ram.size() == amiga_system::chip_ram_size_1m);
 
     fs::remove_all(dir);
 }
@@ -1623,9 +1623,9 @@ TEST_CASE("player launch boots Amiga2000 from its Kickstart env without disk med
     CHECK(outcome.system->media_count() == 0U);
     CHECK(has_spec(*outcome.system, "System", "Amiga 2000"));
     CHECK(has_spec(*outcome.system, "Chip RAM", "512 KiB"));
-    auto* adapter = dynamic_cast<amiga500_adapter*>(outcome.system.get());
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
     REQUIRE(adapter != nullptr);
-    CHECK(adapter->system().chip_ram.size() == amiga500_system::chip_ram_size);
+    CHECK(adapter->system().chip_ram.size() == amiga_system::chip_ram_size);
 
     fs::remove_all(dir);
 }
@@ -1648,9 +1648,9 @@ TEST_CASE("player launch applies Amiga2000 ECS/1MiB model override",
     CHECK(has_spec(*outcome.system, "System", "Amiga 2000"));
     CHECK(has_spec(*outcome.system, "Chip RAM", "1 MiB"));
     CHECK(has_spec(*outcome.system, "Configuration", "ECS / 1 MiB upgrade"));
-    auto* adapter = dynamic_cast<amiga500_adapter*>(outcome.system.get());
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
     REQUIRE(adapter != nullptr);
-    CHECK(adapter->system().chip_ram.size() == amiga500_system::chip_ram_size_1m);
+    CHECK(adapter->system().chip_ram.size() == amiga_system::chip_ram_size_1m);
 
     fs::remove_all(dir);
 }
@@ -1693,9 +1693,9 @@ TEST_CASE("player launch applies Amiga2000 Fast RAM model override",
     CHECK(has_spec(*outcome.system, "Chip RAM", "1 MiB"));
     CHECK(has_spec(*outcome.system, "Fast RAM", "2 MiB"));
     CHECK(has_spec(*outcome.system, "Configuration", "ECS / 1 MiB upgrade"));
-    auto* adapter = dynamic_cast<amiga500_adapter*>(outcome.system.get());
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
     REQUIRE(adapter != nullptr);
-    CHECK(adapter->system().fast_ram.size() == amiga500_system::fast_ram_size_2m);
+    CHECK(adapter->system().fast_ram.size() == amiga_system::fast_ram_size_2m);
 
     fs::remove_all(dir);
 }
@@ -1718,10 +1718,10 @@ TEST_CASE("player launch treats a zip-wrapped Amiga ADF as disk media",
     REQUIRE(outcome.system != nullptr);
     CHECK(outcome.primary_media_path == disk_path.string());
     CHECK(outcome.system->media_count() == 1U);
-    auto* adapter = dynamic_cast<amiga500_adapter*>(outcome.system.get());
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
     REQUIRE(adapter != nullptr);
     CHECK(adapter->system().floppy_loaded());
-    CHECK(adapter->system().floppy_size() == amiga500_system::floppy_dd_size);
+    CHECK(adapter->system().floppy_size() == amiga_system::floppy_dd_size);
     CHECK_FALSE(adapter->system().floppy_drives[0].change_latch);
     CHECK(has_spec(*outcome.system, "Disk", "Workbench"));
 
@@ -1746,10 +1746,10 @@ TEST_CASE("player launch treats a zip-wrapped Amiga600 ADF as disk media",
     REQUIRE(outcome.system != nullptr);
     CHECK(outcome.primary_media_path == disk_path.string());
     CHECK(outcome.system->media_count() == 1U);
-    auto* adapter = dynamic_cast<amiga500_adapter*>(outcome.system.get());
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
     REQUIRE(adapter != nullptr);
     CHECK(adapter->system().floppy_loaded());
-    CHECK(adapter->system().floppy_size() == amiga500_system::floppy_dd_size);
+    CHECK(adapter->system().floppy_size() == amiga_system::floppy_dd_size);
     CHECK(has_spec(*outcome.system, "Disk", "Workbench"));
 
     fs::remove_all(dir);
@@ -1773,10 +1773,10 @@ TEST_CASE("player launch treats a zip-wrapped Amiga2000 ADF as disk media",
     REQUIRE(outcome.system != nullptr);
     CHECK(outcome.primary_media_path == disk_path.string());
     CHECK(outcome.system->media_count() == 1U);
-    auto* adapter = dynamic_cast<amiga500_adapter*>(outcome.system.get());
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
     REQUIRE(adapter != nullptr);
     CHECK(adapter->system().floppy_loaded());
-    CHECK(adapter->system().floppy_size() == amiga500_system::floppy_dd_size);
+    CHECK(adapter->system().floppy_size() == amiga_system::floppy_dd_size);
     CHECK(has_spec(*outcome.system, "Disk", "Workbench"));
 
     fs::remove_all(dir);

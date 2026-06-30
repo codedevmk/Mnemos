@@ -262,7 +262,9 @@ These are tracked as planned but not gated by exit criteria until their scoping 
 - **Sega 32X:** 68000 already exists; add SH-2 CPU (`chips::cpu::sh2`) and 32X VDP.
 - **Sega Saturn:** scope and HLE strategy require their own design doc; expected to be the hardest single system to land.
 - **Capcom CPS1:** arcade hardware, Z80 + 68000 reuse, custom chips.
-- **Commodore Amiga 500:** 68000 reuse, Paula + Denise + Agnus + Gary, custom chipset.
+- **Classic Amiga family:** 68000 reuse, Paula + Denise + Agnus/Gary-era
+  board glue, OCS/ECS/AGA profiles, and model descriptors starting with
+  Amiga 500/500+/600/2000.
 - **Cross-system cleanup:** revisit each system to decide whether to carry over earlier lessons or re-derive from scratch.
 
 A separate "Mnemos System Roadmap" document will govern these once M10 is in flight.
