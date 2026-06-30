@@ -290,14 +290,30 @@ namespace mnemos::apps::player::adapters::amiga500 {
 
         [[nodiscard]] const char*
         model_family_id(manifests::amiga500::amiga500_model model) noexcept {
-            return model == manifests::amiga500::amiga500_model::amiga500_plus ? "amiga500plus"
-                                                                               : "amiga500";
+            using model_t = manifests::amiga500::amiga500_model;
+            switch (model) {
+            case model_t::amiga500_plus:
+                return "amiga500plus";
+            case model_t::amiga600:
+                return "amiga600";
+            case model_t::amiga500:
+                break;
+            }
+            return "amiga500";
         }
 
         [[nodiscard]] const char*
         model_display_name(manifests::amiga500::amiga500_model model) noexcept {
-            return model == manifests::amiga500::amiga500_model::amiga500_plus ? "Amiga 500+"
-                                                                               : "Amiga 500";
+            using model_t = manifests::amiga500::amiga500_model;
+            switch (model) {
+            case model_t::amiga500_plus:
+                return "Amiga 500+";
+            case model_t::amiga600:
+                return "Amiga 600";
+            case model_t::amiga500:
+                break;
+            }
+            return "Amiga 500";
         }
 
         [[nodiscard]] std::string chip_ram_label(std::size_t bytes) {
@@ -1615,6 +1631,7 @@ namespace mnemos::apps::player::adapters::amiga500 {
             register_amiga_family("amiga500", manifests::amiga500::amiga500_model::amiga500);
             register_amiga_family("amiga500plus",
                                   manifests::amiga500::amiga500_model::amiga500_plus);
+            register_amiga_family("amiga600", manifests::amiga500::amiga500_model::amiga600);
             return 0;
         }();
     } // namespace

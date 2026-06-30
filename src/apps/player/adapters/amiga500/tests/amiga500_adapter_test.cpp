@@ -294,6 +294,37 @@ TEST_CASE("amiga500 adapter configures Amiga 500+ metadata and chip RAM",
     CHECK(sys.paula.chipram()[upper_chip_ram] == 0x5AU);
 }
 
+TEST_CASE("amiga500 adapter configures Amiga 600 metadata and chip RAM",
+          "[apps][player][amiga600]") {
+    const amiga500_config config{.video_region = mnemos::video_region::pal,
+                                 .keyboard_layout = amiga500_keyboard_layout::us,
+                                 .model = amiga500_model::amiga600};
+    std::vector<std::vector<std::uint8_t>> disks;
+    disks.push_back(tiny_adf(0x55U));
+    amiga500_adapter adapter(tiny_kickstart(), config, "Kickstart 2.0", std::move(disks));
+    auto& sys = adapter.system();
+
+    REQUIRE(sys.chip_ram.size() == amiga500_system::chip_ram_size_1m);
+    REQUIRE(sys.paula.chipram().size() == amiga500_system::chip_ram_size_1m);
+
+    const auto& spec = adapter.system_spec();
+    REQUIRE(spec.size() >= 2U);
+    CHECK(spec[0].label == "System");
+    CHECK(spec[0].value == "Amiga 600");
+    CHECK(spec[1].label == "Chip RAM");
+    CHECK(spec[1].value == "1 MiB");
+
+    const auto& media = adapter.media_capabilities();
+    REQUIRE(media.media.size() == 2U);
+    CHECK(media.media[0].provider_id == "amiga600.kickstart");
+    CHECK(media.media[1].provider_id == "amiga600.df0");
+
+    constexpr std::uint32_t upper_chip_ram = 0x080000U;
+    sys.bus.write8(upper_chip_ram, 0x7CU);
+    CHECK(sys.chip_ram[upper_chip_ram] == 0x7CU);
+    CHECK(sys.paula.chipram()[upper_chip_ram] == 0x7CU);
+}
+
 TEST_CASE("amiga500 adapter seeds Kickstart keyboard power-up stream",
           "[apps][player][amiga500][input]") {
     amiga500_adapter adapter(kickstart_signature_rom(), {}, "Kickstart signature");

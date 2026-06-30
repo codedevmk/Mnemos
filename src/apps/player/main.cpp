@@ -3,7 +3,7 @@
 // irem_m47 / irem_m52 / irem_m57 / irem_m58 / irem_m62 / irem_m63 / irem_travrusa /
 // irem_redalert / irem_m72 / irem_m75 / irem_m78 / irem_m81 / irem_m82 / irem_m84 / irem_m85 /
 // irem_m90 / irem_m92 / irem_m102 / irem_m107 / irem_m119 / taito_f2 / taito_gnet / cps1 / cps2 /
-// spectrum / nes / msx / msx2 / amiga500)
+// spectrum / nes / msx / msx2 / amiga500 / amiga500plus / amiga600)
 // with the --rom media (zip archives are extracted transparently; Irem arcade
 // boards also accept wrapper zips and unpacked set directories),
 // presents its framebuffer at integer scale, streams audio, and routes keyboard
@@ -58,11 +58,11 @@ namespace {
     constexpr int kInitialWindowHeight = 960;
 
     // Streaming texture is sized for the worst-case frame across supported
-    // systems: V9938 high-resolution MSX2 modes at 512 columns, Genesis VDP
-    // 320x240 V30 (x2 rows for interlace), and the Irem M72's 384x256 (256x384
-    // once a vertical game is rotated for TATE presentation); per-frame uploads
-    // only touch the active subregion the adapter reports.
-    constexpr std::uint32_t kMaxFbWidth = 512U;
+    // systems: Amiga high-resolution modes at 640 columns, Genesis VDP 320x240
+    // V30 (x2 rows for interlace), and the Irem M72's 384x256 (256x384 once a
+    // vertical game is rotated for TATE presentation); per-frame uploads only
+    // touch the active subregion the adapter reports.
+    constexpr std::uint32_t kMaxFbWidth = 640U;
     constexpr std::uint32_t kMaxFbHeight = 480U;
 
     // Status overlay: two lines of 8x8 monospaced text, anchored to the

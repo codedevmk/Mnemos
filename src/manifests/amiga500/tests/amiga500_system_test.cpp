@@ -570,6 +570,23 @@ TEST_CASE("amiga500plus Copper location pointers use the ECS 1 MiB address width
     CHECK(sys->agnus.cop2lc() == 0x00095678U);
 }
 
+TEST_CASE("amiga600 Copper location pointers use the ECS 1 MiB address width",
+          "[manifests][amiga500][custom][amiga600]") {
+    const amiga500_config config{.model = amiga500_model::amiga600};
+    auto sys = assemble_amiga500(tiny_kickstart(), config);
+    REQUIRE(sys != nullptr);
+
+    sys->write_custom_word(0x080U, 0x001FU); // COP1LCH
+    sys->write_custom_word(0x082U, 0x1235U); // COP1LCL, low bit ignored.
+    sys->write_custom_word(0x084U, 0x0019U); // COP2LCH
+    sys->write_custom_word(0x086U, 0x5679U); // COP2LCL, low bit ignored.
+
+    CHECK(sys->cop1lc == 0x000F1234U);
+    CHECK(sys->cop2lc == 0x00095678U);
+    CHECK(sys->agnus.cop1lc() == 0x000F1234U);
+    CHECK(sys->agnus.cop2lc() == 0x00095678U);
+}
+
 TEST_CASE("amiga500 BPLCON0 HIRES custom register exposes 640-pixel OCS rows",
           "[manifests][amiga500][video]") {
     auto sys = assemble_amiga500(tiny_kickstart());
