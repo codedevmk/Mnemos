@@ -1,7 +1,9 @@
 add_library(
     mnemos_manifests_amiga
     amiga_system.cpp
+    chipsets/amiga_chipsets.cpp
     expansions/zorro2.cpp
+    models/amiga_models.cpp
 )
 add_library(mnemos::manifests::amiga ALIAS mnemos_manifests_amiga)
 

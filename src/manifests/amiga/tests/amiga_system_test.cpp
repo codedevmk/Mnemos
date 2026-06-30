@@ -12,7 +12,11 @@
 
 namespace {
     using mnemos::manifests::amiga::amiga_config;
+    using mnemos::manifests::amiga::amiga_chipset;
+    using mnemos::manifests::amiga::amiga_chipset_profile;
+    using mnemos::manifests::amiga::amiga_fast_ram_size_for_config;
     using mnemos::manifests::amiga::amiga_model;
+    using mnemos::manifests::amiga::amiga_model_profile;
     using mnemos::manifests::amiga::amiga_system;
     using mnemos::manifests::amiga::assemble_amiga;
     using agnus = mnemos::chips::video::agnus;
@@ -180,6 +184,63 @@ namespace {
         sys.service_keyboard_queue();
     }
 } // namespace
+
+TEST_CASE("amiga model descriptors capture base chipset and expansion policy",
+          "[manifests][amiga][models]") {
+    const auto& a500 = amiga_model_profile(amiga_model::amiga500);
+    CHECK(a500.chipset == amiga_chipset::ocs);
+    CHECK(a500.chip_ram_size == amiga_system::chip_ram_size);
+    CHECK_FALSE(a500.zorro2_expansion_bus);
+    CHECK_FALSE(a500.fast_ram_configurable);
+
+    const auto& a500plus = amiga_model_profile(amiga_model::amiga500_plus);
+    CHECK(a500plus.chipset == amiga_chipset::ecs_1m);
+    CHECK(a500plus.chip_ram_size == amiga_system::chip_ram_size_1m);
+    CHECK_FALSE(a500plus.fast_ram_configurable);
+
+    const auto& a600 = amiga_model_profile(amiga_model::amiga600);
+    CHECK(a600.chipset == amiga_chipset::ecs_1m);
+    CHECK(a600.chip_ram_size == amiga_system::chip_ram_size_1m);
+    CHECK_FALSE(a600.fast_ram_configurable);
+
+    const auto& a2000 = amiga_model_profile(amiga_model::amiga2000);
+    CHECK(a2000.chipset == amiga_chipset::ocs);
+    CHECK(a2000.chip_ram_size == amiga_system::chip_ram_size);
+    CHECK(a2000.zorro2_expansion_bus);
+    CHECK(a2000.fast_ram_configurable);
+
+    const auto& a2000_ecs = amiga_model_profile(amiga_model::amiga2000_ecs_1m);
+    CHECK(a2000_ecs.chipset == amiga_chipset::ecs_1m);
+    CHECK(a2000_ecs.chip_ram_size == amiga_system::chip_ram_size_1m);
+    CHECK(a2000_ecs.zorro2_expansion_bus);
+    CHECK(a2000_ecs.fast_ram_configurable);
+}
+
+TEST_CASE("amiga chipset descriptors own Copper address width policy",
+          "[manifests][amiga][chipsets]") {
+    CHECK(amiga_chipset_profile(amiga_chipset::ocs).copper_address_mask ==
+          agnus::ocs_copper_address_mask);
+    CHECK(amiga_chipset_profile(amiga_chipset::ecs_1m).copper_address_mask ==
+          agnus::ecs_1m_copper_address_mask);
+}
+
+TEST_CASE("amiga model descriptors gate configurable Fast RAM",
+          "[manifests][amiga][models][memory]") {
+    const amiga_config a500_fast{.model = amiga_model::amiga500,
+                                 .fast_ram_size = amiga_system::fast_ram_size_2m};
+    CHECK(amiga_fast_ram_size_for_config(a500_fast, amiga_system::fast_ram_max_size) == 0U);
+
+    const amiga_config a2000_fast{.model = amiga_model::amiga2000,
+                                  .fast_ram_size = amiga_system::fast_ram_size_2m};
+    CHECK(amiga_fast_ram_size_for_config(a2000_fast, amiga_system::fast_ram_max_size) ==
+          amiga_system::fast_ram_size_2m);
+
+    const amiga_config a2000_oversized{.model = amiga_model::amiga2000_ecs_1m,
+                                       .fast_ram_size =
+                                           amiga_system::fast_ram_max_size + 512U};
+    CHECK(amiga_fast_ram_size_for_config(a2000_oversized, amiga_system::fast_ram_max_size) ==
+          amiga_system::fast_ram_max_size);
+}
 
 TEST_CASE("amiga500 boots through the Kickstart reset overlay", "[manifests][amiga500]") {
     auto sys = assemble_amiga(tiny_kickstart());

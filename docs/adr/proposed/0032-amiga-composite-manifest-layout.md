@@ -45,17 +45,22 @@ The Amiga manifest owns board-level composition and model descriptors:
 ```text
 src/manifests/amiga/
   amiga_system.hpp/.cpp
-  chipsets/
-  expansions/
+  chipsets/amiga_chipsets.hpp/.cpp
+  expansions/zorro2.hpp/.cpp
   drives/
   devices/
-  models/
+  models/amiga_models.hpp/.cpp
 ```
 
 Subdirectories are allowed inside this manifest only for Amiga family
 building-blocks. They do not create new tiers and do not allow higher-tier
 dependencies. Public CLI IDs and ROM environment variables remain model-specific
 (`amiga500`, `amiga2000`, `MNEMOS_AMIGA2000_KICKSTART`, and so on).
+
+Model descriptors select base chip RAM, chipset profile, and expansion-bus
+capabilities. Chipset descriptors own chipset-specific policy such as the
+address width used by Copper pointers. The shared system assembly consumes
+these descriptors rather than hard-coding per-model branches.
 
 ## Consequences
 

@@ -6,8 +6,8 @@
 #include "denise.hpp"
 #include "expansions/zorro2.hpp"
 #include "m68000.hpp"
+#include "models/amiga_models.hpp"
 #include "paula.hpp"
-#include "region.hpp"
 #include "state.hpp"
 
 #include <array>
@@ -18,23 +18,6 @@
 #include <vector>
 
 namespace mnemos::manifests::amiga {
-
-    enum class amiga_keyboard_layout : std::uint8_t { us, qwerty_international, german, azerty };
-
-    enum class amiga_model : std::uint8_t {
-        amiga500,
-        amiga500_plus,
-        amiga600,
-        amiga2000,
-        amiga2000_ecs_1m
-    };
-
-    struct amiga_config final {
-        mnemos::video_region video_region{mnemos::video_region::pal};
-        amiga_keyboard_layout keyboard_layout{amiga_keyboard_layout::us};
-        amiga_model model{amiga_model::amiga500};
-        std::size_t fast_ram_size{};
-    };
 
     // Shared classic Amiga machine assembly: MC68000 + Agnus + Denise + Paula +
     // two CIA 8520s over a 24-bit, big-endian 68K bus, configured by model

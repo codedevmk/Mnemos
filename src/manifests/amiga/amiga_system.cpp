@@ -111,28 +111,6 @@ namespace mnemos::manifests::amiga {
             return rhs > room ? std::numeric_limits<std::uint32_t>::max() : lhs + rhs;
         }
 
-        [[nodiscard]] std::size_t chip_ram_size_for_model(amiga_model model) noexcept {
-            return model == amiga_model::amiga500_plus || model == amiga_model::amiga600 ||
-                           model == amiga_model::amiga2000_ecs_1m
-                       ? amiga_system::chip_ram_size_1m
-                       : amiga_system::chip_ram_size;
-        }
-
-        [[nodiscard]] std::uint32_t copper_address_mask_for_model(amiga_model model) noexcept {
-            return model == amiga_model::amiga500_plus || model == amiga_model::amiga600 ||
-                           model == amiga_model::amiga2000_ecs_1m
-                       ? chips::video::agnus::ecs_1m_copper_address_mask
-                       : chips::video::agnus::ocs_copper_address_mask;
-        }
-
-        [[nodiscard]] std::size_t fast_ram_size_for_config(const amiga_config& config) noexcept {
-            if (config.model != amiga_model::amiga2000 &&
-                config.model != amiga_model::amiga2000_ecs_1m) {
-                return 0U;
-            }
-            return std::min(config.fast_ram_size, amiga_system::fast_ram_max_size);
-        }
-
         [[nodiscard]] zorro2_expansion_board*
         configured_zorro2_memory_board_at(amiga_system& sys, std::uint32_t address) noexcept {
             for (auto& board : sys.zorro2_boards) {
@@ -2927,9 +2905,12 @@ namespace mnemos::manifests::amiga {
                                                        const amiga_config& config) {
         auto sys = std::make_unique<amiga_system>();
         amiga_system* s = sys.get();
-        const std::size_t active_chip_ram_size = chip_ram_size_for_model(config.model);
-        const std::size_t active_fast_ram_size = fast_ram_size_for_config(config);
-        s->copper_address_mask = copper_address_mask_for_model(config.model);
+        const auto& model = amiga_model_profile(config.model);
+        const auto& chipset = amiga_chipset_profile(model.chipset);
+        const std::size_t active_chip_ram_size = model.chip_ram_size;
+        const std::size_t active_fast_ram_size =
+            amiga_fast_ram_size_for_config(config, amiga_system::fast_ram_max_size);
+        s->copper_address_mask = chipset.copper_address_mask;
         s->chip_ram.assign(active_chip_ram_size, 0U);
         s->fast_ram.assign(active_fast_ram_size, 0U);
         if (!s->fast_ram.empty()) {
