@@ -2875,8 +2875,7 @@ namespace mnemos::manifests::amiga {
         // the supervisor stack at $DC0000, and dies on the first stacked RTS. Stops
         // below the $DC0000 RTC slot. Lower priority so real expansion RAM would win.
         s->bus.map_mmio16(
-            0x00C00000U, 0x001C0000U,
-            [s](std::uint32_t a) { return s->read_custom_byte(a); },
+            0x00C00000U, 0x001C0000U, [s](std::uint32_t a) { return s->read_custom_byte(a); },
             [s](std::uint32_t a, std::uint8_t v) { s->write_custom_byte(a, v); },
             [s](std::uint32_t a) {
                 return s->read_custom_word(static_cast<std::uint16_t>(a & 0x01FEU));
