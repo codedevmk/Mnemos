@@ -21,6 +21,20 @@ namespace {
     using mnemos::manifests::amiga::amiga_floppy_sectors_per_track;
     using mnemos::manifests::amiga::amiga_floppy_track_count;
     using mnemos::manifests::amiga::amiga_fast_ram_size_for_config;
+    using mnemos::manifests::amiga::amiga_keyboard_dequeue_code;
+    using mnemos::manifests::amiga::amiga_keyboard_enqueue_key;
+    using mnemos::manifests::amiga::amiga_keyboard_press_caps_lock;
+    using mnemos::manifests::amiga::amiga_keyboard_queue_capacity;
+    using mnemos::manifests::amiga::amiga_keyboard_queue_state;
+    using mnemos::manifests::amiga::amiga_keyboard_raw_key_count;
+    using mnemos::manifests::amiga::amiga_keyboard_reset_warning_code;
+    using mnemos::manifests::amiga::amiga_keyboard_sdr;
+    using mnemos::manifests::amiga::amiga_keyboard_ack_low_seen;
+    using mnemos::manifests::amiga::amiga_keyboard_begin_serial_byte;
+    using mnemos::manifests::amiga::amiga_keyboard_accept_serial_ack_level;
+    using mnemos::manifests::amiga::amiga_keyboard_load_state;
+    using mnemos::manifests::amiga::amiga_keyboard_save_state;
+    using mnemos::manifests::amiga::amiga_keyboard_serial_busy;
     using mnemos::manifests::amiga::amiga_encode_joystick;
     using mnemos::manifests::amiga::amiga_joy_fire;
     using mnemos::manifests::amiga::amiga_joy_middle_fire;
@@ -93,8 +107,7 @@ namespace {
     [[nodiscard]] bool joy_right(std::uint16_t joy) { return (joy & 0x0002U) != 0U; }
 
     [[nodiscard]] std::uint8_t keyboard_sdr(std::uint8_t raw_code) noexcept {
-        const auto inverted = static_cast<std::uint8_t>(~raw_code);
-        return static_cast<std::uint8_t>((inverted << 1U) | (inverted >> 7U));
+        return amiga_keyboard_sdr(raw_code);
     }
 
     void write_chip_word(amiga_system& sys, std::uint32_t address, std::uint16_t value) {
@@ -505,6 +518,61 @@ TEST_CASE("amiga500 keyboard events arrive through CIA-A serial input",
     CHECK((sys->cia_a.read(0x0DU) & 0x08U) != 0U);
 }
 
+TEST_CASE("amiga keyboard helpers preserve raw queue semantics",
+          "[manifests][amiga][devices][keyboard]") {
+    CHECK(amiga_system::keyboard_raw_key_count == amiga_keyboard_raw_key_count);
+    CHECK(amiga_system::keyboard_queue_capacity == amiga_keyboard_queue_capacity);
+    CHECK(amiga_system::keyboard_reset_warning_code == amiga_keyboard_reset_warning_code);
+    CHECK(amiga_keyboard_sdr(0x44U) == 0x77U);
+    CHECK(amiga_keyboard_sdr(0xCCU) == 0x66U);
+
+    amiga_keyboard_queue_state keyboard{};
+    REQUIRE(amiga_keyboard_enqueue_key(keyboard, 0xA0U, true));
+    CHECK(keyboard.key_down[0x20U]);
+    CHECK_FALSE(amiga_keyboard_enqueue_key(keyboard, 0x20U, true));
+
+    std::uint8_t code = 0U;
+    REQUIRE(amiga_keyboard_dequeue_code(keyboard, code));
+    CHECK(code == 0x20U);
+    REQUIRE(amiga_keyboard_enqueue_key(keyboard, 0x20U, false));
+    REQUIRE(amiga_keyboard_dequeue_code(keyboard, code));
+    CHECK(code == 0xA0U);
+
+    REQUIRE(amiga_keyboard_press_caps_lock(keyboard));
+    CHECK(keyboard.caps_lock_led);
+    REQUIRE(amiga_keyboard_dequeue_code(keyboard, code));
+    CHECK(code == 0x62U);
+
+    amiga_keyboard_begin_serial_byte(keyboard);
+    CHECK(amiga_keyboard_serial_busy(keyboard));
+    CHECK_FALSE(amiga_keyboard_ack_low_seen(keyboard));
+    amiga_keyboard_accept_serial_ack_level(keyboard, true);
+    CHECK(amiga_keyboard_serial_busy(keyboard));
+    amiga_keyboard_accept_serial_ack_level(keyboard, false);
+    CHECK(amiga_keyboard_ack_low_seen(keyboard));
+    amiga_keyboard_accept_serial_ack_level(keyboard, true);
+    CHECK_FALSE(amiga_keyboard_serial_busy(keyboard));
+    CHECK_FALSE(amiga_keyboard_ack_low_seen(keyboard));
+
+    REQUIRE(amiga_keyboard_enqueue_key(keyboard, 0x22U, true));
+    amiga_keyboard_begin_serial_byte(keyboard);
+    amiga_keyboard_accept_serial_ack_level(keyboard, false);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    amiga_keyboard_save_state(keyboard, writer);
+
+    amiga_keyboard_queue_state restored{};
+    mnemos::chips::state_reader reader(blob);
+    amiga_keyboard_load_state(restored, reader);
+    REQUIRE(reader.ok());
+    CHECK(restored.count == 1U);
+    CHECK(restored.queue[restored.head] == 0x22U);
+    CHECK(restored.key_down[0x22U]);
+    CHECK(amiga_keyboard_serial_busy(restored));
+    CHECK(amiga_keyboard_ack_low_seen(restored));
+}
+
 TEST_CASE("amiga500 keyboard queue waits for CIA serial acknowledgement",
           "[manifests][amiga500][input]") {
     auto sys = assemble_amiga(tiny_kickstart());
@@ -586,6 +654,123 @@ TEST_CASE("amiga500 keyboard matrix survives system save state",
     acknowledge_keyboard(*sys);
     REQUIRE(sys->enqueue_keyboard_key(0x20U, false));
     CHECK(sys->cia_a.read(0x0CU) == keyboard_sdr(0xA0U));
+}
+
+TEST_CASE("amiga500 keyboard save_state preserves in-flight serial byte",
+          "[manifests][amiga500][input][save]") {
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+
+    REQUIRE(sys->enqueue_keyboard_key(0x20U, true)); // A down, transmitted immediately.
+    REQUIRE(sys->enqueue_keyboard_key(0x21U, true)); // S down, queued behind A.
+    CHECK(sys->keyboard_pending_count() == 1U);
+    CHECK(amiga_keyboard_serial_busy(sys->keyboard));
+    CHECK_FALSE(amiga_keyboard_ack_low_seen(sys->keyboard));
+    CHECK(sys->cia_a.read(0x0CU) == keyboard_sdr(0x20U));
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    sys->save_state(writer);
+
+    acknowledge_keyboard(*sys);
+    CHECK(sys->keyboard_pending_count() == 0U);
+    CHECK(sys->cia_a.read(0x0CU) == keyboard_sdr(0x21U));
+
+    mnemos::chips::state_reader reader(blob);
+    sys->load_state(reader);
+    REQUIRE(reader.ok());
+    CHECK(sys->keyboard_pending_count() == 1U);
+    CHECK(amiga_keyboard_serial_busy(sys->keyboard));
+    CHECK_FALSE(amiga_keyboard_ack_low_seen(sys->keyboard));
+    CHECK(sys->cia_a.read(0x0CU) == keyboard_sdr(0x20U));
+
+    sys->write_cia_a_sp(true);
+    sys->service_keyboard_queue();
+    CHECK(sys->keyboard_pending_count() == 1U);
+    CHECK(amiga_keyboard_serial_busy(sys->keyboard));
+    CHECK_FALSE(amiga_keyboard_ack_low_seen(sys->keyboard));
+
+    sys->write_cia_a_sp(false);
+    sys->write_cia_a_sp(true);
+    sys->service_keyboard_queue();
+    CHECK(sys->keyboard_pending_count() == 0U);
+    CHECK(amiga_keyboard_serial_busy(sys->keyboard));
+    CHECK_FALSE(amiga_keyboard_ack_low_seen(sys->keyboard));
+    CHECK(sys->cia_a.read(0x0CU) == keyboard_sdr(0x21U));
+}
+
+TEST_CASE("amiga500 keyboard save_state preserves partial serial acknowledgement",
+          "[manifests][amiga500][input][save]") {
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+
+    REQUIRE(sys->enqueue_keyboard_key(0x20U, true)); // A down, transmitted immediately.
+    REQUIRE(sys->enqueue_keyboard_key(0x21U, true)); // S down, queued behind A.
+    sys->write_cia_a_sp(false);
+    CHECK(sys->keyboard_pending_count() == 1U);
+    CHECK(amiga_keyboard_serial_busy(sys->keyboard));
+    CHECK(amiga_keyboard_ack_low_seen(sys->keyboard));
+    CHECK(sys->cia_a.read(0x0CU) == keyboard_sdr(0x20U));
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    sys->save_state(writer);
+
+    sys->write_cia_a_sp(true);
+    sys->service_keyboard_queue();
+    CHECK(sys->keyboard_pending_count() == 0U);
+    CHECK(sys->cia_a.read(0x0CU) == keyboard_sdr(0x21U));
+
+    mnemos::chips::state_reader reader(blob);
+    sys->load_state(reader);
+    REQUIRE(reader.ok());
+    CHECK(sys->keyboard_pending_count() == 1U);
+    CHECK(amiga_keyboard_serial_busy(sys->keyboard));
+    CHECK(amiga_keyboard_ack_low_seen(sys->keyboard));
+    CHECK(sys->cia_a.read(0x0CU) == keyboard_sdr(0x20U));
+
+    sys->service_keyboard_queue();
+    CHECK(sys->keyboard_pending_count() == 1U);
+    CHECK(amiga_keyboard_serial_busy(sys->keyboard));
+    CHECK(amiga_keyboard_ack_low_seen(sys->keyboard));
+
+    sys->write_cia_a_sp(true);
+    sys->service_keyboard_queue();
+    CHECK(sys->keyboard_pending_count() == 0U);
+    CHECK(amiga_keyboard_serial_busy(sys->keyboard));
+    CHECK_FALSE(amiga_keyboard_ack_low_seen(sys->keyboard));
+    CHECK(sys->cia_a.read(0x0CU) == keyboard_sdr(0x21U));
+}
+
+TEST_CASE("amiga500 save_state restores CIA chip register state",
+          "[manifests][amiga500][cia][save]") {
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+
+    sys->cia_a.write(0x04U, 0x34U);
+    sys->cia_a.write(0x05U, 0x12U);
+    sys->cia_a.write(0x0DU, 0x81U); // Enable timer A interrupt mask.
+    sys->cia_b.write(0x03U, 0xF0U);
+    sys->cia_b.write(0x01U, 0xA5U);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    sys->save_state(writer);
+
+    sys->cia_a.write(0x04U, 0x78U);
+    sys->cia_a.write(0x05U, 0x56U);
+    sys->cia_a.write(0x0DU, 0x01U); // Clear timer A interrupt mask.
+    sys->cia_b.write(0x03U, 0x0FU);
+    sys->cia_b.write(0x01U, 0x5AU);
+
+    mnemos::chips::state_reader reader(blob);
+    sys->load_state(reader);
+    REQUIRE(reader.ok());
+    CHECK(sys->cia_a.read(0x04U) == 0x34U);
+    CHECK(sys->cia_a.read(0x05U) == 0x12U);
+    CHECK(sys->cia_a.read(0x0EU) == 0x00U);
+    CHECK(sys->cia_b.read(0x03U) == 0xF0U);
+    CHECK(sys->cia_b.port_b_output() == 0xA0U);
 }
 
 TEST_CASE("amiga500 keyboard control codes and caps-lock LED use raw serial codes",
@@ -3263,7 +3448,7 @@ TEST_CASE("amiga500 save_state restores overlay and chip RAM", "[manifests][amig
     sys->set_pot_position(0U, 1U, 1U);
     sys->write_custom_word(0x034U, 0x0001U);
     REQUIRE(sys->mount_floppy(tiny_adf()));
-    sys->keyboard_caps_lock_led = false;
+    sys->keyboard.caps_lock_led = false;
     CHECK((sys->cia_a.read(0x00U) & 0x04U) == 0U);
 
     mnemos::chips::state_reader reader(blob);

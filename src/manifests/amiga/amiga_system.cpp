@@ -9,7 +9,7 @@
 namespace mnemos::manifests::amiga {
 
     namespace {
-        constexpr std::uint32_t state_version = 26U;
+        constexpr std::uint32_t state_version = 27U;
 
         constexpr std::uint16_t reg_dmaconr = 0x002U;
         constexpr std::uint16_t reg_vposr = 0x004U;
@@ -494,11 +494,6 @@ namespace mnemos::manifests::amiga {
 
         [[nodiscard]] std::uint8_t cia_register(std::uint32_t address) noexcept {
             return static_cast<std::uint8_t>((address >> 8U) & 0x0FU);
-        }
-
-        [[nodiscard]] std::uint8_t encode_keyboard_sdr(std::uint8_t raw_code) noexcept {
-            const auto inverted = static_cast<std::uint8_t>(~raw_code);
-            return static_cast<std::uint8_t>((inverted << 1U) | (inverted >> 7U));
         }
 
         void append_be16(std::vector<std::uint8_t>& out, std::uint16_t value) {
@@ -1363,83 +1358,61 @@ namespace mnemos::manifests::amiga {
     }
 
     bool amiga_system::enqueue_keyboard_key(std::uint8_t raw_keycode, bool pressed) noexcept {
-        const std::uint8_t key = static_cast<std::uint8_t>(raw_keycode & 0x7FU);
-        if (keyboard_key_down[key] == pressed) {
+        if (!amiga_keyboard_enqueue_key(keyboard, raw_keycode, pressed)) {
             return false;
         }
-        const std::uint8_t code = static_cast<std::uint8_t>(key | (pressed ? 0x00U : 0x80U));
-        if (!enqueue_keyboard_code(code)) {
-            return false;
-        }
-        keyboard_key_down[key] = pressed;
+        service_keyboard_queue();
         return true;
     }
 
     bool amiga_system::enqueue_keyboard_control_code(std::uint8_t code) noexcept {
-        return enqueue_keyboard_code(code);
+        if (!amiga_keyboard_enqueue_control_code(keyboard, code)) {
+            return false;
+        }
+        service_keyboard_queue();
+        return true;
     }
 
     bool amiga_system::press_caps_lock() noexcept {
-        const bool next_led = !keyboard_caps_lock_led;
-        const std::uint8_t code = static_cast<std::uint8_t>(0x62U | (next_led ? 0x00U : 0x80U));
-        if (!enqueue_keyboard_code(code)) {
+        if (!amiga_keyboard_press_caps_lock(keyboard)) {
             return false;
         }
-        keyboard_caps_lock_led = next_led;
+        service_keyboard_queue();
         return true;
     }
 
     bool amiga_system::enqueue_keyboard_code(std::uint8_t code) noexcept {
-        if (keyboard_queue_count >= keyboard_queue.size()) {
+        if (!amiga_keyboard_enqueue_code(keyboard, code)) {
             return false;
         }
-        const std::size_t tail =
-            (keyboard_queue_head + keyboard_queue_count) % keyboard_queue.size();
-        keyboard_queue[tail] = code;
-        ++keyboard_queue_count;
         service_keyboard_queue();
         return true;
     }
 
     void amiga_system::transmit_keyboard_code(std::uint8_t code) noexcept {
-        const std::uint8_t sdr = encode_keyboard_sdr(code);
+        const std::uint8_t sdr = amiga_keyboard_sdr(code);
         for (int bit = 7; bit >= 0; --bit) {
             cia_a.sp_level(((sdr >> static_cast<unsigned>(bit)) & 0x01U) != 0U);
             cia_a.cnt_edge(false);
             cia_a.cnt_edge(true);
         }
         cia_a.sp_level(true);
-        keyboard_byte_in_flight = true;
-        keyboard_ack_low_seen = false;
+        amiga_keyboard_begin_serial_byte(keyboard);
     }
 
     void amiga_system::service_keyboard_queue() noexcept {
-        if (keyboard_byte_in_flight) {
+        if (amiga_keyboard_serial_busy(keyboard)) {
             return;
         }
-        if (keyboard_queue_count == 0U) {
+        std::uint8_t code = 0U;
+        if (!amiga_keyboard_dequeue_code(keyboard, code)) {
             return;
         }
-        const std::uint8_t code = keyboard_queue[keyboard_queue_head];
-        keyboard_queue_head = (keyboard_queue_head + 1U) % keyboard_queue.size();
-        --keyboard_queue_count;
         transmit_keyboard_code(code);
     }
 
     void amiga_system::write_cia_a_sp(bool level) noexcept {
-        if (!keyboard_byte_in_flight) {
-            keyboard_ack_low_seen = false;
-            return;
-        }
-        if (!level) {
-            keyboard_ack_low_seen = true;
-            return;
-        }
-        if (!keyboard_ack_low_seen) {
-            return;
-        }
-        keyboard_ack_low_seen = false;
-        keyboard_byte_in_flight = false;
+        amiga_keyboard_accept_serial_ack_level(keyboard, level);
     }
 
     std::uint8_t amiga_system::cia_a_port_a_inputs() const noexcept {
@@ -2286,13 +2259,7 @@ namespace mnemos::manifests::amiga {
             drive.track_stream_dirty = false;
         }
 
-        keyboard_queue.fill(0U);
-        keyboard_key_down.fill(false);
-        keyboard_queue_head = 0U;
-        keyboard_queue_count = 0U;
-        keyboard_byte_in_flight = false;
-        keyboard_ack_low_seen = false;
-        keyboard_caps_lock_led = false;
+        amiga_keyboard_reset(keyboard);
 
         std::copy(chip_ram.begin(), chip_ram.end(), paula.chipram().begin());
         agnus.attach_chip_ram(chip_ram);
@@ -2356,6 +2323,8 @@ namespace mnemos::manifests::amiga {
         writer.u16(intreq);
         writer.boolean(cia_a_irq);
         writer.boolean(cia_b_irq);
+        cia_a.save_state(writer);
+        cia_b.save_state(writer);
         writer.u64(frame_index);
         writer.u32(cop1lc);
         writer.u32(cop2lc);
@@ -2450,20 +2419,7 @@ namespace mnemos::manifests::amiga {
                 writer.blob(std::span<const std::uint8_t>(cached_weak_bits));
             }
         }
-        writer.u8(static_cast<std::uint8_t>(keyboard_queue_count));
-        writer.boolean(keyboard_byte_in_flight);
-        writer.boolean(keyboard_ack_low_seen);
-        writer.boolean(keyboard_caps_lock_led);
-        for (std::size_t i = 0U; i < keyboard_queue.size(); ++i) {
-            const std::uint8_t value =
-                i < keyboard_queue_count
-                    ? keyboard_queue[(keyboard_queue_head + i) % keyboard_queue.size()]
-                    : 0U;
-            writer.u8(value);
-        }
-        for (bool down : keyboard_key_down) {
-            writer.boolean(down);
-        }
+        amiga_keyboard_save_state(keyboard, writer);
         for (std::size_t plane = 0U; plane < bitplane_pointer.size(); ++plane) {
             writer.u32(agnus.bitplane_pointer(static_cast<std::uint32_t>(plane)));
         }
@@ -2509,6 +2465,8 @@ namespace mnemos::manifests::amiga {
         intreq = reader.u16();
         cia_a_irq = reader.boolean();
         cia_b_irq = reader.boolean();
+        cia_a.load_state(reader);
+        cia_b.load_state(reader);
         frame_index = reader.u64();
         cop1lc = reader.u32() & copper_address_mask;
         cop2lc = reader.u32() & copper_address_mask;
@@ -2628,20 +2586,7 @@ namespace mnemos::manifests::amiga {
             }
         }
         floppy_selected = floppy_active_drive != no_floppy_drive;
-        const std::uint8_t saved_keyboard_queue_count = reader.u8();
-        keyboard_byte_in_flight = reader.boolean();
-        keyboard_ack_low_seen = reader.boolean();
-        keyboard_caps_lock_led = reader.boolean();
-        keyboard_queue_head = 0U;
-        keyboard_queue_count =
-            std::min<std::size_t>(saved_keyboard_queue_count, keyboard_queue.size());
-        for (std::size_t i = 0U; i < keyboard_queue.size(); ++i) {
-            const std::uint8_t value = reader.u8();
-            keyboard_queue[i] = i < keyboard_queue_count ? value : 0U;
-        }
-        for (bool& down : keyboard_key_down) {
-            down = reader.boolean();
-        }
+        amiga_keyboard_load_state(keyboard, reader);
         for (std::uint32_t& ptr : bitplane_pointer) {
             ptr = reader.u32() & chip_dma_address_mask;
         }

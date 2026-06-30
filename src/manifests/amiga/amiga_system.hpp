@@ -6,6 +6,7 @@
 #include "cia8520.hpp"
 #include "denise.hpp"
 #include "devices/amiga_input.hpp"
+#include "devices/amiga_keyboard.hpp"
 #include "drives/amiga_floppy.hpp"
 #include "expansions/zorro2.hpp"
 #include "m68000.hpp"
@@ -54,14 +55,20 @@ namespace mnemos::manifests::amiga {
         static constexpr std::uint8_t no_floppy_drive = amiga_no_floppy_drive;
         static constexpr std::uint32_t floppy_index_pulses_per_second =
             amiga_floppy_index_pulses_per_second;
-        static constexpr std::size_t keyboard_raw_key_count = 128U;
-        static constexpr std::size_t keyboard_queue_capacity = 16U;
-        static constexpr std::uint8_t keyboard_reset_warning_code = 0x78U;
-        static constexpr std::uint8_t keyboard_last_code_bad_code = 0xF9U;
-        static constexpr std::uint8_t keyboard_buffer_overflow_code = 0xFAU;
-        static constexpr std::uint8_t keyboard_self_test_fail_code = 0xFCU;
-        static constexpr std::uint8_t keyboard_powerup_stream_start_code = 0xFDU;
-        static constexpr std::uint8_t keyboard_powerup_stream_end_code = 0xFEU;
+        static constexpr std::size_t keyboard_raw_key_count = amiga_keyboard_raw_key_count;
+        static constexpr std::size_t keyboard_queue_capacity = amiga_keyboard_queue_capacity;
+        static constexpr std::uint8_t keyboard_reset_warning_code =
+            amiga_keyboard_reset_warning_code;
+        static constexpr std::uint8_t keyboard_last_code_bad_code =
+            amiga_keyboard_last_code_bad_code;
+        static constexpr std::uint8_t keyboard_buffer_overflow_code =
+            amiga_keyboard_buffer_overflow_code;
+        static constexpr std::uint8_t keyboard_self_test_fail_code =
+            amiga_keyboard_self_test_fail_code;
+        static constexpr std::uint8_t keyboard_powerup_stream_start_code =
+            amiga_keyboard_powerup_stream_start_code;
+        static constexpr std::uint8_t keyboard_powerup_stream_end_code =
+            amiga_keyboard_powerup_stream_end_code;
 
         static constexpr std::uint32_t chip_ram_base = 0x000000U;
         static constexpr std::uint32_t fast_ram_base = 0x200000U;
@@ -169,13 +176,7 @@ namespace mnemos::manifests::amiga {
         bool floppy_selected{};
         bool floppy_step_line{true};
         bool floppy_direction_inward{};
-        std::array<std::uint8_t, keyboard_queue_capacity> keyboard_queue{};
-        std::array<bool, keyboard_raw_key_count> keyboard_key_down{};
-        std::size_t keyboard_queue_head{};
-        std::size_t keyboard_queue_count{};
-        bool keyboard_byte_in_flight{};
-        bool keyboard_ack_low_seen{};
-        bool keyboard_caps_lock_led{};
+        amiga_keyboard_queue_state keyboard{};
 
         [[nodiscard]] bool kickstart_overlay_active() const noexcept { return overlay_active; }
         [[nodiscard]] bool floppy_loaded() const noexcept { return floppy_loaded(0U); }
@@ -190,10 +191,10 @@ namespace mnemos::manifests::amiga {
         }
         [[nodiscard]] std::uint32_t floppy_index_lines_per_revolution() const noexcept;
         [[nodiscard]] std::size_t keyboard_pending_count() const noexcept {
-            return keyboard_queue_count;
+            return keyboard.count;
         }
         [[nodiscard]] bool keyboard_caps_lock_led_on() const noexcept {
-            return keyboard_caps_lock_led;
+            return keyboard.caps_lock_led;
         }
         [[nodiscard]] zorro2_expansion_board* active_zorro2_autoconfig_board() noexcept;
         [[nodiscard]] const zorro2_expansion_board*

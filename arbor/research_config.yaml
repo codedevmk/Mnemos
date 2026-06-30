@@ -1,0 +1,47 @@
+# research_config.yaml — Mnemos Amiga emulation superiority vs WinUAE 6.0.3
+# Per-project task + budget only. LLM/provider/keys live in `arbor setup` (~/.arbor/config.yaml).
+# The eval contract, protected dirs, profiles, and timeouts live in the plugin (mnemos_amiga.plugin.yaml).
+#
+# PRECONDITIONS (Arbor will refuse without these): runnable eval script + dev/test data + clean git.
+#   - Headless deterministic Mnemos run mode with trace/framebuffer/audio export + hashing.
+#   - Protected, read-only golden + WinUAE-baseline data referenced by the plugin.
+
+task: >
+  Make the Mnemos Amiga subsystem measurably superior to WinUAE 6.0.3 in accuracy,
+  performance, and feature parity, proven on a HELD-OUT conformance corpus.
+
+  Optimize the primary scalar ACS (Accuracy Conformance Score, 0-100) on the dev split:
+  cycle-stamped trace conformance (0.55) + frame/audio conformance (0.35) + compatibility
+  corpus pass-rate (0.10), scored against TIER-A HARDWARE-TRUTH goldens. WinUAE 6.0.3
+  traces are a Tier-B regression scaffold ONLY, never the correctness oracle; adjudicate
+  every divergence against Tier-A and LOG superiority wins rather than converging to WinUAE.
+
+  Treat performance (PTR, x-realtime at the active accuracy tier on the pinned host) as a
+  FLOORED, lexicographically-subordinate constraint: reject any change dropping PTR below
+  the floor; reward PTR above WinUAE parity only with a bounded bonus that cannot buy
+  accuracy. Apply a HARD regression veto: never merge a change that regresses any
+  previously-passing conformance test, even if the net scalar improves.
+
+  Phase by accuracy tier: A500/OCS/cycle-exact first (WinUAE's "100% accurate" bar), then
+  ECS, then A1200/AGA, then A3000/A4000+accelerators/RTG.
+
+  DO NOT modify the evaluation harness, golden references, or WinUAE baseline traces.
+  DO NOT add non-redistributable assets (Kickstart ROMs, IPF/CAPS, commercial images) to
+  the repo. Keep the build zero-warning and the harness deterministic.
+
+# Domain plugin: carries eval contract, protected paths, required outputs, timeout presets,
+# and smoke/pilot/full profiles. See mnemos_amiga.plugin.yaml.
+plugin: mnemos_amiga
+
+coordinator:
+  max_cycles: 12            # CONFIRM with budget; raise for full runs via plugin profile
+  max_depth: 3              # depth-1 = subsystem direction, depth-2/3 = concrete methods
+  merge_threshold: 1.0      # min HELD-OUT ACS-point gain to merge into trunk (tighten over time)
+  ui:
+    interaction_mode: collaborative   # you approve direction + each merge (per your standing preference)
+
+executor:
+  max_turns: 120            # cycle-exact subsystem changes are deep; give room, cap via profile
+
+# NOTE: a copy-pasteable file with every supported option lives in the Arbor repo at
+# examples/research_config.example.yaml — reconcile against it before the first real run.
