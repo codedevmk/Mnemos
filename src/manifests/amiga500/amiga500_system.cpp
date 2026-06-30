@@ -9,7 +9,7 @@
 namespace mnemos::manifests::amiga500 {
 
     namespace {
-        constexpr std::uint32_t state_version = 25U;
+        constexpr std::uint32_t state_version = 26U;
 
         constexpr std::uint16_t reg_dmaconr = 0x002U;
         constexpr std::uint16_t reg_vposr = 0x004U;
@@ -131,6 +131,164 @@ namespace mnemos::manifests::amiga500 {
                 return 0U;
             }
             return std::min(config.fast_ram_size, amiga500_system::fast_ram_max_size);
+        }
+
+        [[nodiscard]] std::uint8_t zorro2_size_code(std::size_t size) noexcept {
+            if (size >= amiga500_system::fast_ram_max_size) {
+                return 0U;
+            }
+            if (size > amiga500_system::fast_ram_size_4m) {
+                return 0U;
+            }
+            if (size > amiga500_system::fast_ram_size_2m) {
+                return 7U;
+            }
+            if (size > amiga500_system::fast_ram_size_1m) {
+                return 6U;
+            }
+            if (size > amiga500_system::fast_ram_size_512k) {
+                return 5U;
+            }
+            return 4U;
+        }
+
+        [[nodiscard]] std::uint8_t zorro2_logical_config_byte(
+            const amiga500_system::zorro2_expansion_board& board,
+            std::uint8_t logical_offset) noexcept {
+            constexpr std::uint8_t ert_newboard = 0xC0U;
+            constexpr std::uint8_t ert_memlist = 0x20U;
+            constexpr std::uint8_t erff_memspace = 0x80U;
+
+            switch (logical_offset) {
+            case 0x00U:
+                return static_cast<std::uint8_t>(
+                    ert_newboard | (board.memory ? ert_memlist : 0U) |
+                    zorro2_size_code(board.memory_size));
+            case 0x01U:
+                return board.product;
+            case 0x02U:
+                return board.memory ? erff_memspace : 0U;
+            case 0x04U:
+                return static_cast<std::uint8_t>(board.manufacturer >> 8U);
+            case 0x05U:
+                return static_cast<std::uint8_t>(board.manufacturer);
+            case 0x06U:
+                return static_cast<std::uint8_t>(board.serial >> 24U);
+            case 0x07U:
+                return static_cast<std::uint8_t>(board.serial >> 16U);
+            case 0x08U:
+                return static_cast<std::uint8_t>(board.serial >> 8U);
+            case 0x09U:
+                return static_cast<std::uint8_t>(board.serial);
+            case 0x0AU:
+            case 0x0BU:
+                return 0U;
+            default:
+                return 0U;
+            }
+        }
+
+        [[nodiscard]] std::uint8_t zorro2_config_storage_byte(
+            const amiga500_system::zorro2_expansion_board& board,
+            std::uint8_t logical_offset) noexcept {
+            const std::uint8_t value = zorro2_logical_config_byte(board, logical_offset);
+            return logical_offset == 0U ? value : static_cast<std::uint8_t>(~value);
+        }
+
+        [[nodiscard]] std::uint8_t repeat_nibble(std::uint8_t nibble) noexcept {
+            nibble = static_cast<std::uint8_t>(nibble & 0x0FU);
+            return static_cast<std::uint8_t>((nibble << 4U) | nibble);
+        }
+
+        [[nodiscard]] std::uint8_t zorro2_autoconfig_read(
+            const amiga500_system::zorro2_expansion_board& board,
+            std::uint32_t address) noexcept {
+            const std::uint32_t physical =
+                (address - amiga500_system::zorro2_autoconfig_base) & 0xFFFFU;
+            const auto logical_offset = static_cast<std::uint8_t>((physical >> 2U) & 0x3FU);
+            const std::uint8_t value = zorro2_config_storage_byte(board, logical_offset);
+            const bool high_nibble = (physical & 0x02U) == 0U;
+            const std::uint8_t nibble = high_nibble ? static_cast<std::uint8_t>(value >> 4U)
+                                                    : static_cast<std::uint8_t>(value & 0x0FU);
+            return repeat_nibble(nibble);
+        }
+
+        [[nodiscard]] std::uint8_t zorro2_write_nibble(std::uint8_t value) noexcept {
+            return (value & 0xF0U) != 0U ? static_cast<std::uint8_t>(value >> 4U)
+                                         : static_cast<std::uint8_t>(value & 0x0FU);
+        }
+
+        [[nodiscard]] amiga500_system::zorro2_expansion_board*
+        configured_zorro2_memory_board_at(amiga500_system& sys, std::uint32_t address) noexcept {
+            for (auto& board : sys.zorro2_boards) {
+                if (!board.memory || !board.configured || board.shut_up ||
+                    board.memory_size == 0U) {
+                    continue;
+                }
+                if (address < board.assigned_base) {
+                    continue;
+                }
+                const std::uint32_t offset = address - board.assigned_base;
+                if (offset < board.memory_size) {
+                    return &board;
+                }
+            }
+            return nullptr;
+        }
+
+        void advance_zorro2_autoconfig(amiga500_system& sys) noexcept {
+            sys.zorro2_base_low_nibble = 0U;
+            sys.zorro2_base_low_nibble_valid = false;
+            if (sys.zorro2_autoconfig_index < sys.zorro2_boards.size()) {
+                ++sys.zorro2_autoconfig_index;
+            }
+            while (sys.zorro2_autoconfig_index < sys.zorro2_boards.size()) {
+                const auto& board = sys.zorro2_boards[sys.zorro2_autoconfig_index];
+                if (!board.configured && !board.shut_up) {
+                    return;
+                }
+                ++sys.zorro2_autoconfig_index;
+            }
+        }
+
+        void zorro2_autoconfig_write(amiga500_system& sys, std::uint32_t address,
+                                     std::uint8_t value) noexcept {
+            auto* board = sys.active_zorro2_autoconfig_board();
+            if (board == nullptr) {
+                return;
+            }
+            const std::uint32_t physical =
+                (address - amiga500_system::zorro2_autoconfig_base) & 0xFFFFU;
+            const std::uint32_t even_physical = physical & ~0x01U;
+            const bool base_high = even_physical == 0x48U || even_physical == 0x24U;
+            const bool base_low = even_physical == 0x4AU || even_physical == 0x26U;
+            const bool shut_up = even_physical == 0x4CU || even_physical == 0x4EU ||
+                                 even_physical == 0x28U || even_physical == 0x2AU;
+            if (base_low) {
+                sys.zorro2_base_low_nibble = zorro2_write_nibble(value);
+                sys.zorro2_base_low_nibble_valid = true;
+                return;
+            }
+            if (base_high) {
+                const bool encoded_nibble = (value & 0xF0U) == 0U;
+                const std::uint8_t high = zorro2_write_nibble(value);
+                const std::uint8_t low = sys.zorro2_base_low_nibble_valid
+                                             ? sys.zorro2_base_low_nibble
+                                             : static_cast<std::uint8_t>(
+                                                   encoded_nibble ? 0U : (value & 0x0FU));
+                board->assigned_base = static_cast<std::uint32_t>(
+                    static_cast<std::uint32_t>((high << 4U) | low) << 16U);
+                board->configured = true;
+                board->shut_up = false;
+                advance_zorro2_autoconfig(sys);
+                return;
+            }
+            if (shut_up) {
+                board->shut_up = true;
+                board->configured = false;
+                board->assigned_base = 0U;
+                advance_zorro2_autoconfig(sys);
+            }
         }
 
         [[nodiscard]] std::uint32_t chip_ram_address_mask(std::size_t size) noexcept {
@@ -1189,6 +1347,57 @@ namespace mnemos::manifests::amiga500 {
             return;
         }
         write_custom_word(reg, static_cast<std::uint16_t>((previous & 0xFF00U) | value));
+    }
+
+    amiga500_system::zorro2_expansion_board*
+    amiga500_system::active_zorro2_autoconfig_board() noexcept {
+        if (zorro2_autoconfig_index < zorro2_boards.size()) {
+            auto& board = zorro2_boards[zorro2_autoconfig_index];
+            if (!board.configured && !board.shut_up) {
+                return &board;
+            }
+        }
+        for (std::size_t i = 0U; i < zorro2_boards.size(); ++i) {
+            auto& board = zorro2_boards[i];
+            if (!board.configured && !board.shut_up) {
+                zorro2_autoconfig_index = i;
+                return &board;
+            }
+        }
+        zorro2_autoconfig_index = zorro2_boards.size();
+        return nullptr;
+    }
+
+    const amiga500_system::zorro2_expansion_board*
+    amiga500_system::active_zorro2_autoconfig_board() const noexcept {
+        if (zorro2_autoconfig_index < zorro2_boards.size()) {
+            const auto& board = zorro2_boards[zorro2_autoconfig_index];
+            if (!board.configured && !board.shut_up) {
+                return &board;
+            }
+        }
+        for (const auto& board : zorro2_boards) {
+            if (!board.configured && !board.shut_up) {
+                return &board;
+            }
+        }
+        return nullptr;
+    }
+
+    bool amiga500_system::zorro2_autoconfig_pending() const noexcept {
+        return active_zorro2_autoconfig_board() != nullptr;
+    }
+
+    void amiga500_system::reset_zorro2_autoconfig() noexcept {
+        zorro2_autoconfig_index = 0U;
+        zorro2_base_low_nibble = 0U;
+        zorro2_base_low_nibble_valid = false;
+        for (auto& board : zorro2_boards) {
+            board.assigned_base = 0U;
+            board.configured = false;
+            board.shut_up = false;
+        }
+        static_cast<void>(active_zorro2_autoconfig_board());
     }
 
     bool amiga500_system::floppy_loaded(std::size_t drive) const noexcept {
@@ -2274,6 +2483,7 @@ namespace mnemos::manifests::amiga500 {
         cpu.set_irq_level(0);
 
         overlay_active = true;
+        reset_zorro2_autoconfig();
         floppy_selected_mask = 0U;
         floppy_active_drive = no_floppy_drive;
         floppy_side_pos = 0U;
@@ -2500,6 +2710,15 @@ namespace mnemos::manifests::amiga500 {
         writer.bytes(chip_ram);
         writer.u64(static_cast<std::uint64_t>(fast_ram.size()));
         writer.bytes(fast_ram);
+        writer.u64(static_cast<std::uint64_t>(zorro2_autoconfig_index));
+        writer.u8(static_cast<std::uint8_t>(zorro2_base_low_nibble & 0x0FU));
+        writer.boolean(zorro2_base_low_nibble_valid);
+        writer.u64(static_cast<std::uint64_t>(zorro2_boards.size()));
+        for (const auto& board : zorro2_boards) {
+            writer.u32(board.assigned_base);
+            writer.boolean(board.configured);
+            writer.boolean(board.shut_up);
+        }
         for (std::uint16_t color : palette_words) {
             writer.u16(color);
         }
@@ -2678,6 +2897,35 @@ namespace mnemos::manifests::amiga500 {
             return;
         }
         reader.bytes(fast_ram);
+        zorro2_autoconfig_index = static_cast<std::size_t>(reader.u64());
+        zorro2_base_low_nibble = static_cast<std::uint8_t>(reader.u8() & 0x0FU);
+        zorro2_base_low_nibble_valid = reader.boolean();
+        const std::uint64_t saved_zorro2_board_count = reader.u64();
+        if (saved_zorro2_board_count != static_cast<std::uint64_t>(zorro2_boards.size())) {
+            reader.fail();
+            return;
+        }
+        for (auto& board : zorro2_boards) {
+            board.assigned_base = reader.u32() & 0x00FF0000U;
+            board.configured = reader.boolean();
+            board.shut_up = reader.boolean();
+            if (board.configured && board.memory) {
+                const std::uint32_t expansion_end =
+                    amiga500_system::zorro2_expansion_ram_base +
+                    amiga500_system::zorro2_expansion_ram_size;
+                const std::uint64_t board_end = static_cast<std::uint64_t>(board.assigned_base) +
+                                                static_cast<std::uint64_t>(board.memory_size);
+                if (board.assigned_base < amiga500_system::zorro2_expansion_ram_base ||
+                    board_end > expansion_end) {
+                    reader.fail();
+                    return;
+                }
+            }
+        }
+        if (zorro2_autoconfig_index > zorro2_boards.size()) {
+            reader.fail();
+            return;
+        }
         for (std::size_t i = 0; i < palette_words.size(); ++i) {
             const std::uint16_t color = reader.u16();
             palette_words[i] = color;
@@ -2686,6 +2934,7 @@ namespace mnemos::manifests::amiga500 {
             denise.write_color(i, color);
         }
         if (reader.ok()) {
+            static_cast<void>(active_zorro2_autoconfig_board());
             std::copy(chip_ram.begin(), chip_ram.end(), paula.chipram().begin());
             agnus.attach_chip_ram(chip_ram);
             agnus.attach_palette(palette_bytes);
@@ -2770,6 +3019,17 @@ namespace mnemos::manifests::amiga500 {
         s->copper_address_mask = copper_address_mask_for_model(config.model);
         s->chip_ram.assign(active_chip_ram_size, 0U);
         s->fast_ram.assign(active_fast_ram_size, 0U);
+        if (!s->fast_ram.empty()) {
+            s->zorro2_boards.push_back(amiga500_system::zorro2_expansion_board{
+                .product = 0x01U,
+                .manufacturer = 2011U,
+                .serial = 0x4D4E0001U,
+                .memory_size = s->fast_ram.size(),
+                .assigned_base = 0U,
+                .memory = true,
+                .configured = false,
+                .shut_up = false});
+        }
         s->paula.resize_chipram(active_chip_ram_size);
         normalize_kickstart(s->kickstart_rom, kickstart_rom);
 
@@ -2826,7 +3086,51 @@ namespace mnemos::manifests::amiga500 {
             },
             0);
         if (!s->fast_ram.empty()) {
-            s->bus.map_ram(amiga500_system::fast_ram_base, s->fast_ram, 0);
+            s->bus.map_mmio(
+                amiga500_system::zorro2_expansion_ram_base,
+                amiga500_system::zorro2_expansion_ram_size,
+                [s](std::uint32_t a) {
+                    const auto* board = configured_zorro2_memory_board_at(*s, a);
+                    if (board == nullptr) {
+                        return static_cast<std::uint8_t>(0xFFU);
+                    }
+                    return s->fast_ram[a - board->assigned_base];
+                },
+                [s](std::uint32_t a, std::uint8_t v) {
+                    const auto* board = configured_zorro2_memory_board_at(*s, a);
+                    if (board == nullptr) {
+                        return;
+                    }
+                    s->fast_ram[a - board->assigned_base] = v;
+                },
+                0,
+                [s](std::uint32_t a, bool) {
+                    return configured_zorro2_memory_board_at(*s, a) != nullptr;
+                });
+            s->bus.map_mmio16(
+                amiga500_system::zorro2_autoconfig_base,
+                amiga500_system::zorro2_autoconfig_size,
+                [s](std::uint32_t a) {
+                    const auto* board = s->active_zorro2_autoconfig_board();
+                    return board == nullptr ? static_cast<std::uint8_t>(0xFFU)
+                                            : zorro2_autoconfig_read(*board, a);
+                },
+                [s](std::uint32_t a, std::uint8_t v) { zorro2_autoconfig_write(*s, a, v); },
+                [s](std::uint32_t a) {
+                    const auto* board = s->active_zorro2_autoconfig_board();
+                    if (board == nullptr) {
+                        return static_cast<std::uint16_t>(0xFFFFU);
+                    }
+                    const std::uint8_t value = zorro2_autoconfig_read(*board, a);
+                    return static_cast<std::uint16_t>((static_cast<std::uint16_t>(value) << 8U) |
+                                                      value);
+                },
+                [s](std::uint32_t a, std::uint16_t v) {
+                    zorro2_autoconfig_write(*s, a, static_cast<std::uint8_t>(v >> 8U));
+                    zorro2_autoconfig_write(*s, a + 1U, static_cast<std::uint8_t>(v));
+                },
+                0,
+                [s](std::uint32_t, bool) { return s->zorro2_autoconfig_pending(); });
         }
         // Reset overlay: Kickstart answers reads at $000000 until CIA-A PA0 is
         // driven high. Writes always fall through to chip RAM.

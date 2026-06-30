@@ -70,6 +70,11 @@ namespace mnemos::manifests::amiga500 {
 
         static constexpr std::uint32_t chip_ram_base = 0x000000U;
         static constexpr std::uint32_t fast_ram_base = 0x200000U;
+        static constexpr std::uint32_t zorro2_expansion_ram_base = fast_ram_base;
+        static constexpr std::uint32_t zorro2_expansion_ram_size =
+            static_cast<std::uint32_t>(fast_ram_max_size);
+        static constexpr std::uint32_t zorro2_autoconfig_base = 0xE80000U;
+        static constexpr std::uint32_t zorro2_autoconfig_size = 0x10000U;
         static constexpr std::uint32_t kickstart_base = 0xF80000U;
         static constexpr std::uint32_t custom_base = 0xDFF000U;
         static constexpr std::uint32_t cia_a_base = 0xBFE000U;
@@ -110,6 +115,22 @@ namespace mnemos::manifests::amiga500 {
         std::vector<std::uint8_t> chip_ram = std::vector<std::uint8_t>(chip_ram_size, 0U);
         std::vector<std::uint8_t> fast_ram{};
         std::array<std::uint8_t, kickstart_window_size> kickstart_rom{};
+
+        struct zorro2_expansion_board final {
+            std::uint8_t product{};
+            std::uint16_t manufacturer{};
+            std::uint32_t serial{};
+            std::size_t memory_size{};
+            std::uint32_t assigned_base{};
+            bool memory{};
+            bool configured{};
+            bool shut_up{};
+        };
+
+        std::vector<zorro2_expansion_board> zorro2_boards{};
+        std::size_t zorro2_autoconfig_index{};
+        std::uint8_t zorro2_base_low_nibble{};
+        bool zorro2_base_low_nibble_valid{};
 
         std::array<std::uint16_t, chips::video::agnus::palette_entries> palette_words{};
         std::array<std::uint8_t, chips::video::agnus::palette_entries * 2U> palette_bytes{};
@@ -214,6 +235,11 @@ namespace mnemos::manifests::amiga500 {
         [[nodiscard]] bool keyboard_caps_lock_led_on() const noexcept {
             return keyboard_caps_lock_led;
         }
+        [[nodiscard]] zorro2_expansion_board* active_zorro2_autoconfig_board() noexcept;
+        [[nodiscard]] const zorro2_expansion_board*
+        active_zorro2_autoconfig_board() const noexcept;
+        [[nodiscard]] bool zorro2_autoconfig_pending() const noexcept;
+        void reset_zorro2_autoconfig() noexcept;
 
         [[nodiscard]] bool mount_floppy(std::span<const std::uint8_t> adf_image);
         [[nodiscard]] bool mount_floppy(std::size_t drive, std::span<const std::uint8_t> adf_image);

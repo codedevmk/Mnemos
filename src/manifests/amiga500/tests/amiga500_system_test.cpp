@@ -79,6 +79,13 @@ namespace {
         sys.bus.write8(address + 1U, static_cast<std::uint8_t>(value));
     }
 
+    void assign_first_zorro2_board(amiga500_system& sys, std::uint8_t base_page = 0x20U) {
+        REQUIRE(sys.zorro2_autoconfig_pending());
+        sys.bus.write8(amiga500_system::zorro2_autoconfig_base + 0x4AU,
+                       static_cast<std::uint8_t>(base_page & 0x0FU));
+        sys.bus.write8(amiga500_system::zorro2_autoconfig_base + 0x48U, base_page);
+    }
+
     void write_kickstart_word(amiga500_system& sys, std::uint32_t offset, std::uint16_t value) {
         sys.kickstart_rom[offset] = static_cast<std::uint8_t>(value >> 8U);
         sys.kickstart_rom[offset + 1U] = static_cast<std::uint8_t>(value);
@@ -558,6 +565,8 @@ TEST_CASE("amiga2000 Copper location pointers are clipped to OCS chip address wi
     const amiga500_config config{.model = amiga500_model::amiga2000};
     auto sys = assemble_amiga500(tiny_kickstart(), config);
     REQUIRE(sys != nullptr);
+    CHECK(sys->zorro2_boards.empty());
+    CHECK_FALSE(sys->zorro2_autoconfig_pending());
 
     sys->write_custom_word(0x080U, 0x001FU); // COP1LCH
     sys->write_custom_word(0x082U, 0x1235U); // COP1LCL, low bit ignored.
@@ -596,6 +605,15 @@ TEST_CASE("amiga2000 Fast RAM maps as CPU-visible expansion memory",
 
     REQUIRE(sys->chip_ram.size() == amiga500_system::chip_ram_size);
     REQUIRE(sys->fast_ram.size() == amiga500_system::fast_ram_size_2m);
+    REQUIRE(sys->zorro2_boards.size() == 1U);
+    CHECK(sys->zorro2_autoconfig_pending());
+    CHECK(sys->bus.read8(amiga500_system::fast_ram_base) == 0xFFU);
+    CHECK(sys->bus.read8(amiga500_system::zorro2_autoconfig_base + 0x00U) == 0xEEU);
+    CHECK(sys->bus.read8(amiga500_system::zorro2_autoconfig_base + 0x02U) == 0x66U);
+    assign_first_zorro2_board(*sys);
+    REQUIRE_FALSE(sys->zorro2_autoconfig_pending());
+    REQUIRE(sys->zorro2_boards[0].configured);
+    CHECK(sys->zorro2_boards[0].assigned_base == amiga500_system::fast_ram_base);
 
     constexpr std::uint32_t fast_offset = 0x001234U;
     sys->bus.write8(amiga500_system::fast_ram_base + fast_offset, 0xA6U);
@@ -3147,6 +3165,7 @@ TEST_CASE("amiga2000 save_state restores configured Fast RAM",
     auto sys = assemble_amiga500(tiny_kickstart(), config);
     REQUIRE(sys != nullptr);
     REQUIRE(sys->fast_ram.size() == amiga500_system::fast_ram_size_2m);
+    assign_first_zorro2_board(*sys);
 
     constexpr std::uint32_t fast_offset = 0x010123U;
     sys->bus.write8(amiga500_system::fast_ram_base + fast_offset, 0x6DU);
@@ -3161,6 +3180,9 @@ TEST_CASE("amiga2000 save_state restores configured Fast RAM",
     mnemos::chips::state_reader reader(blob);
     sys->load_state(reader);
     REQUIRE(reader.ok());
+    REQUIRE(sys->zorro2_boards.size() == 1U);
+    CHECK(sys->zorro2_boards[0].configured);
+    CHECK(sys->zorro2_boards[0].assigned_base == amiga500_system::fast_ram_base);
     CHECK(sys->bus.read8(amiga500_system::fast_ram_base + fast_offset) == 0x6DU);
     CHECK(sys->fast_ram[fast_offset] == 0x6DU);
 }

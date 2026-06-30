@@ -1782,7 +1782,7 @@ namespace mnemos::apps::player::adapters::amiga500 {
 
         runtime::save_target target;
         target.manifest_id = model_family_id(adapter.model_);
-        target.manifest_rev = 3U;
+        target.manifest_rev = 4U;
         target.master_cycle = sched.master_cycle();
         target.chips.push_back({"cpu", &sys.cpu});
         target.chips.push_back({"agnus", &sys.agnus});

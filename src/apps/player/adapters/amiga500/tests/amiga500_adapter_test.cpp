@@ -160,6 +160,13 @@ namespace {
         sys.bus.write8(address + 1U, static_cast<std::uint8_t>(value));
     }
 
+    void assign_first_zorro2_board(amiga500_system& sys, std::uint8_t base_page = 0x20U) {
+        REQUIRE(sys.zorro2_autoconfig_pending());
+        sys.bus.write8(amiga500_system::zorro2_autoconfig_base + 0x4AU,
+                       static_cast<std::uint8_t>(base_page & 0x0FU));
+        sys.bus.write8(amiga500_system::zorro2_autoconfig_base + 0x48U, base_page);
+    }
+
     [[nodiscard]] bool joy_up(std::uint16_t joy) {
         return (((joy >> 9U) ^ (joy >> 8U)) & 0x01U) != 0U;
     }
@@ -415,6 +422,8 @@ TEST_CASE("amiga500 adapter configures Amiga 2000 Fast RAM expansion",
     CHECK(spec_reports_fast_ram);
 
     constexpr std::uint32_t fast_offset = 0x004321U;
+    CHECK(sys.bus.read8(amiga500_system::fast_ram_base + fast_offset) == 0xFFU);
+    assign_first_zorro2_board(sys);
     sys.bus.write8(amiga500_system::fast_ram_base + fast_offset, 0xD2U);
     CHECK(sys.fast_ram[fast_offset] == 0xD2U);
     CHECK(sys.paula.chipram()[fast_offset] == 0x00U);
@@ -968,7 +977,8 @@ TEST_CASE("amiga500 adapter registry accepts Amiga 2000 Fast RAM model override"
     CHECK(adapter->system().chip_ram.size() == amiga500_system::chip_ram_size_1m);
     CHECK(adapter->system().fast_ram.size() == amiga500_system::fast_ram_size_2m);
 
-    CHECK(adapter->system().bus.read8(amiga500_system::fast_ram_base) == 0x00U);
+    CHECK(adapter->system().bus.read8(amiga500_system::fast_ram_base) == 0xFFU);
+    assign_first_zorro2_board(adapter->system());
     adapter->system().bus.write8(amiga500_system::fast_ram_base, 0xE4U);
     CHECK(adapter->system().fast_ram[0] == 0xE4U);
 
