@@ -72,12 +72,44 @@ namespace mnemos::manifests::amiga {
         return true;
     }
 
+    bool amiga_keyboard_serial_busy(const amiga_keyboard_queue_state& keyboard) noexcept {
+        return keyboard.byte_in_flight;
+    }
+
+    bool amiga_keyboard_ack_low_seen(const amiga_keyboard_queue_state& keyboard) noexcept {
+        return keyboard.ack_low_seen;
+    }
+
+    void amiga_keyboard_begin_serial_byte(amiga_keyboard_queue_state& keyboard) noexcept {
+        keyboard.byte_in_flight = true;
+        keyboard.ack_low_seen = false;
+    }
+
+    void amiga_keyboard_accept_serial_ack_level(amiga_keyboard_queue_state& keyboard,
+                                                bool level) noexcept {
+        if (!keyboard.byte_in_flight) {
+            keyboard.ack_low_seen = false;
+            return;
+        }
+        if (!level) {
+            keyboard.ack_low_seen = true;
+            return;
+        }
+        if (!keyboard.ack_low_seen) {
+            return;
+        }
+        keyboard.ack_low_seen = false;
+        keyboard.byte_in_flight = false;
+    }
+
     void amiga_keyboard_reset(amiga_keyboard_queue_state& keyboard) noexcept {
         keyboard.queue.fill(0U);
         keyboard.key_down.fill(false);
         keyboard.head = 0U;
         keyboard.count = 0U;
         keyboard.caps_lock_led = false;
+        keyboard.byte_in_flight = false;
+        keyboard.ack_low_seen = false;
     }
 
 } // namespace mnemos::manifests::amiga

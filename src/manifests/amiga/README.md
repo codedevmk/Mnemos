@@ -27,7 +27,7 @@ Layout:
   `amiga_input.*` currently owns controller-port masks, JOYDAT encoding, mouse
   counter wrapping, and POT counter composition. `amiga_keyboard.*` currently
   owns raw key constants, keyboard queue/matrix helpers, caps lock state, and
-  keyboard SDR byte encoding.
+  keyboard SDR byte encoding plus serial acknowledgement state transitions.
 - `models/` — model descriptors for A500, A500+, A600, A2000, and later
   machines. `amiga_models.*` currently owns base chip RAM, chipset selection,
   and expansion capability policy.

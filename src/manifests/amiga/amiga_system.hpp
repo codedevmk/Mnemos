@@ -177,8 +177,6 @@ namespace mnemos::manifests::amiga {
         bool floppy_step_line{true};
         bool floppy_direction_inward{};
         amiga_keyboard_queue_state keyboard{};
-        bool keyboard_byte_in_flight{};
-        bool keyboard_ack_low_seen{};
 
         [[nodiscard]] bool kickstart_overlay_active() const noexcept { return overlay_active; }
         [[nodiscard]] bool floppy_loaded() const noexcept { return floppy_loaded(0U); }

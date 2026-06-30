@@ -1397,12 +1397,11 @@ namespace mnemos::manifests::amiga {
             cia_a.cnt_edge(true);
         }
         cia_a.sp_level(true);
-        keyboard_byte_in_flight = true;
-        keyboard_ack_low_seen = false;
+        amiga_keyboard_begin_serial_byte(keyboard);
     }
 
     void amiga_system::service_keyboard_queue() noexcept {
-        if (keyboard_byte_in_flight) {
+        if (amiga_keyboard_serial_busy(keyboard)) {
             return;
         }
         std::uint8_t code = 0U;
@@ -1413,19 +1412,7 @@ namespace mnemos::manifests::amiga {
     }
 
     void amiga_system::write_cia_a_sp(bool level) noexcept {
-        if (!keyboard_byte_in_flight) {
-            keyboard_ack_low_seen = false;
-            return;
-        }
-        if (!level) {
-            keyboard_ack_low_seen = true;
-            return;
-        }
-        if (!keyboard_ack_low_seen) {
-            return;
-        }
-        keyboard_ack_low_seen = false;
-        keyboard_byte_in_flight = false;
+        amiga_keyboard_accept_serial_ack_level(keyboard, level);
     }
 
     std::uint8_t amiga_system::cia_a_port_a_inputs() const noexcept {
@@ -2273,8 +2260,6 @@ namespace mnemos::manifests::amiga {
         }
 
         amiga_keyboard_reset(keyboard);
-        keyboard_byte_in_flight = false;
-        keyboard_ack_low_seen = false;
 
         std::copy(chip_ram.begin(), chip_ram.end(), paula.chipram().begin());
         agnus.attach_chip_ram(chip_ram);
@@ -2433,8 +2418,8 @@ namespace mnemos::manifests::amiga {
             }
         }
         writer.u8(static_cast<std::uint8_t>(keyboard.count));
-        writer.boolean(keyboard_byte_in_flight);
-        writer.boolean(keyboard_ack_low_seen);
+        writer.boolean(keyboard.byte_in_flight);
+        writer.boolean(keyboard.ack_low_seen);
         writer.boolean(keyboard.caps_lock_led);
         for (std::size_t i = 0U; i < keyboard.queue.size(); ++i) {
             const std::uint8_t value =
@@ -2611,8 +2596,8 @@ namespace mnemos::manifests::amiga {
         }
         floppy_selected = floppy_active_drive != no_floppy_drive;
         const std::uint8_t saved_keyboard_queue_count = reader.u8();
-        keyboard_byte_in_flight = reader.boolean();
-        keyboard_ack_low_seen = reader.boolean();
+        keyboard.byte_in_flight = reader.boolean();
+        keyboard.ack_low_seen = reader.boolean();
         keyboard.caps_lock_led = reader.boolean();
         keyboard.head = 0U;
         keyboard.count = std::min<std::size_t>(saved_keyboard_queue_count, keyboard.queue.size());

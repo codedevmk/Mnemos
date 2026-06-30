@@ -70,9 +70,9 @@ changing timing behavior.
 
 Device helpers own controller-port button masks, joystick register encoding,
 mouse counter wrapping, POT counter composition, keyboard constants, keyboard
-queue/matrix helpers, caps lock state, and keyboard SDR byte encoding. The
-system assembly still owns CIA pin routing and keyboard serial acknowledgement
-state until those can be moved with focused save-state coverage.
+queue/matrix helpers, caps lock state, keyboard SDR byte encoding, and keyboard
+serial acknowledgement state transitions. The system assembly still owns CIA
+pin routing until that can be moved without changing timing behavior.
 
 ## Consequences
 

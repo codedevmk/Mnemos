@@ -23,6 +23,8 @@ namespace mnemos::manifests::amiga {
         std::size_t head{};
         std::size_t count{};
         bool caps_lock_led{};
+        bool byte_in_flight{};
+        bool ack_low_seen{};
     };
 
     [[nodiscard]] std::uint8_t amiga_keyboard_raw_key(std::uint8_t raw_keycode) noexcept;
@@ -46,6 +48,17 @@ namespace mnemos::manifests::amiga {
 
     [[nodiscard]] bool amiga_keyboard_dequeue_code(amiga_keyboard_queue_state& keyboard,
                                                    std::uint8_t& code) noexcept;
+
+    [[nodiscard]] bool amiga_keyboard_serial_busy(
+        const amiga_keyboard_queue_state& keyboard) noexcept;
+
+    [[nodiscard]] bool amiga_keyboard_ack_low_seen(
+        const amiga_keyboard_queue_state& keyboard) noexcept;
+
+    void amiga_keyboard_begin_serial_byte(amiga_keyboard_queue_state& keyboard) noexcept;
+
+    void amiga_keyboard_accept_serial_ack_level(amiga_keyboard_queue_state& keyboard,
+                                                bool level) noexcept;
 
     void amiga_keyboard_reset(amiga_keyboard_queue_state& keyboard) noexcept;
 
