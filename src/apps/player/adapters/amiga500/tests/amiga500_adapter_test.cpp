@@ -355,6 +355,39 @@ TEST_CASE("amiga500 adapter configures Amiga 2000 metadata and OCS chip RAM",
     CHECK(sys.paula.chipram()[0x000123U] == 0x9AU);
 }
 
+TEST_CASE("amiga500 adapter configures upgraded Amiga 2000 ECS metadata and chip RAM",
+          "[apps][player][amiga2000]") {
+    const amiga500_config config{.video_region = mnemos::video_region::pal,
+                                 .keyboard_layout = amiga500_keyboard_layout::us,
+                                 .model = amiga500_model::amiga2000_ecs_1m};
+    std::vector<std::vector<std::uint8_t>> disks;
+    disks.push_back(tiny_adf(0x77U));
+    amiga500_adapter adapter(tiny_kickstart(), config, "Kickstart 2.0", std::move(disks));
+    auto& sys = adapter.system();
+
+    REQUIRE(sys.chip_ram.size() == amiga500_system::chip_ram_size_1m);
+    REQUIRE(sys.paula.chipram().size() == amiga500_system::chip_ram_size_1m);
+
+    const auto& spec = adapter.system_spec();
+    REQUIRE(spec.size() >= 3U);
+    CHECK(spec[0].label == "System");
+    CHECK(spec[0].value == "Amiga 2000");
+    CHECK(spec[1].label == "Chip RAM");
+    CHECK(spec[1].value == "1 MiB");
+    CHECK(spec[2].label == "Configuration");
+    CHECK(spec[2].value == "ECS / 1 MiB upgrade");
+
+    const auto& media = adapter.media_capabilities();
+    REQUIRE(media.media.size() == 2U);
+    CHECK(media.media[0].provider_id == "amiga2000.kickstart");
+    CHECK(media.media[1].provider_id == "amiga2000.df0");
+
+    constexpr std::uint32_t upper_chip_ram = 0x080000U;
+    sys.bus.write8(upper_chip_ram, 0xB4U);
+    CHECK(sys.chip_ram[upper_chip_ram] == 0xB4U);
+    CHECK(sys.paula.chipram()[upper_chip_ram] == 0xB4U);
+}
+
 TEST_CASE("amiga500 adapter seeds Kickstart keyboard power-up stream",
           "[apps][player][amiga500][input]") {
     amiga500_adapter adapter(kickstart_signature_rom(), {}, "Kickstart signature");
@@ -863,6 +896,29 @@ TEST_CASE("amiga500 adapter registry accepts international QWERTY keyboard layou
         CHECK(static_cast<amiga500_adapter*>(system.get())->system().cia_a.read(0x0CU) ==
               keyboard_sdr(0x31U));
     }
+}
+
+TEST_CASE("amiga500 adapter registry accepts Amiga 2000 ECS/1MiB model override",
+          "[apps][player][amiga2000]") {
+    mnemos::frontend_sdk::adapter_options options{};
+    options.rom = tiny_kickstart();
+    options.video_region = mnemos::video_region::pal;
+    options.amiga_model_override = "ecs_1m";
+
+    auto system =
+        mnemos::frontend_sdk::adapter_registry::instance().create("amiga2000", std::move(options));
+    REQUIRE(system != nullptr);
+    auto* adapter = dynamic_cast<amiga500_adapter*>(system.get());
+    REQUIRE(adapter != nullptr);
+    CHECK(adapter->system().chip_ram.size() == amiga500_system::chip_ram_size_1m);
+
+    bool spec_reports_config = false;
+    for (const auto& field : system->system_spec()) {
+        spec_reports_config = spec_reports_config ||
+                              (field.label == "Configuration" &&
+                               field.value == "ECS / 1 MiB upgrade");
+    }
+    CHECK(spec_reports_config);
 }
 
 TEST_CASE("amiga500 adapter converts frontend mouse movement to Amiga counters",

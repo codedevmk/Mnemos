@@ -20,7 +20,13 @@ namespace mnemos::manifests::amiga500 {
 
     enum class amiga500_keyboard_layout : std::uint8_t { us, qwerty_international, german, azerty };
 
-    enum class amiga500_model : std::uint8_t { amiga500, amiga500_plus, amiga600, amiga2000 };
+    enum class amiga500_model : std::uint8_t {
+        amiga500,
+        amiga500_plus,
+        amiga600,
+        amiga2000,
+        amiga2000_ecs_1m
+    };
 
     struct amiga500_config final {
         mnemos::video_region video_region{mnemos::video_region::pal};

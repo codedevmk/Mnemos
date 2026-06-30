@@ -12,6 +12,7 @@ namespace {
     using mnemos::apps::player::adapters::animation_record_format;
     using mnemos::apps::player::adapters::input_for_frame;
     using mnemos::apps::player::adapters::parse_animation_record_args;
+    using mnemos::apps::player::adapters::parse_amiga_model_arg;
     using mnemos::apps::player::adapters::parse_capabilities_arg;
     using mnemos::apps::player::adapters::parse_dump_battery_args;
     using mnemos::apps::player::adapters::parse_extract_assets_args;
@@ -149,6 +150,18 @@ TEST_CASE("cli_args: --keyboard-layout accepts a concrete token") {
 
     auto option = make_argv({"player", "--keyboard-layout", "--rom", "kick.rom"});
     CHECK(parse_keyboard_layout_arg(option.argc(), option.argv.data()) == std::nullopt);
+}
+
+TEST_CASE("cli_args: --amiga-model accepts a lowercased machine configuration token") {
+    auto a = make_argv(
+        {"player", "--system", "amiga2000", "--rom", "kick.rom", "--amiga-model", "ECS_1M"});
+    REQUIRE(parse_amiga_model_arg(a.argc(), a.argv.data()) == "ecs_1m");
+
+    auto missing = make_argv({"player", "--amiga-model"});
+    CHECK(parse_amiga_model_arg(missing.argc(), missing.argv.data()) == std::nullopt);
+
+    auto option = make_argv({"player", "--amiga-model", "--rom", "kick.rom"});
+    CHECK(parse_amiga_model_arg(option.argc(), option.argv.data()) == std::nullopt);
 }
 
 TEST_CASE("cli_args: --fm enables the optional FM expansion") {

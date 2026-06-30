@@ -121,6 +121,10 @@ namespace mnemos::frontend_sdk {
         // this to map host HID usages to the target machine's raw key matrix.
         // Empty = adapter default. Console/arcade families ignore it.
         std::string keyboard_layout_override;
+        // Optional Amiga machine configuration token. The Amiga adapter consumes
+        // this for expanded model profiles such as an A2000 ECS/1 MiB upgrade.
+        // Empty = the selected family id's base model.
+        std::string amiga_model_override;
         // Optional scheduler-construction override. null = adapter falls back
         // to its built-in scheduler. Non-null lets tooling (deterministic
         // replay, profilers, slice-based multi-clock for 32X/Saturn/CD)

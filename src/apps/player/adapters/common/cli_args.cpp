@@ -80,6 +80,23 @@ namespace mnemos::apps::player::adapters {
         return std::nullopt;
     }
 
+    std::optional<std::string> parse_amiga_model_arg(int argc, char* argv[]) {
+        for (int i = 1; i < argc - 1; ++i) {
+            if (std::string_view{argv[i]} == "--amiga-model") {
+                const std::string_view value{argv[i + 1]};
+                if (!value.empty() && !value.starts_with("--")) {
+                    std::string out{value};
+                    for (char& c : out) {
+                        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                    }
+                    return out;
+                }
+                return std::nullopt;
+            }
+        }
+        return std::nullopt;
+    }
+
     bool parse_fm_unit_arg(int argc, char* argv[]) {
         for (int i = 1; i < argc; ++i) {
             if (std::string_view{argv[i]} == "--fm") {

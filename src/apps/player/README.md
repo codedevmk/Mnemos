@@ -44,3 +44,6 @@ Currently wired:
   `en-gb`, `es`, `it`, `sv`, `fi`, `dk`, and `nb-no`.
   `MNEMOS_AMIGA500_KEYBOARD_LAYOUT` remains the fallback when the CLI option is
   absent.
+- Amiga 2000 defaults to the base OCS/512 KiB profile. Use
+  `--amiga-model ecs-1m` or `MNEMOS_AMIGA2000_MODEL=ecs-1m` for an upgraded
+  ECS / 1 MiB Kickstart 2.x-style configuration.

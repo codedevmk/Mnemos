@@ -112,13 +112,15 @@ namespace mnemos::manifests::amiga500 {
         }
 
         [[nodiscard]] std::size_t chip_ram_size_for_model(amiga500_model model) noexcept {
-            return model == amiga500_model::amiga500_plus || model == amiga500_model::amiga600
+            return model == amiga500_model::amiga500_plus || model == amiga500_model::amiga600 ||
+                           model == amiga500_model::amiga2000_ecs_1m
                        ? amiga500_system::chip_ram_size_1m
                        : amiga500_system::chip_ram_size;
         }
 
         [[nodiscard]] std::uint32_t copper_address_mask_for_model(amiga500_model model) noexcept {
-            return model == amiga500_model::amiga500_plus || model == amiga500_model::amiga600
+            return model == amiga500_model::amiga500_plus || model == amiga500_model::amiga600 ||
+                           model == amiga500_model::amiga2000_ecs_1m
                        ? chips::video::agnus::ecs_1m_copper_address_mask
                        : chips::video::agnus::ocs_copper_address_mask;
         }

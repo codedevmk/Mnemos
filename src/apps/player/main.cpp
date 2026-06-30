@@ -435,6 +435,7 @@ Core:
   --mapper2 <name>      Mapper for a system's second slot (e.g. MSX cart 2)
   --dip <value>         16-bit DIP bank (0x-hex or decimal)
   --no-autostart        Drop to a bare prompt instead of auto-loading
+  --amiga-model <name>  Amiga config token (amiga2000: base, ecs-1m)
 
 Optional hardware:
   --fm                  FM expansion (SMS YM2413 / MSX-MUSIC / FM-PAC)
@@ -469,6 +470,7 @@ Keyboard as pad:
 Environment:
   MNEMOS_*_BIOS / MNEMOS_*_BIOS_DIR   BIOS/Kickstart paths (Sega CD, 32X, FDS,
                                       MSX/MSX2, Amiga Kickstart)
+  MNEMOS_AMIGA2000_MODEL              Amiga 2000 config token (base or ecs-1m)
   MNEMOS_GPU_DRIVER                   Override GPU backend (default direct3d12 on Windows)
   MNEMOS_GPU_DEBUG=1                  Enable the GPU validation layer (slow)
 )",
@@ -482,6 +484,7 @@ int main(int argc, char* argv[]) {
     install_debug_fatal_handlers();
 
     using mnemos::apps::player::adapters::parse_animation_record_args;
+    using mnemos::apps::player::adapters::parse_amiga_model_arg;
     using mnemos::apps::player::adapters::parse_capabilities_arg;
     using mnemos::apps::player::adapters::parse_dip_arg;
     using mnemos::apps::player::adapters::parse_dump_battery_args;
@@ -532,6 +535,7 @@ int main(int argc, char* argv[]) {
     const bool msx2 = parse_msx2_arg(argc, argv);
     const auto dip_arg = parse_dip_arg(argc, argv);
     const auto keyboard_layout_arg = parse_keyboard_layout_arg(argc, argv);
+    const auto amiga_model_arg = parse_amiga_model_arg(argc, argv);
     const mnemos::apps::player::headless_requests headless{
         .screenshot = parse_screenshot_args(argc, argv),
         .save_state = parse_save_state_args(argc, argv),
@@ -556,7 +560,8 @@ int main(int argc, char* argv[]) {
                                              .rtc = rtc,
                                              .msx2 = msx2,
                                              .dip_override = dip_arg,
-                                             .keyboard_layout_override = keyboard_layout_arg});
+                                             .keyboard_layout_override = keyboard_layout_arg,
+                                             .amiga_model_override = amiga_model_arg});
     if (launch.exit_code != 0) {
         return launch.exit_code;
     }
