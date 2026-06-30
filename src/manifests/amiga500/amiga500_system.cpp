@@ -96,7 +96,6 @@ namespace mnemos::manifests::amiga500 {
         constexpr std::uint32_t ocs_copper_address_mask = 0x0007FFFEU;
         constexpr std::uint32_t ocs_copper_address_high_mask = 0x0007U;
         constexpr std::uint32_t ocs_disk_dma_address_mask = 0x0007FFFFU;
-        constexpr std::uint32_t ocs_disk_dma_address_high_mask = 0x0007U;
         constexpr std::size_t blit_a = 0U;
         constexpr std::size_t blit_b = 1U;
         constexpr std::size_t blit_c = 2U;
@@ -112,6 +111,22 @@ namespace mnemos::manifests::amiga500 {
         [[nodiscard]] std::uint32_t saturating_add(std::uint32_t lhs, std::uint32_t rhs) noexcept {
             const std::uint32_t room = std::numeric_limits<std::uint32_t>::max() - lhs;
             return rhs > room ? std::numeric_limits<std::uint32_t>::max() : lhs + rhs;
+        }
+
+        [[nodiscard]] std::size_t chip_ram_size_for_model(amiga500_model model) noexcept {
+            return model == amiga500_model::amiga500_plus ? amiga500_system::chip_ram_size_1m
+                                                          : amiga500_system::chip_ram_size;
+        }
+
+        [[nodiscard]] std::uint32_t chip_ram_address_mask(std::size_t size) noexcept {
+            if (size >= amiga500_system::chip_ram_size_1m) {
+                return 0x000FFFFFU;
+            }
+            return ocs_disk_dma_address_mask;
+        }
+
+        [[nodiscard]] std::uint16_t chip_ram_address_high_mask(std::size_t size) noexcept {
+            return static_cast<std::uint16_t>((chip_ram_address_mask(size) >> 16U) & 0x001FU);
         }
 
         [[nodiscard]] std::uint16_t apply_setclr(std::uint16_t current, std::uint16_t value,
@@ -290,6 +305,14 @@ namespace mnemos::manifests::amiga500 {
             return static_cast<std::size_t>(byte_address & 0x001FFFFEU) % mirrored_bytes;
         }
 
+        [[nodiscard]] std::size_t mirrored_chip_byte_address(std::span<const std::uint8_t> ram,
+                                                             std::uint32_t byte_address) noexcept {
+            if (ram.empty()) {
+                return 0U;
+            }
+            return static_cast<std::size_t>(byte_address & 0x001FFFFFU) % ram.size();
+        }
+
         [[nodiscard]] std::uint16_t read_chip_word(std::span<const std::uint8_t> ram,
                                                    std::uint32_t byte_address) noexcept {
             if (ram.size() < 2U) {
@@ -387,13 +410,14 @@ namespace mnemos::manifests::amiga500 {
         }
 
         [[nodiscard]] std::uint32_t merge_disk_ptr(std::uint32_t old, bool high,
-                                                   std::uint16_t value) noexcept {
+                                                   std::uint16_t value,
+                                                   std::size_t chip_ram_size) noexcept {
+            const std::uint16_t high_mask = chip_ram_address_high_mask(chip_ram_size);
             if (high) {
-                return ((static_cast<std::uint32_t>(value) & ocs_disk_dma_address_high_mask)
-                        << 16U) |
+                return ((static_cast<std::uint32_t>(value) & high_mask) << 16U) |
                        (old & 0x0000FFFEU);
             }
-            return (old & (ocs_disk_dma_address_high_mask << 16U)) |
+            return (old & (static_cast<std::uint32_t>(high_mask) << 16U)) |
                    (static_cast<std::uint32_t>(value) & 0x0000FFFEU);
         }
 
@@ -679,7 +703,7 @@ namespace mnemos::manifests::amiga500 {
             return visible_intreq();
         case reg_dskpth:
             return static_cast<std::uint16_t>((disk_pointer >> 16U) &
-                                              ocs_disk_dma_address_high_mask);
+                                              chip_ram_address_high_mask(chip_ram.size()));
         case reg_dskptl:
             return static_cast<std::uint16_t>(disk_pointer & 0xFFFEU);
         case reg_dsklen:
@@ -886,10 +910,10 @@ namespace mnemos::manifests::amiga500 {
             blitter_data[blit_d] = value;
             return;
         case reg_dskpth:
-            disk_pointer = merge_disk_ptr(disk_pointer, true, value);
+            disk_pointer = merge_disk_ptr(disk_pointer, true, value, chip_ram.size());
             return;
         case reg_dskptl:
-            disk_pointer = merge_disk_ptr(disk_pointer, false, value);
+            disk_pointer = merge_disk_ptr(disk_pointer, false, value, chip_ram.size());
             return;
         case reg_dsklen:
             start_disk_dma(value);
@@ -1092,7 +1116,7 @@ namespace mnemos::manifests::amiga500 {
                 return blitter_data[blit_d];
             case reg_dskpth:
                 return static_cast<std::uint16_t>((disk_pointer >> 16U) &
-                                                  ocs_disk_dma_address_high_mask);
+                                                  chip_ram_address_high_mask(chip_ram.size()));
             case reg_dskptl:
                 return static_cast<std::uint16_t>(disk_pointer & 0xFFFEU);
             case reg_dsklen:
@@ -1721,9 +1745,9 @@ namespace mnemos::manifests::amiga500 {
                 !agnus.dma_disk()) {
                 return;
             }
-            const std::size_t addr = disk_pointer & (chip_ram_size - 1U);
+            const std::size_t addr = mirrored_chip_byte_address(chip_ram, disk_pointer);
             const std::uint8_t byte = chip_ram[addr];
-            disk_pointer = (disk_pointer + 1U) & 0x0007FFFFU;
+            disk_pointer = (disk_pointer + 1U) & chip_ram_address_mask(chip_ram.size());
             drive->stream_write_latch = byte;
             drive->stream_write_shift = byte;
             drive->stream_write_bits_remaining = 8U;
@@ -1850,10 +1874,10 @@ namespace mnemos::manifests::amiga500 {
             return;
         }
 
-        const std::size_t addr = disk_pointer & (chip_ram_size - 1U);
+        const std::size_t addr = mirrored_chip_byte_address(chip_ram, disk_pointer);
         chip_ram[addr] = byte;
         paula.chipram()[addr] = byte;
-        disk_pointer = (disk_pointer + 1U) & 0x0007FFFFU;
+        disk_pointer = (disk_pointer + 1U) & chip_ram_address_mask(chip_ram.size());
         complete_disk_dma_byte();
     }
 
@@ -2274,7 +2298,7 @@ namespace mnemos::manifests::amiga500 {
     amiga500_system::cpu_bus_wait_cycles(std::uint32_t address, bool /*program*/, bool write,
                                          std::uint32_t instruction_cycles_before_access,
                                          std::uint32_t instruction_wait_cycles) const noexcept {
-        const bool chip_ram_window = (address & 0x00FFFFFFU) < chip_ram_size;
+        const bool chip_ram_window = (address & 0x00FFFFFFU) < chip_ram.size();
         if (!chip_ram_window) {
             return 0U;
         }
@@ -2469,7 +2493,7 @@ namespace mnemos::manifests::amiga500 {
         cop1lc = reader.u32() & ocs_copper_address_mask;
         cop2lc = reader.u32() & ocs_copper_address_mask;
         custom_high_latch = reader.u16();
-        disk_pointer = reader.u32() & ocs_disk_dma_address_mask;
+        disk_pointer = reader.u32() & chip_ram_address_mask(chip_ram.size());
         disk_length = reader.u16();
         disk_sync = reader.u16();
         disk_adkcon = reader.u16();
@@ -2709,6 +2733,9 @@ namespace mnemos::manifests::amiga500 {
                                                        const amiga500_config& config) {
         auto sys = std::make_unique<amiga500_system>();
         amiga500_system* s = sys.get();
+        const std::size_t active_chip_ram_size = chip_ram_size_for_model(config.model);
+        s->chip_ram.assign(active_chip_ram_size, 0U);
+        s->paula.resize_chipram(active_chip_ram_size);
         normalize_kickstart(s->kickstart_rom, kickstart_rom);
 
         const bool pal = config.video_region == mnemos::video_region::pal;
@@ -2753,9 +2780,11 @@ namespace mnemos::manifests::amiga500 {
         // stays coherent with CPU writes.
         s->bus.map_mmio(
             amiga500_system::chip_ram_base, static_cast<std::uint32_t>(s->chip_ram.size()),
-            [s](std::uint32_t a) { return s->chip_ram[a & (amiga500_system::chip_ram_size - 1U)]; },
+            [s](std::uint32_t a) {
+                return s->chip_ram[mirrored_chip_byte_address(s->chip_ram, a)];
+            },
             [s](std::uint32_t a, std::uint8_t v) {
-                const std::size_t off = a & (amiga500_system::chip_ram_size - 1U);
+                const std::size_t off = mirrored_chip_byte_address(s->chip_ram, a);
                 s->chip_ram[off] = v;
                 s->paula.chipram()[off] = v;
             },

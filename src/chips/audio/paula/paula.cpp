@@ -142,12 +142,33 @@ namespace mnemos::chips::audio {
         return channels_[static_cast<std::size_t>(channel)].state != channel_state::idle;
     }
 
+    namespace {
+        [[nodiscard]] std::size_t mirrored_chipram_address(std::size_t size,
+                                                           std::uint32_t addr) noexcept {
+            if (size == 0U) {
+                return 0U;
+            }
+            if ((size & (size - 1U)) == 0U) {
+                return static_cast<std::size_t>(addr) & (size - 1U);
+            }
+            return static_cast<std::size_t>(addr) % size;
+        }
+    } // namespace
+
     std::uint16_t paula::fetch_word(std::uint32_t addr) const noexcept {
-        const std::uint32_t a = addr & (chipram_size - 1U);
+        if (chipram_.size() < 2U) {
+            return 0U;
+        }
+        const std::size_t a = mirrored_chipram_address(chipram_.size(), addr);
         // Big-endian word: high byte first, then low byte.
         const std::uint16_t hi = chipram_[a];
-        const std::uint16_t lo = chipram_[(a + 1U) & (chipram_size - 1U)];
+        const std::uint16_t lo =
+            chipram_[mirrored_chipram_address(chipram_.size(), addr + 1U)];
         return static_cast<std::uint16_t>((hi << 8U) | lo);
+    }
+
+    void paula::resize_chipram(std::size_t size) {
+        chipram_.assign(size == 0U ? chipram_size : size, 0U);
     }
 
     void paula::latch_sample(voice& ch, std::int8_t sample) noexcept {
@@ -370,6 +391,9 @@ namespace mnemos::chips::audio {
         constexpr std::uint32_t native_rate = 16726U;
 
         const auto& ram = owner_->chipram_;
+        if (ram.empty()) {
+            return samples_;
+        }
 
         struct meta final {
             std::uint32_t start;
@@ -384,7 +408,8 @@ namespace mnemos::chips::audio {
         // the 4 channels reference rather than near-duplicates.
         for (int ci = 0; ci < paula::channel_count; ++ci) {
             const voice& ch = owner_->channels_[static_cast<std::size_t>(ci)];
-            const std::uint32_t start = ch.lc & (paula::chipram_size - 1U);
+            const auto start = static_cast<std::uint32_t>(
+                mirrored_chipram_address(ram.size(), ch.lc));
             const std::uint16_t words = ch.len;
             if (words == 0U) {
                 continue;
@@ -400,7 +425,8 @@ namespace mnemos::chips::audio {
             std::size_t decoded = 0U;
             for (std::size_t b = 0; b < byte_count; ++b) {
                 const std::size_t a =
-                    (static_cast<std::size_t>(start) + b) & (paula::chipram_size - 1U);
+                    mirrored_chipram_address(ram.size(),
+                                             static_cast<std::uint32_t>(start + b));
                 const auto s = static_cast<std::int8_t>(ram[a]);
                 // Signed 8-bit -> s16 (x256: +-127 -> +-32512).
                 pcm_.push_back(static_cast<std::int16_t>(static_cast<std::int32_t>(s) * 256));

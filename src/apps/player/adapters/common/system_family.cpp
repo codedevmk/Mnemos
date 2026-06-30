@@ -123,6 +123,9 @@ namespace mnemos::apps::player::adapters {
         if (id == "amiga500" || id == "a500" || id == "amiga") {
             return system_family::amiga500;
         }
+        if (id == "amiga500plus" || id == "amiga500+" || id == "a500plus" || id == "a500+") {
+            return system_family::amiga500_plus;
+        }
         return std::nullopt;
     }
 
@@ -204,6 +207,8 @@ namespace mnemos::apps::player::adapters {
             return "msx2";
         case system_family::amiga500:
             return "amiga500";
+        case system_family::amiga500_plus:
+            return "amiga500plus";
         case system_family::genesis:
             break;
         }
@@ -288,6 +293,8 @@ namespace mnemos::apps::player::adapters {
             return "MSX2";
         case system_family::amiga500:
             return "Amiga 500";
+        case system_family::amiga500_plus:
+            return "Amiga 500+";
         case system_family::genesis:
             break;
         }
@@ -300,7 +307,7 @@ namespace mnemos::apps::player::adapters {
                "irem_redalert, irem_m72, irem_m75, irem_m78, "
                "irem_m81, irem_m82, irem_m84, irem_m85, irem_m90, irem_m92, irem_m102, "
                "irem_m107, irem_m119, taito_f2, taito_gnet, cps1, cps2, spectrum, nes, msx, "
-               "msx2, amiga500";
+               "msx2, amiga500, amiga500plus";
     }
 
 } // namespace mnemos::apps::player::adapters

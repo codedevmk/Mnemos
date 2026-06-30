@@ -36,8 +36,8 @@ namespace mnemos::chips::audio {
       public:
         static constexpr int channel_count = 4;
         static constexpr std::uint16_t volume_max = 64U;
-        // Chip-RAM the DMA channels fetch from. The 8364 addresses up to 512 KB of
-        // chip RAM via a 20-bit word-aligned pointer; the host sets the span.
+        // Default chip-RAM the DMA channels fetch from. The pointer is 20-bit and
+        // word-aligned; the board sets the active backing size for OCS/ECS models.
         static constexpr std::size_t chipram_size = 512U * 1024U;
         static constexpr std::uint32_t pointer_mask = 0x001FFFFEU; // 20-bit, word-aligned
 
@@ -81,6 +81,7 @@ namespace mnemos::chips::audio {
         // analogue). Words are big-endian byte pairs at word-aligned addresses.
         [[nodiscard]] std::span<std::uint8_t> chipram() noexcept { return chipram_; }
         [[nodiscard]] std::span<const std::uint8_t> chipram() const noexcept { return chipram_; }
+        void resize_chipram(std::size_t size);
 
         // Per-channel signed-16 output: signed 8-bit sample * volume (0..64);
         // 0 while idle or priming.

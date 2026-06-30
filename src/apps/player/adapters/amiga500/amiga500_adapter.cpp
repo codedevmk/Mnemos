@@ -288,6 +288,28 @@ namespace mnemos::apps::player::adapters::amiga500 {
                 .cache_hint = std::move(cache_hint)};
         }
 
+        [[nodiscard]] const char*
+        model_family_id(manifests::amiga500::amiga500_model model) noexcept {
+            return model == manifests::amiga500::amiga500_model::amiga500_plus ? "amiga500plus"
+                                                                               : "amiga500";
+        }
+
+        [[nodiscard]] const char*
+        model_display_name(manifests::amiga500::amiga500_model model) noexcept {
+            return model == manifests::amiga500::amiga500_model::amiga500_plus ? "Amiga 500+"
+                                                                               : "Amiga 500";
+        }
+
+        [[nodiscard]] std::string chip_ram_label(std::size_t bytes) {
+            if (bytes == manifests::amiga500::amiga500_system::chip_ram_size_1m) {
+                return "1 MiB";
+            }
+            if (bytes == manifests::amiga500::amiga500_system::chip_ram_size) {
+                return "512 KiB";
+            }
+            return std::to_string(bytes / 1024U) + " KiB";
+        }
+
         [[nodiscard]] std::uint8_t
         pack_joystick(const frontend_sdk::controller_state& state) noexcept {
             std::uint8_t mask = 0U;
@@ -519,12 +541,12 @@ namespace mnemos::apps::player::adapters::amiga500 {
                 return static_cast<std::uint16_t>(
                     (static_cast<std::uint16_t>(bytes[offset]) << 8U) | bytes[offset + 1U]);
             };
-            if (a < manifests::amiga500::amiga500_system::chip_ram_size) {
-                if (sys.overlay_active) {
+            if (a < sys.chip_ram.size()) {
+                if (sys.overlay_active && a < sys.kickstart_rom.size()) {
                     return read_be(sys.kickstart_rom,
                                    static_cast<std::size_t>(a) % sys.kickstart_rom.size());
                 }
-                return read_be(sys.chip_ram, static_cast<std::size_t>(a));
+                return read_be(sys.chip_ram, static_cast<std::size_t>(a) % sys.chip_ram.size());
             }
             if (a >= manifests::amiga500::amiga500_system::kickstart_base &&
                 a + 1U < manifests::amiga500::amiga500_system::kickstart_base +
@@ -994,10 +1016,12 @@ namespace mnemos::apps::player::adapters::amiga500 {
 
         frontend_sdk::media_capability_info
         make_media_capabilities(std::string_view display_name, std::uint64_t kickstart_byte_count,
-                                const std::vector<std::vector<std::uint8_t>>& disks) {
+                                const std::vector<std::vector<std::uint8_t>>& disks,
+                                manifests::amiga500::amiga500_model model) {
             frontend_sdk::media_capability_info media{};
+            const std::string provider_prefix = model_family_id(model);
             media.media.push_back(make_media("kickstart", "Kickstart", kickstart_byte_count,
-                                             "amiga500.kickstart", "resident"));
+                                             provider_prefix + ".kickstart", "resident"));
             for (std::size_t i = 0U; i < disks.size(); ++i) {
                 const std::string label =
                     disks.size() == 1U
@@ -1007,8 +1031,8 @@ namespace mnemos::apps::player::adapters::amiga500 {
                            " disk " + std::to_string(i + 1U));
                 const std::string provider_id =
                     i < manifests::amiga500::amiga500_system::floppy_drive_count
-                        ? "amiga500.df" + std::to_string(i)
-                        : "amiga500.df0";
+                        ? provider_prefix + ".df" + std::to_string(i)
+                        : provider_prefix + ".df0";
                 media.media.push_back(
                     make_media("disk." + std::to_string(i), label, disks[i].size(), provider_id,
                                disks.size() == 1U ? "resident" : "resident_removable"));
@@ -1102,12 +1126,13 @@ namespace mnemos::apps::player::adapters::amiga500 {
                                        std::vector<std::vector<std::uint8_t>> disks,
                                        frontend_sdk::scheduler_factory* scheduler_factory)
         : session_(make_session_capabilities()),
-          media_(make_media_capabilities(display_name, kickstart_rom.size(), disks)),
+          media_(make_media_capabilities(display_name, kickstart_rom.size(), disks, config.model)),
           sys_(manifests::amiga500::assemble_amiga500(std::move(kickstart_rom), config)),
           chip_ram_view_("chip_ram", sys_->chip_ram),
           scheduler_(
               frontend_sdk::make_scheduler(scheduler_factory, build_schedule(*sys_), &sys_->agnus)),
           region_(config.video_region), keyboard_layout_(config.keyboard_layout),
+          model_(config.model),
           target_fps_(mnemos::target_fps[static_cast<std::size_t>(config.video_region)]),
           disks_(std::move(disks)) {
         board_debug_chip_ = std::make_unique<amiga500_board_debug_chip>(*sys_);
@@ -1331,7 +1356,8 @@ namespace mnemos::apps::player::adapters::amiga500 {
         chip_view_[6] = board_debug_chip_.get();
         system_mem_view_[0] = &chip_ram_view_;
 
-        spec_.push_back({.label = "System", .value = "Amiga 500"});
+        spec_.push_back({.label = "System", .value = model_display_name(model_)});
+        spec_.push_back({.label = "Chip RAM", .value = chip_ram_label(sys_->chip_ram.size())});
         spec_.push_back(
             {.label = "Region",
              .value = config.video_region == mnemos::video_region::pal ? "PAL" : "NTSC"});
@@ -1542,7 +1568,7 @@ namespace mnemos::apps::player::adapters::amiga500 {
         auto& sched = adapter.scheduler();
 
         runtime::save_target target;
-        target.manifest_id = "amiga500";
+        target.manifest_id = model_family_id(adapter.model_);
         target.manifest_rev = 2U;
         target.master_cycle = sched.master_cycle();
         target.chips.push_back({"cpu", &sys.cpu});
@@ -1568,19 +1594,27 @@ namespace mnemos::apps::player::adapters::amiga500 {
     }
 
     namespace {
-        const auto register_amiga500 = [] {
+        void register_amiga_family(const char* family_id,
+                                   manifests::amiga500::amiga500_model model) {
             mnemos::frontend_sdk::adapter_registry::instance().register_family(
-                "amiga500",
-                [](mnemos::frontend_sdk::adapter_options opts)
+                family_id,
+                [model](mnemos::frontend_sdk::adapter_options opts)
                     -> std::unique_ptr<mnemos::frontend_sdk::player_system> {
                     const auto config = manifests::amiga500::amiga500_config{
                         .video_region = opts.video_region,
                         .keyboard_layout =
-                            keyboard_layout_from_token(opts.keyboard_layout_override)};
+                            keyboard_layout_from_token(opts.keyboard_layout_override),
+                        .model = model};
                     return std::make_unique<amiga500_adapter>(
                         std::move(opts.rom), config, std::move(opts.display_name),
                         std::move(opts.additional_media), opts.scheduler_factory_override);
                 });
+        }
+
+        const auto register_amiga500 = [] {
+            register_amiga_family("amiga500", manifests::amiga500::amiga500_model::amiga500);
+            register_amiga_family("amiga500plus",
+                                  manifests::amiga500::amiga500_model::amiga500_plus);
             return 0;
         }();
     } // namespace

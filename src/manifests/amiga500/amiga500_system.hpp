@@ -20,9 +20,12 @@ namespace mnemos::manifests::amiga500 {
 
     enum class amiga500_keyboard_layout : std::uint8_t { us, qwerty_international, german, azerty };
 
+    enum class amiga500_model : std::uint8_t { amiga500, amiga500_plus };
+
     struct amiga500_config final {
         mnemos::video_region video_region{mnemos::video_region::pal};
         amiga500_keyboard_layout keyboard_layout{amiga500_keyboard_layout::us};
+        amiga500_model model{amiga500_model::amiga500};
     };
 
     // Commodore Amiga 500, OCS baseline: MC68000 + Agnus + Denise + Paula +
@@ -32,6 +35,7 @@ namespace mnemos::manifests::amiga500 {
     // frame IRQ generation, and Paula audio DMA register routing.
     struct amiga500_system final {
         static constexpr std::size_t chip_ram_size = 512U * 1024U;
+        static constexpr std::size_t chip_ram_size_1m = 1024U * 1024U;
         static constexpr std::size_t kickstart_window_size = 512U * 1024U;
         static constexpr std::size_t floppy_cylinders = 80U;
         static constexpr std::size_t floppy_heads = 2U;
@@ -90,7 +94,7 @@ namespace mnemos::manifests::amiga500 {
         chips::peripheral::cia8520 cia_b;
         topology::bus bus{24U, topology::endianness::big};
 
-        std::array<std::uint8_t, chip_ram_size> chip_ram{};
+        std::vector<std::uint8_t> chip_ram = std::vector<std::uint8_t>(chip_ram_size, 0U);
         std::array<std::uint8_t, kickstart_window_size> kickstart_rom{};
 
         std::array<std::uint16_t, chips::video::agnus::palette_entries> palette_words{};

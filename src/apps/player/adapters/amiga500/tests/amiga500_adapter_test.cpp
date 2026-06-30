@@ -22,6 +22,7 @@ namespace {
     using mnemos::apps::player::adapters::amiga500::amiga500_adapter;
     using mnemos::manifests::amiga500::amiga500_config;
     using mnemos::manifests::amiga500::amiga500_keyboard_layout;
+    using mnemos::manifests::amiga500::amiga500_model;
     using mnemos::manifests::amiga500::amiga500_system;
     using agnus = mnemos::chips::video::agnus;
 
@@ -258,6 +259,39 @@ TEST_CASE("amiga500 adapter publishes session and media metadata", "[apps][playe
     REQUIRE(media.media.size() == 1U);
     CHECK(media.media[0].id == "kickstart");
     CHECK(media.media[0].provider_id == "amiga500.kickstart");
+}
+
+TEST_CASE("amiga500 adapter configures Amiga 500+ metadata and chip RAM",
+          "[apps][player][amiga500plus]") {
+    const amiga500_config config{.video_region = mnemos::video_region::pal,
+                                 .keyboard_layout = amiga500_keyboard_layout::us,
+                                 .model = amiga500_model::amiga500_plus};
+    std::vector<std::vector<std::uint8_t>> disks;
+    disks.push_back(tiny_adf(0x33U));
+    amiga500_adapter adapter(tiny_kickstart(), config, "Kickstart 2.0", std::move(disks));
+    auto& sys = adapter.system();
+
+    REQUIRE(sys.chip_ram.size() == amiga500_system::chip_ram_size_1m);
+    REQUIRE(sys.paula.chipram().size() == amiga500_system::chip_ram_size_1m);
+    REQUIRE(adapter.memory_views().size() == 1U);
+    CHECK(adapter.memory_views()[0]->bytes().size() == amiga500_system::chip_ram_size_1m);
+
+    const auto& spec = adapter.system_spec();
+    REQUIRE(spec.size() >= 2U);
+    CHECK(spec[0].label == "System");
+    CHECK(spec[0].value == "Amiga 500+");
+    CHECK(spec[1].label == "Chip RAM");
+    CHECK(spec[1].value == "1 MiB");
+
+    const auto& media = adapter.media_capabilities();
+    REQUIRE(media.media.size() == 2U);
+    CHECK(media.media[0].provider_id == "amiga500plus.kickstart");
+    CHECK(media.media[1].provider_id == "amiga500plus.df0");
+
+    constexpr std::uint32_t upper_chip_ram = 0x080000U;
+    sys.bus.write8(upper_chip_ram, 0x5AU);
+    CHECK(sys.chip_ram[upper_chip_ram] == 0x5AU);
+    CHECK(sys.paula.chipram()[upper_chip_ram] == 0x5AU);
 }
 
 TEST_CASE("amiga500 adapter seeds Kickstart keyboard power-up stream",

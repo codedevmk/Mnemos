@@ -389,6 +389,24 @@ namespace {
         }
         return layout;
     }
+
+    [[nodiscard]] bool
+    is_amiga500_family(mnemos::apps::player::adapters::system_family family) noexcept {
+        using mnemos::apps::player::adapters::system_family;
+        return family == system_family::amiga500 || family == system_family::amiga500_plus;
+    }
+
+    [[nodiscard]] const char*
+    amiga500_kickstart_env_var(mnemos::apps::player::adapters::system_family family) noexcept {
+        return family == mnemos::apps::player::adapters::system_family::amiga500_plus
+                   ? "MNEMOS_AMIGA500PLUS_KICKSTART"
+                   : "MNEMOS_AMIGA500_KICKSTART";
+    }
+
+    [[nodiscard]] const char*
+    amiga500_kickstart_env(mnemos::apps::player::adapters::system_family family) noexcept {
+        return getenv_nonempty(amiga500_kickstart_env_var(family));
+    }
 } // namespace
 
 namespace mnemos::apps::player {
@@ -410,14 +428,16 @@ namespace mnemos::apps::player {
                 return outcome;
             }
             const auto family_opt = family_from_name(*options.system_arg);
-            if (!family_opt || *family_opt != system_family::amiga500) {
+            if (!family_opt || !is_amiga500_family(*family_opt)) {
                 return outcome;
             }
 
-            const char* kickstart_env = MNEMOS_PLAYER_GETENV("MNEMOS_AMIGA500_KICKSTART");
+            const system_family family = *family_opt;
+            const char* kickstart_env = amiga500_kickstart_env(family);
             if (kickstart_env == nullptr || kickstart_env[0] == '\0') {
-                std::fprintf(stderr, "[mnemos_player] Amiga500 BIOS-only launch needs "
-                                     "MNEMOS_AMIGA500_KICKSTART set to a Kickstart ROM\n");
+                std::fprintf(stderr, "[mnemos_player] %s BIOS-only launch needs "
+                                     "%s set to a Kickstart ROM\n",
+                             family_label(family), amiga500_kickstart_env_var(family));
                 outcome.exit_code = 1;
                 return outcome;
             }
@@ -429,7 +449,6 @@ namespace mnemos::apps::player {
                 return outcome;
             }
 
-            const system_family family = *family_opt;
             const auto video =
                 resolve_video_region(options.region_override, mnemos::video_region::pal);
             std::fprintf(stderr, "[mnemos_player] system: %s  region: %s (%s)\n",
@@ -582,6 +601,7 @@ namespace mnemos::apps::player {
             cart_default = mnemos::video_region::ntsc;
             break;
         case system_family::amiga500:
+        case system_family::amiga500_plus:
             cart_default = mnemos::video_region::pal;
             break;
         case system_family::msx2:
@@ -810,15 +830,16 @@ namespace mnemos::apps::player {
             }
         }
 
-        if (family == system_family::amiga500) {
+        if (is_amiga500_family(family)) {
             keyboard_layout_override =
                 amiga500_keyboard_layout_override(options.keyboard_layout_override);
             const std::string ext = lowercase_extension(loaded->name);
             if (ext == ".adf") {
-                const char* kickstart_env = MNEMOS_PLAYER_GETENV("MNEMOS_AMIGA500_KICKSTART");
+                const char* kickstart_env = amiga500_kickstart_env(family);
                 if (kickstart_env == nullptr || kickstart_env[0] == '\0') {
-                    std::fprintf(stderr, "[mnemos_player] an Amiga ADF needs "
-                                         "MNEMOS_AMIGA500_KICKSTART set to a Kickstart ROM\n");
+                    std::fprintf(stderr, "[mnemos_player] a %s ADF needs "
+                                         "%s set to a Kickstart ROM\n",
+                                 family_label(family), amiga500_kickstart_env_var(family));
                     outcome.exit_code = 1;
                     return outcome;
                 }

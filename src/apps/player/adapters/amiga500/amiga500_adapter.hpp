@@ -85,6 +85,7 @@ namespace mnemos::apps::player::adapters::amiga500 {
         runtime::scheduler scheduler_;
         mnemos::video_region region_;
         manifests::amiga500::amiga500_keyboard_layout keyboard_layout_;
+        manifests::amiga500::amiga500_model model_;
         double target_fps_;
         std::vector<frontend_sdk::spec_field> spec_{};
         std::array<frontend_sdk::controller_state, 6> ports_{};
