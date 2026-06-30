@@ -7,4 +7,5 @@ frontend input mapping stays in the player adapter.
 JOYDAT encoding, mouse counter wrapping, and POT counter composition.
 `amiga_keyboard.*` owns raw key constants, keyboard queue/matrix helpers, caps
 lock state, keyboard SDR byte encoding, and keyboard serial acknowledgement
-state transitions. CIA pin routing still lives in `amiga_system.cpp`.
+state transitions plus the keyboard save-state payload. CIA pin routing still
+lives in `amiga_system.cpp`.

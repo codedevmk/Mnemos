@@ -4,6 +4,11 @@
 #include <cstddef>
 #include <cstdint>
 
+namespace mnemos::chips {
+    class state_reader;
+    class state_writer;
+} // namespace mnemos::chips
+
 namespace mnemos::manifests::amiga {
 
     inline constexpr std::size_t amiga_keyboard_raw_key_count = 128U;
@@ -59,6 +64,12 @@ namespace mnemos::manifests::amiga {
 
     void amiga_keyboard_accept_serial_ack_level(amiga_keyboard_queue_state& keyboard,
                                                 bool level) noexcept;
+
+    void amiga_keyboard_save_state(const amiga_keyboard_queue_state& keyboard,
+                                   chips::state_writer& writer);
+
+    void amiga_keyboard_load_state(amiga_keyboard_queue_state& keyboard,
+                                   chips::state_reader& reader);
 
     void amiga_keyboard_reset(amiga_keyboard_queue_state& keyboard) noexcept;
 

@@ -1,5 +1,9 @@
 #include "devices/amiga_keyboard.hpp"
 
+#include "state.hpp"
+
+#include <algorithm>
+
 namespace mnemos::manifests::amiga {
 
     std::uint8_t amiga_keyboard_raw_key(std::uint8_t raw_keycode) noexcept {
@@ -100,6 +104,41 @@ namespace mnemos::manifests::amiga {
         }
         keyboard.ack_low_seen = false;
         keyboard.byte_in_flight = false;
+    }
+
+    void amiga_keyboard_save_state(const amiga_keyboard_queue_state& keyboard,
+                                   chips::state_writer& writer) {
+        writer.u8(static_cast<std::uint8_t>(keyboard.count));
+        writer.boolean(keyboard.byte_in_flight);
+        writer.boolean(keyboard.ack_low_seen);
+        writer.boolean(keyboard.caps_lock_led);
+        for (std::size_t i = 0U; i < keyboard.queue.size(); ++i) {
+            const std::uint8_t value =
+                i < keyboard.count
+                    ? keyboard.queue[(keyboard.head + i) % keyboard.queue.size()]
+                    : 0U;
+            writer.u8(value);
+        }
+        for (bool down : keyboard.key_down) {
+            writer.boolean(down);
+        }
+    }
+
+    void amiga_keyboard_load_state(amiga_keyboard_queue_state& keyboard,
+                                   chips::state_reader& reader) {
+        const std::uint8_t saved_queue_count = reader.u8();
+        keyboard.byte_in_flight = reader.boolean();
+        keyboard.ack_low_seen = reader.boolean();
+        keyboard.caps_lock_led = reader.boolean();
+        keyboard.head = 0U;
+        keyboard.count = std::min<std::size_t>(saved_queue_count, keyboard.queue.size());
+        for (std::size_t i = 0U; i < keyboard.queue.size(); ++i) {
+            const std::uint8_t value = reader.u8();
+            keyboard.queue[i] = i < keyboard.count ? value : 0U;
+        }
+        for (bool& down : keyboard.key_down) {
+            down = reader.boolean();
+        }
     }
 
     void amiga_keyboard_reset(amiga_keyboard_queue_state& keyboard) noexcept {

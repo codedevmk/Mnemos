@@ -2417,20 +2417,7 @@ namespace mnemos::manifests::amiga {
                 writer.blob(std::span<const std::uint8_t>(cached_weak_bits));
             }
         }
-        writer.u8(static_cast<std::uint8_t>(keyboard.count));
-        writer.boolean(keyboard.byte_in_flight);
-        writer.boolean(keyboard.ack_low_seen);
-        writer.boolean(keyboard.caps_lock_led);
-        for (std::size_t i = 0U; i < keyboard.queue.size(); ++i) {
-            const std::uint8_t value =
-                i < keyboard.count
-                    ? keyboard.queue[(keyboard.head + i) % keyboard.queue.size()]
-                    : 0U;
-            writer.u8(value);
-        }
-        for (bool down : keyboard.key_down) {
-            writer.boolean(down);
-        }
+        amiga_keyboard_save_state(keyboard, writer);
         for (std::size_t plane = 0U; plane < bitplane_pointer.size(); ++plane) {
             writer.u32(agnus.bitplane_pointer(static_cast<std::uint32_t>(plane)));
         }
@@ -2595,19 +2582,7 @@ namespace mnemos::manifests::amiga {
             }
         }
         floppy_selected = floppy_active_drive != no_floppy_drive;
-        const std::uint8_t saved_keyboard_queue_count = reader.u8();
-        keyboard.byte_in_flight = reader.boolean();
-        keyboard.ack_low_seen = reader.boolean();
-        keyboard.caps_lock_led = reader.boolean();
-        keyboard.head = 0U;
-        keyboard.count = std::min<std::size_t>(saved_keyboard_queue_count, keyboard.queue.size());
-        for (std::size_t i = 0U; i < keyboard.queue.size(); ++i) {
-            const std::uint8_t value = reader.u8();
-            keyboard.queue[i] = i < keyboard.count ? value : 0U;
-        }
-        for (bool& down : keyboard.key_down) {
-            down = reader.boolean();
-        }
+        amiga_keyboard_load_state(keyboard, reader);
         for (std::uint32_t& ptr : bitplane_pointer) {
             ptr = reader.u32() & chip_dma_address_mask;
         }

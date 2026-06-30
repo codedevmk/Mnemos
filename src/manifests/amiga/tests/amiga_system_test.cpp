@@ -32,6 +32,8 @@ namespace {
     using mnemos::manifests::amiga::amiga_keyboard_ack_low_seen;
     using mnemos::manifests::amiga::amiga_keyboard_begin_serial_byte;
     using mnemos::manifests::amiga::amiga_keyboard_accept_serial_ack_level;
+    using mnemos::manifests::amiga::amiga_keyboard_load_state;
+    using mnemos::manifests::amiga::amiga_keyboard_save_state;
     using mnemos::manifests::amiga::amiga_keyboard_serial_busy;
     using mnemos::manifests::amiga::amiga_encode_joystick;
     using mnemos::manifests::amiga::amiga_joy_fire;
@@ -551,6 +553,24 @@ TEST_CASE("amiga keyboard helpers preserve raw queue semantics",
     amiga_keyboard_accept_serial_ack_level(keyboard, true);
     CHECK_FALSE(amiga_keyboard_serial_busy(keyboard));
     CHECK_FALSE(amiga_keyboard_ack_low_seen(keyboard));
+
+    REQUIRE(amiga_keyboard_enqueue_key(keyboard, 0x22U, true));
+    amiga_keyboard_begin_serial_byte(keyboard);
+    amiga_keyboard_accept_serial_ack_level(keyboard, false);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    amiga_keyboard_save_state(keyboard, writer);
+
+    amiga_keyboard_queue_state restored{};
+    mnemos::chips::state_reader reader(blob);
+    amiga_keyboard_load_state(restored, reader);
+    REQUIRE(reader.ok());
+    CHECK(restored.count == 1U);
+    CHECK(restored.queue[restored.head] == 0x22U);
+    CHECK(restored.key_down[0x22U]);
+    CHECK(amiga_keyboard_serial_busy(restored));
+    CHECK(amiga_keyboard_ack_low_seen(restored));
 }
 
 TEST_CASE("amiga500 keyboard queue waits for CIA serial acknowledgement",
