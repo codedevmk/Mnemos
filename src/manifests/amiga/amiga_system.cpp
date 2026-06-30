@@ -9,7 +9,7 @@
 namespace mnemos::manifests::amiga {
 
     namespace {
-        constexpr std::uint32_t state_version = 26U;
+        constexpr std::uint32_t state_version = 27U;
 
         constexpr std::uint16_t reg_dmaconr = 0x002U;
         constexpr std::uint16_t reg_vposr = 0x004U;
@@ -2323,6 +2323,8 @@ namespace mnemos::manifests::amiga {
         writer.u16(intreq);
         writer.boolean(cia_a_irq);
         writer.boolean(cia_b_irq);
+        cia_a.save_state(writer);
+        cia_b.save_state(writer);
         writer.u64(frame_index);
         writer.u32(cop1lc);
         writer.u32(cop2lc);
@@ -2463,6 +2465,8 @@ namespace mnemos::manifests::amiga {
         intreq = reader.u16();
         cia_a_irq = reader.boolean();
         cia_b_irq = reader.boolean();
+        cia_a.load_state(reader);
+        cia_b.load_state(reader);
         frame_index = reader.u64();
         cop1lc = reader.u32() & copper_address_mask;
         cop2lc = reader.u32() & copper_address_mask;

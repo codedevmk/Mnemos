@@ -682,6 +682,7 @@ TEST_CASE("amiga500 keyboard save_state preserves in-flight serial byte",
     CHECK(sys->keyboard_pending_count() == 1U);
     CHECK(amiga_keyboard_serial_busy(sys->keyboard));
     CHECK_FALSE(amiga_keyboard_ack_low_seen(sys->keyboard));
+    CHECK(sys->cia_a.read(0x0CU) == keyboard_sdr(0x20U));
 
     sys->write_cia_a_sp(true);
     sys->service_keyboard_queue();
@@ -726,6 +727,7 @@ TEST_CASE("amiga500 keyboard save_state preserves partial serial acknowledgement
     CHECK(sys->keyboard_pending_count() == 1U);
     CHECK(amiga_keyboard_serial_busy(sys->keyboard));
     CHECK(amiga_keyboard_ack_low_seen(sys->keyboard));
+    CHECK(sys->cia_a.read(0x0CU) == keyboard_sdr(0x20U));
 
     sys->service_keyboard_queue();
     CHECK(sys->keyboard_pending_count() == 1U);
@@ -738,6 +740,37 @@ TEST_CASE("amiga500 keyboard save_state preserves partial serial acknowledgement
     CHECK(amiga_keyboard_serial_busy(sys->keyboard));
     CHECK_FALSE(amiga_keyboard_ack_low_seen(sys->keyboard));
     CHECK(sys->cia_a.read(0x0CU) == keyboard_sdr(0x21U));
+}
+
+TEST_CASE("amiga500 save_state restores CIA chip register state",
+          "[manifests][amiga500][cia][save]") {
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+
+    sys->cia_a.write(0x04U, 0x34U);
+    sys->cia_a.write(0x05U, 0x12U);
+    sys->cia_a.write(0x0DU, 0x81U); // Enable timer A interrupt mask.
+    sys->cia_b.write(0x03U, 0xF0U);
+    sys->cia_b.write(0x01U, 0xA5U);
+
+    std::vector<std::uint8_t> blob;
+    mnemos::chips::state_writer writer(blob);
+    sys->save_state(writer);
+
+    sys->cia_a.write(0x04U, 0x78U);
+    sys->cia_a.write(0x05U, 0x56U);
+    sys->cia_a.write(0x0DU, 0x01U); // Clear timer A interrupt mask.
+    sys->cia_b.write(0x03U, 0x0FU);
+    sys->cia_b.write(0x01U, 0x5AU);
+
+    mnemos::chips::state_reader reader(blob);
+    sys->load_state(reader);
+    REQUIRE(reader.ok());
+    CHECK(sys->cia_a.read(0x04U) == 0x34U);
+    CHECK(sys->cia_a.read(0x05U) == 0x12U);
+    CHECK(sys->cia_a.read(0x0EU) == 0x00U);
+    CHECK(sys->cia_b.read(0x03U) == 0xF0U);
+    CHECK(sys->cia_b.port_b_output() == 0xA0U);
 }
 
 TEST_CASE("amiga500 keyboard control codes and caps-lock LED use raw serial codes",
