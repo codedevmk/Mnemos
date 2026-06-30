@@ -91,15 +91,11 @@ sub_workflow_inject: |
   - If you find a better direction outside the assigned idea, record it as a proposal in your
     report instead of silently widening scope.
 
-# --- Lifecycle hooks ---------------------------------------------------------------------
-# arbor runs scripts only for on_workspace_setup (once, pre-INIT) and on_finalize (once,
-# post-STOP/timeout). after_executor exists but only snapshots `submission_path`; it does
-# NOT run a script. Per-experiment clean-build/determinism gating therefore lives in the
-# executor prompt injection above, with these scripts as start/end bookends.
-lifecycle_hooks:
-  on_workspace_setup:
-    script: "scripts/assert_clean_build.sh"       # zero-warning gate at run start
-    prompt: "A zero-warning build is a precondition for every passing experiment."
-  on_finalize:
-    script: "scripts/check_determinism.sh"        # repeat-run hash-equality check at run end
-    prompt: "Confirm the merged trunk reproduces identical trace/framebuffer/audio hashes."
+# --- Lifecycle hooks (intentionally omitted) ---------------------------------------------
+# arbor runs hook scripts via `bash <path>`, but on this Windows host Python's subprocess
+# resolves WSL bash (C:\Windows\System32\bash.exe wins over Git Bash by CreateProcess search
+# order), which can't open C:/ paths — so scripts/assert_clean_build.sh and
+# scripts/check_determinism.sh would silently fail (exit 127). The zero-warning-build and
+# repeat-run-determinism gates are enforced instead through the executor prompt injection
+# above (sub_preamble_inject / sub_workflow_inject) plus the eval's `--repeat`. Run those
+# scripts manually or from CI where Git Bash is the resolved shell.
