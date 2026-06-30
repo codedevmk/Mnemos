@@ -435,7 +435,7 @@ Core:
   --mapper2 <name>      Mapper for a system's second slot (e.g. MSX cart 2)
   --dip <value>         16-bit DIP bank (0x-hex or decimal)
   --no-autostart        Drop to a bare prompt instead of auto-loading
-  --amiga-model <name>  Amiga config token (amiga2000: base, ecs-1m)
+  --amiga-model <name>  Amiga config token (amiga2000: base, ecs-1m, fast-ram=2m)
 
 Optional hardware:
   --fm                  FM expansion (SMS YM2413 / MSX-MUSIC / FM-PAC)
@@ -470,7 +470,7 @@ Keyboard as pad:
 Environment:
   MNEMOS_*_BIOS / MNEMOS_*_BIOS_DIR   BIOS/Kickstart paths (Sega CD, 32X, FDS,
                                       MSX/MSX2, Amiga Kickstart)
-  MNEMOS_AMIGA2000_MODEL              Amiga 2000 config token (base or ecs-1m)
+  MNEMOS_AMIGA2000_MODEL              Amiga 2000 config token (base, ecs-1m, fast-ram=2m)
   MNEMOS_GPU_DRIVER                   Override GPU backend (default direct3d12 on Windows)
   MNEMOS_GPU_DEBUG=1                  Enable the GPU validation layer (slow)
 )",

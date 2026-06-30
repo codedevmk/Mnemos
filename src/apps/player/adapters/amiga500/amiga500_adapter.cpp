@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -340,7 +341,7 @@ namespace mnemos::apps::player::adapters::amiga500 {
             std::string out;
             out.reserve(token.size());
             for (char c : token) {
-                if (c == '_' || c == ' ') {
+                if (c == '_' || std::isspace(static_cast<unsigned char>(c)) != 0) {
                     out.push_back('-');
                 } else {
                     out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
@@ -349,34 +350,163 @@ namespace mnemos::apps::player::adapters::amiga500 {
             return out;
         }
 
-        [[nodiscard]] manifests::amiga500::amiga500_model
-        resolve_amiga_model_override(manifests::amiga500::amiga500_model base_model,
-                                     std::string_view override) {
-            using model_t = manifests::amiga500::amiga500_model;
-            if (base_model != model_t::amiga2000) {
-                return base_model;
+        [[nodiscard]] std::string_view strip_token_padding(std::string_view token) noexcept {
+            while (!token.empty() && token.front() == '-') {
+                token.remove_prefix(1U);
             }
-            const std::string token = normalize_amiga_model_token(override);
-            if (token.empty() || token == "base" || token == "ocs" || token == "ocs-512k" ||
-                token == "512k") {
-                return model_t::amiga2000;
+            while (!token.empty() && token.back() == '-') {
+                token.remove_suffix(1U);
+            }
+            return token;
+        }
+
+        [[nodiscard]] std::optional<std::size_t>
+        parse_memory_size_token(std::string_view token) {
+            token = strip_token_padding(token);
+            if (token.empty()) {
+                return std::nullopt;
+            }
+            if (token == "0" || token == "off" || token == "none") {
+                return 0U;
+            }
+
+            std::string value{token};
+            if (value.ends_with("ib")) {
+                value.pop_back();
+                value.pop_back();
+            } else if (value.ends_with("b")) {
+                value.pop_back();
+            }
+            if (value.empty()) {
+                return std::nullopt;
+            }
+
+            std::size_t multiplier = 1U;
+            const char suffix = value.back();
+            if (suffix == 'k') {
+                multiplier = 1024U;
+                value.pop_back();
+            } else if (suffix == 'm') {
+                multiplier = 1024U * 1024U;
+                value.pop_back();
+            }
+            if (value.empty()) {
+                return std::nullopt;
+            }
+
+            char* end = nullptr;
+            const unsigned long long parsed = std::strtoull(value.c_str(), &end, 10);
+            if (end == value.c_str() || *end != '\0') {
+                return std::nullopt;
+            }
+            if (multiplier != 0U &&
+                parsed >
+                    (std::numeric_limits<unsigned long long>::max() /
+                     static_cast<unsigned long long>(multiplier))) {
+                return std::nullopt;
+            }
+            const unsigned long long bytes = parsed * static_cast<unsigned long long>(multiplier);
+            if (bytes > manifests::amiga500::amiga500_system::fast_ram_max_size) {
+                return std::nullopt;
+            }
+            if (bytes != 0U &&
+                (bytes % manifests::amiga500::amiga500_system::fast_ram_size_512k) != 0U) {
+                return std::nullopt;
+            }
+            return static_cast<std::size_t>(bytes);
+        }
+
+        [[nodiscard]] std::optional<std::string_view>
+        token_suffix(std::string_view token, std::string_view prefix) noexcept {
+            if (!token.starts_with(prefix)) {
+                return std::nullopt;
+            }
+            return token.substr(prefix.size());
+        }
+
+        bool apply_fast_ram_token(manifests::amiga500::amiga500_config& config,
+                                  std::string_view token) {
+            if (token == "no-fast-ram" || token == "no-fast" || token == "fast-ram-none") {
+                config.fast_ram_size = 0U;
+                return true;
+            }
+
+            std::optional<std::string_view> size_token = token_suffix(token, "fast-ram=");
+            if (!size_token) {
+                size_token = token_suffix(token, "fast=");
+            }
+            if (!size_token) {
+                size_token = token_suffix(token, "ram=");
+            }
+            if (!size_token) {
+                size_token = token_suffix(token, "fast-ram-");
+            }
+            if (!size_token) {
+                size_token = token_suffix(token, "fast-");
+            }
+            if (!size_token) {
+                return false;
+            }
+
+            if (const auto size = parse_memory_size_token(*size_token)) {
+                config.fast_ram_size = *size;
+            }
+            return true;
+        }
+
+        void apply_amiga2000_config_token(manifests::amiga500::amiga500_config& config,
+                                          std::string_view token) {
+            using model_t = manifests::amiga500::amiga500_model;
+            token = strip_token_padding(token);
+            if (token.empty()) {
+                return;
+            }
+            if (token == "base" || token == "ocs" || token == "ocs-512k" || token == "512k") {
+                config.model = model_t::amiga2000;
+                return;
             }
             if (token == "ecs" || token == "ecs-1m" || token == "ecs1m" || token == "1m" ||
                 token == "ks2" || token == "kickstart2" || token == "kickstart-2" ||
                 token == "kickstart-2.0" || token == "2.0") {
-                return model_t::amiga2000_ecs_1m;
+                config.model = model_t::amiga2000_ecs_1m;
+                return;
             }
-            return base_model;
+            static_cast<void>(apply_fast_ram_token(config, token));
         }
 
-        [[nodiscard]] std::string chip_ram_label(std::size_t bytes) {
-            if (bytes == manifests::amiga500::amiga500_system::chip_ram_size_1m) {
-                return "1 MiB";
+        [[nodiscard]] manifests::amiga500::amiga500_config
+        resolve_amiga_config_override(manifests::amiga500::amiga500_config base_config,
+                                      std::string_view override) {
+            using model_t = manifests::amiga500::amiga500_model;
+            if (base_config.model != model_t::amiga2000) {
+                return base_config;
             }
-            if (bytes == manifests::amiga500::amiga500_system::chip_ram_size) {
-                return "512 KiB";
+            const std::string normalized = normalize_amiga_model_token(override);
+            std::size_t token_start = 0U;
+            while (token_start <= normalized.size()) {
+                const std::size_t token_end = normalized.find_first_of("+,;", token_start);
+                const std::size_t count =
+                    token_end == std::string::npos ? std::string::npos : token_end - token_start;
+                apply_amiga2000_config_token(
+                    base_config, std::string_view{normalized}.substr(token_start, count));
+                if (token_end == std::string::npos) {
+                    break;
+                }
+                token_start = token_end + 1U;
             }
-            return std::to_string(bytes / 1024U) + " KiB";
+            return base_config;
+        }
+
+        [[nodiscard]] std::string memory_size_label(std::size_t bytes) {
+            constexpr std::size_t kib = 1024U;
+            constexpr std::size_t mib = 1024U * 1024U;
+            if (bytes >= mib && (bytes % mib) == 0U) {
+                return std::to_string(bytes / mib) + " MiB";
+            }
+            if ((bytes % kib) == 0U) {
+                return std::to_string(bytes / kib) + " KiB";
+            }
+            return std::to_string(bytes) + " bytes";
         }
 
         [[nodiscard]] std::uint8_t
@@ -1198,6 +1328,7 @@ namespace mnemos::apps::player::adapters::amiga500 {
           media_(make_media_capabilities(display_name, kickstart_rom.size(), disks, config.model)),
           sys_(manifests::amiga500::assemble_amiga500(std::move(kickstart_rom), config)),
           chip_ram_view_("chip_ram", sys_->chip_ram),
+          fast_ram_view_("fast_ram", sys_->fast_ram),
           scheduler_(
               frontend_sdk::make_scheduler(scheduler_factory, build_schedule(*sys_), &sys_->agnus)),
           region_(config.video_region), keyboard_layout_(config.keyboard_layout),
@@ -1424,9 +1555,18 @@ namespace mnemos::apps::player::adapters::amiga500 {
         chip_view_[5] = &sys_->cia_b;
         chip_view_[6] = board_debug_chip_.get();
         system_mem_view_[0] = &chip_ram_view_;
+        system_mem_view_count_ = 1U;
+        if (!sys_->fast_ram.empty()) {
+            system_mem_view_[system_mem_view_count_] = &fast_ram_view_;
+            ++system_mem_view_count_;
+        }
 
         spec_.push_back({.label = "System", .value = model_display_name(model_)});
-        spec_.push_back({.label = "Chip RAM", .value = chip_ram_label(sys_->chip_ram.size())});
+        spec_.push_back({.label = "Chip RAM", .value = memory_size_label(sys_->chip_ram.size())});
+        if (!sys_->fast_ram.empty()) {
+            spec_.push_back(
+                {.label = "Fast RAM", .value = memory_size_label(sys_->fast_ram.size())});
+        }
         if (const std::string_view config_label = model_configuration_label(model_);
             !config_label.empty()) {
             spec_.push_back({.label = "Configuration", .value = std::string{config_label}});
@@ -1642,7 +1782,7 @@ namespace mnemos::apps::player::adapters::amiga500 {
 
         runtime::save_target target;
         target.manifest_id = model_family_id(adapter.model_);
-        target.manifest_rev = 2U;
+        target.manifest_rev = 3U;
         target.master_cycle = sched.master_cycle();
         target.chips.push_back({"cpu", &sys.cpu});
         target.chips.push_back({"agnus", &sys.agnus});
@@ -1673,15 +1813,15 @@ namespace mnemos::apps::player::adapters::amiga500 {
                 family_id,
                 [model](mnemos::frontend_sdk::adapter_options opts)
                     -> std::unique_ptr<mnemos::frontend_sdk::player_system> {
-                    const auto selected_model =
-                        resolve_amiga_model_override(model, opts.amiga_model_override);
                     const auto config = manifests::amiga500::amiga500_config{
                         .video_region = opts.video_region,
                         .keyboard_layout =
                             keyboard_layout_from_token(opts.keyboard_layout_override),
-                        .model = selected_model};
+                        .model = model};
+                    const auto selected_config =
+                        resolve_amiga_config_override(config, opts.amiga_model_override);
                     return std::make_unique<amiga500_adapter>(
-                        std::move(opts.rom), config, std::move(opts.display_name),
+                        std::move(opts.rom), selected_config, std::move(opts.display_name),
                         std::move(opts.additional_media), opts.scheduler_factory_override);
                 });
         }

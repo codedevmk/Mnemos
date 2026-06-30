@@ -9,7 +9,7 @@
 namespace mnemos::manifests::amiga500 {
 
     namespace {
-        constexpr std::uint32_t state_version = 24U;
+        constexpr std::uint32_t state_version = 25U;
 
         constexpr std::uint16_t reg_dmaconr = 0x002U;
         constexpr std::uint16_t reg_vposr = 0x004U;
@@ -123,6 +123,14 @@ namespace mnemos::manifests::amiga500 {
                            model == amiga500_model::amiga2000_ecs_1m
                        ? chips::video::agnus::ecs_1m_copper_address_mask
                        : chips::video::agnus::ocs_copper_address_mask;
+        }
+
+        [[nodiscard]] std::size_t fast_ram_size_for_config(const amiga500_config& config) noexcept {
+            if (config.model != amiga500_model::amiga2000 &&
+                config.model != amiga500_model::amiga2000_ecs_1m) {
+                return 0U;
+            }
+            return std::min(config.fast_ram_size, amiga500_system::fast_ram_max_size);
         }
 
         [[nodiscard]] std::uint32_t chip_ram_address_mask(std::size_t size) noexcept {
@@ -2490,6 +2498,8 @@ namespace mnemos::manifests::amiga500 {
         writer.u16(bltsize);
         writer.u64(blitter_cycles_remaining);
         writer.bytes(chip_ram);
+        writer.u64(static_cast<std::uint64_t>(fast_ram.size()));
+        writer.bytes(fast_ram);
         for (std::uint16_t color : palette_words) {
             writer.u16(color);
         }
@@ -2662,6 +2672,12 @@ namespace mnemos::manifests::amiga500 {
         bltsize = reader.u16();
         blitter_cycles_remaining = reader.u64();
         reader.bytes(chip_ram);
+        const std::uint64_t saved_fast_ram_size = reader.u64();
+        if (saved_fast_ram_size != static_cast<std::uint64_t>(fast_ram.size())) {
+            reader.fail();
+            return;
+        }
+        reader.bytes(fast_ram);
         for (std::size_t i = 0; i < palette_words.size(); ++i) {
             const std::uint16_t color = reader.u16();
             palette_words[i] = color;
@@ -2750,8 +2766,10 @@ namespace mnemos::manifests::amiga500 {
         auto sys = std::make_unique<amiga500_system>();
         amiga500_system* s = sys.get();
         const std::size_t active_chip_ram_size = chip_ram_size_for_model(config.model);
+        const std::size_t active_fast_ram_size = fast_ram_size_for_config(config);
         s->copper_address_mask = copper_address_mask_for_model(config.model);
         s->chip_ram.assign(active_chip_ram_size, 0U);
+        s->fast_ram.assign(active_fast_ram_size, 0U);
         s->paula.resize_chipram(active_chip_ram_size);
         normalize_kickstart(s->kickstart_rom, kickstart_rom);
 
@@ -2807,6 +2825,9 @@ namespace mnemos::manifests::amiga500 {
                 s->paula.chipram()[off] = v;
             },
             0);
+        if (!s->fast_ram.empty()) {
+            s->bus.map_ram(amiga500_system::fast_ram_base, s->fast_ram, 0);
+        }
         // Reset overlay: Kickstart answers reads at $000000 until CIA-A PA0 is
         // driven high. Writes always fall through to chip RAM.
         s->bus.map_rom(

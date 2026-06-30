@@ -153,9 +153,9 @@ TEST_CASE("cli_args: --keyboard-layout accepts a concrete token") {
 }
 
 TEST_CASE("cli_args: --amiga-model accepts a lowercased machine configuration token") {
-    auto a = make_argv(
-        {"player", "--system", "amiga2000", "--rom", "kick.rom", "--amiga-model", "ECS_1M"});
-    REQUIRE(parse_amiga_model_arg(a.argc(), a.argv.data()) == "ecs_1m");
+    auto a = make_argv({"player", "--system", "amiga2000", "--rom", "kick.rom",
+                        "--amiga-model", "ECS_1M+FAST-RAM=2M"});
+    REQUIRE(parse_amiga_model_arg(a.argc(), a.argv.data()) == "ecs_1m+fast-ram=2m");
 
     auto missing = make_argv({"player", "--amiga-model"});
     CHECK(parse_amiga_model_arg(missing.argc(), missing.argv.data()) == std::nullopt);
