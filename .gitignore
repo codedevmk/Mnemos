@@ -82,3 +82,5 @@ __pycache__/
 # Raw session telemetry (M7/M15 inputs) — aggregated into committed
 # snapshots by metrics.py; the raw logs are working data, never authority.
 metrics/sessions/
+results/
+cache_old_*/
