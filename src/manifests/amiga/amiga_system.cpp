@@ -103,7 +103,7 @@ namespace mnemos::manifests::amiga {
             chips::video::agnus::scanlines_ntsc - pot_reset_scanlines;
         static_assert(pot_full_scale_scanlines == 255U);
         constexpr std::uint32_t non_nasty_blitter_release_wait_cycles = 6U;
-        constexpr std::uint16_t weak_bit_lfsr_seed = 0xACE1U;
+        constexpr std::uint16_t weak_bit_lfsr_seed = amiga_floppy_weak_bit_lfsr_seed;
         constexpr std::uint16_t weak_bit_lfsr_feedback = 0xB400U;
 
         [[nodiscard]] std::uint32_t saturating_add(std::uint32_t lhs, std::uint32_t rhs) noexcept {
@@ -1314,28 +1314,16 @@ namespace mnemos::manifests::amiga {
         auto& df = floppy_drives[drive];
         df.connected = true;
         df.image.assign(adf_image.begin(), adf_image.end());
-        for (auto& cached_track : df.raw_track_cache) {
-            cached_track.clear();
-        }
-        for (auto& cached_weak_bits : df.weak_bit_cache) {
-            cached_weak_bits.clear();
-        }
+        amiga_clear_floppy_track_cache(df);
         df.cylinder_pos = 0U;
-        df.stream_offset = 0U;
+        amiga_reset_floppy_stream_phase(df);
         df.track_stream_track_index = 0U;
         df.weak_bit_stream.clear();
-        df.stream_bit_offset = 0U;
-        df.stream_read_shift = 0U;
-        df.stream_read_bit_count = 0U;
-        df.stream_write_latch = 0U;
-        df.stream_write_shift = 0U;
-        df.stream_write_bits_remaining = 0U;
         df.weak_bit_lfsr = weak_bit_lfsr_seed;
         df.write_protected = true;
         df.change_latch = true;
         df.track_stream_dirty = false;
         df.index_line_accumulator = 0U;
-        df.byte_clock_accumulator = 0U;
         floppy_side_pos = 0U;
         disk_dma_bytes_remaining = 0U;
         df.track_stream.reserve(floppy_sectors_per_track * 1100U);
@@ -1352,27 +1340,15 @@ namespace mnemos::manifests::amiga {
         auto& df = floppy_drives[drive];
         df.image.clear();
         df.track_stream.clear();
-        for (auto& cached_track : df.raw_track_cache) {
-            cached_track.clear();
-        }
-        for (auto& cached_weak_bits : df.weak_bit_cache) {
-            cached_weak_bits.clear();
-        }
-        df.stream_offset = 0U;
+        amiga_clear_floppy_track_cache(df);
+        amiga_reset_floppy_stream_phase(df);
         df.track_stream_track_index = 0U;
         df.weak_bit_stream.clear();
-        df.stream_bit_offset = 0U;
-        df.stream_read_shift = 0U;
-        df.stream_read_bit_count = 0U;
-        df.stream_write_latch = 0U;
-        df.stream_write_shift = 0U;
-        df.stream_write_bits_remaining = 0U;
         df.weak_bit_lfsr = weak_bit_lfsr_seed;
         df.cylinder_pos = 0U;
         df.change_latch = true;
         df.track_stream_dirty = false;
         df.index_line_accumulator = 0U;
-        df.byte_clock_accumulator = 0U;
         floppy_side_pos = 0U;
         disk_dma_bytes_remaining = 0U;
     }
@@ -2389,16 +2365,9 @@ namespace mnemos::manifests::amiga {
                 drive.connected = true;
             }
             drive.motor_on = false;
-            drive.stream_offset = 0U;
-            drive.stream_bit_offset = 0U;
-            drive.stream_read_shift = 0U;
-            drive.stream_read_bit_count = 0U;
-            drive.stream_write_latch = 0U;
-            drive.stream_write_shift = 0U;
-            drive.stream_write_bits_remaining = 0U;
+            amiga_reset_floppy_stream_phase(drive);
             drive.weak_bit_lfsr = weak_bit_lfsr_seed;
             drive.index_line_accumulator = 0U;
-            drive.byte_clock_accumulator = 0U;
             drive.track_stream_dirty = false;
         }
 
@@ -2712,12 +2681,7 @@ namespace mnemos::manifests::amiga {
             }
             saved_floppy_track_stream[drive] = reader.blob();
             saved_floppy_weak_bit_stream[drive] = reader.blob();
-            for (auto& cached_track : df.raw_track_cache) {
-                cached_track.clear();
-            }
-            for (auto& cached_weak_bits : df.weak_bit_cache) {
-                cached_weak_bits.clear();
-            }
+            amiga_clear_floppy_track_cache(df);
             df.track_stream_dirty = false;
             const std::uint16_t cached_track_count = reader.u16();
             for (std::uint16_t cached = 0U; cached < cached_track_count; ++cached) {
@@ -2872,14 +2836,8 @@ namespace mnemos::manifests::amiga {
                     df.stream_write_bits_remaining = saved_floppy_write_bits_remaining[drive];
                 } else {
                     df.index_line_accumulator = 0U;
-                    df.byte_clock_accumulator = 0U;
                     df.weak_bit_stream.clear();
-                    df.stream_bit_offset = 0U;
-                    df.stream_read_shift = 0U;
-                    df.stream_read_bit_count = 0U;
-                    df.stream_write_latch = 0U;
-                    df.stream_write_shift = 0U;
-                    df.stream_write_bits_remaining = 0U;
+                    amiga_reset_floppy_stream_phase(df);
                     df.track_stream_dirty = false;
                 }
                 if (index_lines != 0U) {

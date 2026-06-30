@@ -47,7 +47,7 @@ src/manifests/amiga/
   amiga_system.hpp/.cpp
   chipsets/amiga_chipsets.hpp/.cpp
   expansions/zorro2.hpp/.cpp
-  drives/
+  drives/amiga_floppy.hpp/.cpp
   devices/
   models/amiga_models.hpp/.cpp
 ```
@@ -61,6 +61,11 @@ Model descriptors select base chip RAM, chipset profile, and expansion-bus
 capabilities. Chipset descriptors own chipset-specific policy such as the
 address width used by Copper pointers. The shared system assembly consumes
 these descriptors rather than hard-coding per-model branches.
+
+Drive descriptors and state helpers own Amiga floppy geometry and drive-local
+stream/cache state. The system assembly still owns the disk DMA register
+contract and CIA wiring until those responsibilities can be split without
+changing timing behavior.
 
 ## Consequences
 

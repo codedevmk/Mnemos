@@ -14,6 +14,12 @@ namespace {
     using mnemos::manifests::amiga::amiga_config;
     using mnemos::manifests::amiga::amiga_chipset;
     using mnemos::manifests::amiga::amiga_chipset_profile;
+    using mnemos::manifests::amiga::amiga_floppy_dd_size;
+    using mnemos::manifests::amiga::amiga_floppy_drive_count;
+    using mnemos::manifests::amiga::amiga_floppy_heads;
+    using mnemos::manifests::amiga::amiga_floppy_sector_size;
+    using mnemos::manifests::amiga::amiga_floppy_sectors_per_track;
+    using mnemos::manifests::amiga::amiga_floppy_track_count;
     using mnemos::manifests::amiga::amiga_fast_ram_size_for_config;
     using mnemos::manifests::amiga::amiga_model;
     using mnemos::manifests::amiga::amiga_model_profile;
@@ -131,14 +137,7 @@ namespace {
 
     void reset_floppy_stream_phase(amiga_system::floppy_drive_state& drive,
                                    std::size_t offset = 0U, std::uint8_t bit_offset = 0U) {
-        drive.stream_offset = offset;
-        drive.stream_bit_offset = static_cast<std::uint8_t>(bit_offset & 0x07U);
-        drive.stream_read_shift = 0U;
-        drive.stream_read_bit_count = 0U;
-        drive.stream_write_latch = 0U;
-        drive.stream_write_shift = 0U;
-        drive.stream_write_bits_remaining = 0U;
-        drive.byte_clock_accumulator = 0U;
+        mnemos::manifests::amiga::amiga_reset_floppy_stream_phase(drive, offset, bit_offset);
     }
 
     [[nodiscard]] std::uint8_t next_expected_weak_bit(std::uint16_t& state) noexcept {
@@ -240,6 +239,16 @@ TEST_CASE("amiga model descriptors gate configurable Fast RAM",
                                            amiga_system::fast_ram_max_size + 512U};
     CHECK(amiga_fast_ram_size_for_config(a2000_oversized, amiga_system::fast_ram_max_size) ==
           amiga_system::fast_ram_max_size);
+}
+
+TEST_CASE("amiga floppy drive profile preserves public DD geometry",
+          "[manifests][amiga][drives]") {
+    CHECK(amiga_system::floppy_heads == amiga_floppy_heads);
+    CHECK(amiga_system::floppy_track_count == amiga_floppy_track_count);
+    CHECK(amiga_system::floppy_sectors_per_track == amiga_floppy_sectors_per_track);
+    CHECK(amiga_system::floppy_sector_size == amiga_floppy_sector_size);
+    CHECK(amiga_system::floppy_dd_size == amiga_floppy_dd_size);
+    CHECK(amiga_system::floppy_drive_count == amiga_floppy_drive_count);
 }
 
 TEST_CASE("amiga500 boots through the Kickstart reset overlay", "[manifests][amiga500]") {

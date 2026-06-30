@@ -19,13 +19,14 @@ Layout:
   Paula. The chips themselves stay under `src/chips/`. `amiga_chipsets.*`
   currently owns Copper address-width policy.
 - `expansions/` — Zorro/autoconfig and expansion-board helpers.
-- `drives/` — Amiga drive and disk-controller glue.
+- `drives/` — Amiga drive and disk-controller glue. `amiga_floppy.*`
+  currently owns DD floppy geometry and drive-local stream/cache state.
 - `devices/` — keyboard, joystick, mouse, and port-device glue.
 - `models/` — model descriptors for A500, A500+, A600, A2000, and later
   machines. `amiga_models.*` currently owns base chip RAM, chipset selection,
   and expansion capability policy.
 
 The current refactor has split out `chipsets/amiga_chipsets.*`,
-`expansions/zorro2.*`, and `models/amiga_models.*`; remaining large blocks in
-`amiga_system.cpp` should move into the matching folders as the next behavior
-work touches them.
+`drives/amiga_floppy.*`, `expansions/zorro2.*`, and `models/amiga_models.*`;
+remaining large blocks in `amiga_system.cpp` should move into the matching
+folders as the next behavior work touches them.
