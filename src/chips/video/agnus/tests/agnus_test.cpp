@@ -55,16 +55,16 @@ namespace {
 
     void program_full_window(agnus& chip, std::uint16_t bplcon0 = 0x1000U) {
         chip.set_bplcon0(bplcon0);
-        chip.set_diwstrt(0x2C00U); // V start = 0x2C (matches display_line_origin)
-        chip.set_diwstop(0xF400U); // V stop = 0xF4 (244), bit 7 set => no +0x100
+        chip.set_diwstrt(0x2C81U); // V start = 0x2C, H start = standard full field.
+        chip.set_diwstop(0xF4C1U); // V stop = 0xF4, H stop = 320 low-res pixels.
         chip.set_ddfstrt(0x0038U); // fetch start
         chip.set_ddfstop(0x00D0U); // fetch stop => 20 words/line
     }
 
     void program_full_window_hires(agnus& chip, std::uint16_t bplcon0 = 0x9000U) {
         chip.set_bplcon0(bplcon0);
-        chip.set_diwstrt(0x2C00U);
-        chip.set_diwstop(0xF400U);
+        chip.set_diwstrt(0x2C81U);
+        chip.set_diwstop(0xF4C1U);
         chip.set_ddfstrt(0x003CU); // standard high-resolution fetch start
         chip.set_ddfstop(0x00D4U); // standard high-resolution fetch stop => 40 words/line
     }
@@ -238,7 +238,7 @@ TEST_CASE("agnus bitplane pointers advance only during vertical display DMA", "[
     CHECK(chip.bitplane_pointer(0U) == expected_pointer);
 }
 
-TEST_CASE("agnus delayed BPLCON1 playfields fetch an extra tail word", "[agnus]") {
+TEST_CASE("agnus BPLCON1 delays do not fetch an extra tail word", "[agnus]") {
     agnus chip;
     std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
     const auto palette = make_palette(1U, 0x0F00U);
@@ -248,7 +248,7 @@ TEST_CASE("agnus delayed BPLCON1 playfields fetch an extra tail word", "[agnus]"
     program_full_window(chip, 0x2000U); // Two bitplanes.
     chip.set_bitplane_pointer(0U, 0U);
     chip.set_bitplane_pointer(1U, 0x4000U);
-    chip.set_bplcon1(0x0001U); // PF1 delayed; PF2 has no tail fetch.
+    chip.set_bplcon1(0x0001U); // PF1 delayed; DDF still owns the fetch width.
     chip.write_dmacon(
         static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
 
@@ -256,7 +256,7 @@ TEST_CASE("agnus delayed BPLCON1 playfields fetch an extra tail word", "[agnus]"
 
     constexpr std::uint32_t visible_lines = 0xF4U - 0x2CU;
     constexpr std::uint32_t words_per_line = 20U;
-    CHECK(chip.bitplane_pointer(0U) == visible_lines * (words_per_line + 1U) * 2U);
+    CHECK(chip.bitplane_pointer(0U) == visible_lines * words_per_line * 2U);
     CHECK(chip.bitplane_pointer(1U) == 0x4000U + visible_lines * words_per_line * 2U);
 }
 
@@ -280,7 +280,7 @@ TEST_CASE("agnus clipped DDF fetches still advance bitplane pointers", "[agnus]"
     CHECK(chip.bitplane_pointer(0U) == visible_lines * ddf_words_per_line * 2U);
 }
 
-TEST_CASE("agnus BPLCON1 tail fetch needs an active DDF window", "[agnus]") {
+TEST_CASE("agnus BPLCON1 delay still needs an active DDF window", "[agnus]") {
     agnus chip;
     std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
     const auto palette = make_palette(1U, 0x0F00U);
@@ -346,6 +346,37 @@ TEST_CASE("agnus BPLCON0 HIRES fetches and exposes 640-pixel bitplane rows", "[a
     CHECK(frame.effective_stride() == agnus::framebuffer_stride);
     CHECK(frame.pixels[0] == 0x00FF0000U);
     CHECK(frame.pixels[agnus::visible_width_hires - 1U] == 0x00FF0000U);
+}
+
+TEST_CASE("agnus clips high-resolution fetch guard words to the horizontal display window",
+          "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    const auto palette = make_palette(1U, 0x0F00U);
+
+    write_word(chip_ram, 0U, 0xFFFFU);        // fetched before DIW, must stay hidden
+    write_word(chip_ram, 1U * 2U, 0xFFFFU);   // straddles the DIW left edge
+    write_word(chip_ram, 37U * 2U, 0xFFFFU);  // fetched after DIW, must stay hidden
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    chip.set_bplcon0(0x9000U);
+    chip.set_diwstrt(0x2C95U);
+    chip.set_diwstop(0xF4ADU);
+    chip.set_ddfstrt(0x0040U);
+    chip.set_ddfstop(0x00D0U);
+    chip.set_bitplane_pointer(0U, 0U);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    chip.tick(frame_ticks);
+    const auto frame = chip.framebuffer();
+
+    CHECK(frame.pixels[16U] == 0x00000000U);
+    CHECK(frame.pixels[39U] == 0x00000000U);
+    CHECK(frame.pixels[40U] == 0x00FF0000U);
+    CHECK(frame.pixels[47U] == 0x00FF0000U);
+    CHECK(frame.pixels[48U] == 0x00000000U);
+    CHECK(frame.pixels[608U] == 0x00000000U);
 }
 
 TEST_CASE("agnus BPLCON1 high-resolution scroll delay advances in two-pixel steps", "[agnus]") {
@@ -1598,6 +1629,38 @@ TEST_CASE("agnus Copper location pointers are clipped to the OCS 18-bit address 
 
     CHECK(chip.cop1lc() == 0x00071234U);
     CHECK(chip.cop2lc() == 0x00015678U);
+}
+
+TEST_CASE("agnus Copper location pointers can use an ECS 1 MiB address mask", "[agnus]") {
+    agnus chip;
+
+    chip.set_copper_address_mask(agnus::ecs_1m_copper_address_mask);
+    chip.write_cop1lc(0x001F1234U);
+    chip.write_cop2lc(0x00195678U);
+
+    CHECK(chip.cop1lc() == 0x000F1234U);
+    CHECK(chip.cop2lc() == 0x00095678U);
+}
+
+TEST_CASE("agnus Copper fetches instructions from ECS upper chip RAM", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(1024U * 1024U, 0U);
+
+    constexpr std::uint32_t list = 0x090000U;
+    write_word(chip_ram, list + 0U, 0x0096U); // MOVE DMACON: set BPLEN.
+    write_word(chip_ram, list + 2U,
+               static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_bplen));
+    write_word(chip_ram, list + 4U, 0xFFFFU);
+    write_word(chip_ram, list + 6U, 0xFFFEU);
+
+    chip.attach_chip_ram(chip_ram);
+    chip.set_copper_address_mask(agnus::ecs_1m_copper_address_mask);
+    chip.write_cop1lc(list);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_copen));
+
+    chip.tick(pal_vblank_exit_ticks + 1U);
+    CHECK(chip.dma_bitplane());
 }
 
 TEST_CASE("agnus copper reloads COP1 as vblank exits each frame", "[agnus]") {

@@ -85,6 +85,8 @@ namespace mnemos::chips::video {
         static constexpr std::uint32_t max_sprites = 8U;
         static constexpr std::uint32_t sprite_width = 16U;
         static constexpr std::uint32_t palette_entries = 32U;
+        static constexpr std::uint32_t ocs_copper_address_mask = 0x0007FFFEU;
+        static constexpr std::uint32_t ecs_1m_copper_address_mask = 0x000FFFFEU;
 
         // The visible field begins this color clock into the line and this
         // scanline down the frame (the standard OCS hardware origin). The
@@ -229,8 +231,9 @@ namespace mnemos::chips::video {
         void set_custom_write_callback(custom_write_callback cb) noexcept {
             custom_write_cb_ = std::move(cb);
         }
-        void write_cop1lc(std::uint32_t value) noexcept { cop1lc_ = value & 0x0007FFFEU; }
-        void write_cop2lc(std::uint32_t value) noexcept { cop2lc_ = value & 0x0007FFFEU; }
+        void set_copper_address_mask(std::uint32_t mask) noexcept;
+        void write_cop1lc(std::uint32_t value) noexcept;
+        void write_cop2lc(std::uint32_t value) noexcept;
         [[nodiscard]] std::uint16_t dmacon() const noexcept { return dmacon_; }
         [[nodiscard]] std::uint32_t cop1lc() const noexcept { return cop1lc_; }
         [[nodiscard]] std::uint32_t cop2lc() const noexcept { return cop2lc_; }
@@ -272,10 +275,8 @@ namespace mnemos::chips::video {
             bool active{};
             bool hires{};
             std::uint32_t active_planes{};
-            std::uint32_t delayed_planes{};
             std::uint32_t group_offset{};
             std::uint32_t beam_clock{};
-            std::uint32_t normal_fetch_end{};
             std::uint32_t fetch_end{};
         };
 
@@ -401,6 +402,7 @@ namespace mnemos::chips::video {
         std::uint32_t cop1lc_{};
         std::uint32_t cop2lc_{};
         std::uint32_t copper_pc_{};
+        std::uint32_t copper_address_mask_{ocs_copper_address_mask};
         bool copper_running_{};
         bool copper_danger_{};
         std::uint8_t copper_delay_{};

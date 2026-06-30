@@ -55,7 +55,6 @@ namespace mnemos::chips::video {
         constexpr std::uint32_t max_sprite_dma_blocks = agnus::scanlines_pal + 1U;
         constexpr std::uint32_t chip_address_mask = 0x001FFFFEU;
         constexpr std::uint32_t chip_address_high_mask = 0x001FU;
-        constexpr std::uint32_t copper_address_mask = 0x0007FFFEU;
 
         struct copper_trace_config final {
             bool enabled{};
@@ -101,24 +100,25 @@ namespace mnemos::chips::video {
                 return {};
             }
             if (env[0] == '1' && env[1] == '\0') {
-                return {.enabled = true, .first = 0U, .last = copper_address_mask};
+                return {.enabled = true, .first = 0U, .last = chip_address_mask};
             }
 
             const char* end = env;
-            const std::uint32_t first = parse_trace_hex(env, &end) & copper_address_mask;
+            const std::uint32_t first = parse_trace_hex(env, &end) & chip_address_mask;
             if (*end != '-') {
                 return {.enabled = true, .first = first, .last = first};
             }
-            const std::uint32_t last = parse_trace_hex(end + 1, &end) & copper_address_mask;
+            const std::uint32_t last = parse_trace_hex(end + 1, &end) & chip_address_mask;
             return {.enabled = true, .first = first, .last = last};
         }
 
-        [[nodiscard]] bool copper_trace_matches(std::uint32_t pc) noexcept {
+        [[nodiscard]] bool copper_trace_matches(std::uint32_t pc,
+                                                std::uint32_t address_mask) noexcept {
             static const copper_trace_config config = copper_trace_from_env();
             if (!config.enabled) {
                 return false;
             }
-            const std::uint32_t clipped_pc = pc & copper_address_mask;
+            const std::uint32_t clipped_pc = pc & address_mask;
             if (config.first <= config.last) {
                 return clipped_pc >= config.first && clipped_pc <= config.last;
             }
@@ -190,14 +190,6 @@ namespace mnemos::chips::video {
             return (plane & 1U) == 0U ? (bplcon1 & 0x000FU) : ((bplcon1 >> 4U) & 0x000FU);
         }
 
-        [[nodiscard]] std::uint32_t delayed_scroll_plane_count(std::uint32_t planes,
-                                                               std::uint16_t bplcon1) noexcept {
-            std::uint32_t count = 0U;
-            for (std::uint32_t plane = 0U; plane < planes; ++plane) {
-                count += plane_scroll_delay_raw(plane, bplcon1) != 0U ? 1U : 0U;
-            }
-            return count;
-        }
     } // namespace
 
     chip_metadata agnus::metadata() const noexcept {
@@ -409,27 +401,18 @@ namespace mnemos::chips::video {
         const std::uint32_t terminal_words = hires ? 2U : 1U;
         const std::uint32_t normal_words_per_line =
             ((ddf_stop - ddf_start) / clocks_per_word) + terminal_words;
-        const std::uint32_t delayed_planes = delayed_scroll_plane_count(planes, bplcon1_);
-        const std::uint32_t normal_fetch_end =
-            std::min(color_clocks_per_line, ddf_start + normal_words_per_line * clocks_per_word);
         const std::uint32_t fetch_end =
-            std::min(color_clocks_per_line,
-                     normal_fetch_end + (delayed_planes != 0U ? clocks_per_word : 0U));
+            std::min(color_clocks_per_line, ddf_start + normal_words_per_line * clocks_per_word);
         if (beam_clock < ddf_start || beam_clock >= fetch_end) {
             return {};
         }
 
-        const bool extra_scroll_fetch = beam_clock >= normal_fetch_end;
-        const std::uint32_t active_planes = extra_scroll_fetch ? delayed_planes : planes;
-
         return {
             .active = true,
             .hires = hires,
-            .active_planes = active_planes,
-            .delayed_planes = delayed_planes,
+            .active_planes = planes,
             .group_offset = (beam_clock - ddf_start) % clocks_per_word,
             .beam_clock = beam_clock,
-            .normal_fetch_end = normal_fetch_end,
             .fetch_end = fetch_end,
         };
     }
@@ -443,11 +426,8 @@ namespace mnemos::chips::video {
 
         if (slot.hires) {
             if (slot.active_planes >= max_hires_bitplanes) {
-                const std::uint32_t lockout_end = (slot.delayed_planes >= max_hires_bitplanes)
-                                                      ? slot.fetch_end
-                                                      : slot.normal_fetch_end;
                 return {
-                    (lockout_end - slot.beam_clock) * cpu_cycles_per_memory_slot,
+                    (slot.fetch_end - slot.beam_clock) * cpu_cycles_per_memory_slot,
                 };
             }
             if (slot.active_planes == 3U && (slot.group_offset == 2U || slot.group_offset == 3U)) {
@@ -726,6 +706,22 @@ namespace mnemos::chips::video {
 
     // --- copper ------------------------------------------------------------
 
+    void agnus::set_copper_address_mask(std::uint32_t mask) noexcept {
+        const std::uint32_t normalized = mask & chip_address_mask;
+        copper_address_mask_ = normalized == 0U ? ocs_copper_address_mask : normalized;
+        cop1lc_ &= copper_address_mask_;
+        cop2lc_ &= copper_address_mask_;
+        copper_pc_ &= copper_address_mask_;
+    }
+
+    void agnus::write_cop1lc(std::uint32_t value) noexcept {
+        cop1lc_ = value & copper_address_mask_;
+    }
+
+    void agnus::write_cop2lc(std::uint32_t value) noexcept {
+        cop2lc_ = value & copper_address_mask_;
+    }
+
     void agnus::strobe_copjmp1() noexcept {
         copper_pc_ = cop1lc_;
         copper_running_ = dma_copper();
@@ -775,7 +771,7 @@ namespace mnemos::chips::video {
         const std::uint16_t ir1 = chip_word(copper_pc_);
         const std::uint16_t ir2 = chip_word(copper_pc_ + 2U);
         const std::uint32_t instruction_pc = copper_pc_;
-        const bool trace_instruction = copper_trace_matches(instruction_pc);
+        const bool trace_instruction = copper_trace_matches(instruction_pc, copper_address_mask_);
 
         const bool is_move = (ir1 & 0x0001U) == 0U;
         if (is_move) {
@@ -786,7 +782,7 @@ namespace mnemos::chips::video {
                 apply_copper_move(reg_addr, ir2);
             }
             if (copper_pc_ == previous_pc) {
-                copper_pc_ = (copper_pc_ + 4U) & copper_address_mask;
+                copper_pc_ = (copper_pc_ + 4U) & copper_address_mask_;
             }
             if (copper_running_) {
                 copper_delay_ = copper_move_skip_cycles - 1U;
@@ -836,10 +832,10 @@ namespace mnemos::chips::video {
         }
 
         if (is_skip) {
-            copper_pc_ = (copper_pc_ + 4U) & copper_address_mask;
+            copper_pc_ = (copper_pc_ + 4U) & copper_address_mask_;
             if (past) {
                 // Skip the next instruction's two words as well.
-                copper_pc_ = (copper_pc_ + 4U) & copper_address_mask;
+                copper_pc_ = (copper_pc_ + 4U) & copper_address_mask_;
             }
             copper_delay_ = copper_move_skip_cycles - 1U;
             return;
@@ -847,7 +843,7 @@ namespace mnemos::chips::video {
         // WAIT: advance past the instruction only when the target is reached;
         // otherwise stall (re-evaluate on the next clock).
         if (past) {
-            copper_pc_ = (copper_pc_ + 4U) & copper_address_mask;
+            copper_pc_ = (copper_pc_ + 4U) & copper_address_mask_;
             copper_delay_ = copper_wait_wake_cycles - 1U;
         }
     }
@@ -1006,6 +1002,20 @@ namespace mnemos::chips::video {
         const std::uint32_t ddf_start = ddfstrt_ & 0xFFU;
         const std::uint32_t ddf_stop = ddfstop_ & 0xFFU;
         const bool hires = hires_enabled();
+        const std::uint32_t pixel_scale = hires ? 2U : 1U;
+        constexpr std::uint32_t diw_h_origin = 0x81U;
+        const std::int32_t display_start_x =
+            (static_cast<std::int32_t>(diwstrt_ & 0x00FFU) -
+             static_cast<std::int32_t>(diw_h_origin)) *
+            static_cast<std::int32_t>(pixel_scale);
+        const std::int32_t display_stop_x =
+            (static_cast<std::int32_t>((diwstop_ & 0x00FFU) + 0x100U) -
+             static_cast<std::int32_t>(diw_h_origin)) *
+            static_cast<std::int32_t>(pixel_scale);
+        const std::uint32_t display_left = static_cast<std::uint32_t>(
+            std::clamp(display_start_x, 0, static_cast<std::int32_t>(width)));
+        const std::uint32_t display_right = static_cast<std::uint32_t>(
+            std::clamp(display_stop_x, 0, static_cast<std::int32_t>(width)));
         std::uint32_t words_per_line = 0U;
         if (ddf_stop >= ddf_start) {
             const std::uint32_t clocks_per_word = hires ? 4U : 8U;
@@ -1013,13 +1023,16 @@ namespace mnemos::chips::video {
             words_per_line = ((ddf_stop - ddf_start) / clocks_per_word) + terminal_words;
         }
 
-        if (beam_line < diw_v_start || beam_line >= diw_v_stop) {
+        if (beam_line < diw_v_start || beam_line >= diw_v_stop ||
+            display_left >= display_right) {
             return;
         }
 
         std::array<std::uint8_t, visible_width_hires> line_sample{};
         std::uint32_t ham_hold = backdrop;
-
+        const std::int32_t data_fetch_origin_x =
+            hires ? (static_cast<std::int32_t>(ddf_start) - 0x3C) * 4
+                  : (static_cast<std::int32_t>(ddf_start) - 0x38) * 2;
         for (std::uint32_t word = 0; word < words_per_line; ++word) {
             // Fetch one word per active plane for this cell. BPLCON1 delays
             // the odd/even playfield serializers independently.
@@ -1028,25 +1041,21 @@ namespace mnemos::chips::video {
                 bitplane_pointer_[p] = (bitplane_pointer_[p] + 2U) & chip_address_mask;
                 const std::uint32_t raw_delay = plane_scroll_delay_raw(p, bplcon1_);
                 const std::uint32_t delay = hires ? raw_delay * 2U : raw_delay;
-                const std::uint32_t base_x = word * 16U;
+                const std::int32_t base_x =
+                    data_fetch_origin_x + static_cast<std::int32_t>(word * 16U + delay);
                 for (std::uint32_t pixel = 0; pixel < 16U; ++pixel) {
                     const std::uint32_t bit = 15U - pixel;
-                    const std::uint32_t x = base_x + pixel + delay;
-                    if (x >= width) {
+                    const std::int32_t x = base_x + static_cast<std::int32_t>(pixel);
+                    if (x < 0 || x >= static_cast<std::int32_t>(width)) {
                         continue;
                     }
-                    line_sample[x] =
-                        static_cast<std::uint8_t>(line_sample[x] | (((data >> bit) & 1U) << p));
+                    line_sample[static_cast<std::uint32_t>(x)] = static_cast<std::uint8_t>(
+                        line_sample[static_cast<std::uint32_t>(x)] |
+                        (((data >> bit) & 1U) << p));
                 }
             }
         }
-        for (std::uint32_t p = 0; p < planes; ++p) {
-            if (words_per_line != 0U && plane_scroll_delay_raw(p, bplcon1_) != 0U) {
-                bitplane_pointer_[p] = (bitplane_pointer_[p] + 2U) & chip_address_mask;
-            }
-        }
-
-        for (std::uint32_t x = 0; x < width; ++x) {
+        for (std::uint32_t x = display_left; x < display_right; ++x) {
             const std::size_t out = static_cast<std::size_t>(line) * stride + x;
             const std::uint32_t index = line_sample[x];
             bitplane_sample_[out] = static_cast<std::uint8_t>(index & 0x3FU);
@@ -1535,9 +1544,9 @@ namespace mnemos::chips::video {
         diwstop_ = reader.u16();
         ddfstrt_ = reader.u16();
         ddfstop_ = reader.u16();
-        cop1lc_ = reader.u32() & copper_address_mask;
-        cop2lc_ = reader.u32() & copper_address_mask;
-        copper_pc_ = reader.u32() & copper_address_mask;
+        cop1lc_ = reader.u32() & copper_address_mask_;
+        cop2lc_ = reader.u32() & copper_address_mask_;
+        copper_pc_ = reader.u32() & copper_address_mask_;
         copper_running_ = reader.boolean();
         copper_danger_ = reader.boolean();
         copper_delay_ = reader.u8();

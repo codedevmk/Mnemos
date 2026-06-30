@@ -11,6 +11,8 @@
 #include <vector>
 
 namespace {
+    using mnemos::manifests::amiga500::amiga500_config;
+    using mnemos::manifests::amiga500::amiga500_model;
     using mnemos::manifests::amiga500::amiga500_system;
     using mnemos::manifests::amiga500::assemble_amiga500;
     using agnus = mnemos::chips::video::agnus;
@@ -99,8 +101,8 @@ namespace {
         sys.write_custom_word(0x180U, 0x000FU); // COLOR00 = blue backdrop
         sys.write_custom_word(0x182U, 0x0F00U); // COLOR01 = red foreground
         sys.write_custom_word(0x100U, 0x1000U); // BPU = 1
-        sys.write_custom_word(0x08EU, 0x2C00U);
-        sys.write_custom_word(0x090U, 0xF400U);
+        sys.write_custom_word(0x08EU, 0x2C81U);
+        sys.write_custom_word(0x090U, 0xF4C1U);
         sys.write_custom_word(0x092U, 0x0038U);
         sys.write_custom_word(0x094U, 0x00D0U);
         sys.write_custom_word(0x0E0U, 0x0000U); // BPL1PTH
@@ -551,6 +553,23 @@ TEST_CASE("amiga500 Copper location pointers are clipped to OCS chip address wid
     CHECK(sys->agnus.cop2lc() == 0x00015678U);
 }
 
+TEST_CASE("amiga500plus Copper location pointers use the ECS 1 MiB address width",
+          "[manifests][amiga500][custom][amiga500plus]") {
+    const amiga500_config config{.model = amiga500_model::amiga500_plus};
+    auto sys = assemble_amiga500(tiny_kickstart(), config);
+    REQUIRE(sys != nullptr);
+
+    sys->write_custom_word(0x080U, 0x001FU); // COP1LCH
+    sys->write_custom_word(0x082U, 0x1235U); // COP1LCL, low bit ignored.
+    sys->write_custom_word(0x084U, 0x0019U); // COP2LCH
+    sys->write_custom_word(0x086U, 0x5679U); // COP2LCL, low bit ignored.
+
+    CHECK(sys->cop1lc == 0x000F1234U);
+    CHECK(sys->cop2lc == 0x00095678U);
+    CHECK(sys->agnus.cop1lc() == 0x000F1234U);
+    CHECK(sys->agnus.cop2lc() == 0x00095678U);
+}
+
 TEST_CASE("amiga500 BPLCON0 HIRES custom register exposes 640-pixel OCS rows",
           "[manifests][amiga500][video]") {
     auto sys = assemble_amiga500(tiny_kickstart());
@@ -561,8 +580,8 @@ TEST_CASE("amiga500 BPLCON0 HIRES custom register exposes 640-pixel OCS rows",
     sys->write_custom_word(0x180U, 0x000FU); // COLOR00 = blue backdrop
     sys->write_custom_word(0x182U, 0x0F00U); // COLOR01 = red foreground
     sys->write_custom_word(0x100U, 0x9000U); // HIRES | BPU = 1
-    sys->write_custom_word(0x08EU, 0x2C00U);
-    sys->write_custom_word(0x090U, 0xF400U);
+    sys->write_custom_word(0x08EU, 0x2C81U);
+    sys->write_custom_word(0x090U, 0xF4C1U);
     sys->write_custom_word(0x092U, 0x003CU);
     sys->write_custom_word(0x094U, 0x00D4U);
     sys->write_custom_word(0x0E0U, 0x0000U); // BPL1PTH
@@ -2053,8 +2072,8 @@ TEST_CASE("amiga500 display DMA stalls blitter busy countdown",
     REQUIRE(sys != nullptr);
 
     sys->write_custom_word(0x100U, 0xC000U); // HIRES | BPU = 4.
-    sys->write_custom_word(0x08EU, 0x2C00U);
-    sys->write_custom_word(0x090U, 0xF400U);
+    sys->write_custom_word(0x08EU, 0x2C81U);
+    sys->write_custom_word(0x090U, 0xF4C1U);
     sys->write_custom_word(0x092U, 0x003CU);
     sys->write_custom_word(0x094U, 0x00D4U);
     sys->write_custom_word(
@@ -2131,8 +2150,8 @@ TEST_CASE("amiga500 BLTPRI waits behind display-owned DMA slots",
 
     sys->overlay_active = false;
     sys->write_custom_word(0x100U, 0x6000U); // Six low-resolution bitplanes.
-    sys->write_custom_word(0x08EU, 0x2C00U);
-    sys->write_custom_word(0x090U, 0xF400U);
+    sys->write_custom_word(0x08EU, 0x2C81U);
+    sys->write_custom_word(0x090U, 0xF4C1U);
     sys->write_custom_word(0x092U, 0x0038U);
     sys->write_custom_word(0x094U, 0x00D0U);
 
@@ -2210,8 +2229,8 @@ TEST_CASE("amiga500 high-resolution display DMA stalls CPU chip-RAM bus cycles d
 
         sys->write_custom_word(0x100U, bplcon0);
         sys->write_custom_word(0x102U, bplcon1);
-        sys->write_custom_word(0x08EU, 0x2C00U);
-        sys->write_custom_word(0x090U, 0xF400U);
+        sys->write_custom_word(0x08EU, 0x2C81U);
+        sys->write_custom_word(0x090U, 0xF4C1U);
         sys->write_custom_word(0x092U, 0x003CU);
         sys->write_custom_word(0x094U, 0x00D4U);
         sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
@@ -2261,12 +2280,12 @@ TEST_CASE("amiga500 high-resolution display DMA stalls CPU chip-RAM bus cycles d
     CHECK(one_plane_blitter[1] == 6U);
     CHECK(four_planes_blitter[1] == expected_wait);
     CHECK(four_planes_pf1_scroll[1] == expected_wait);
-    CHECK(four_planes_both_scroll[1] == expected_wait + 8U);
+    CHECK(four_planes_both_scroll[1] == expected_wait);
     CHECK(four_planes[0] == one_plane[0] + expected_wait);
     CHECK(one_plane_blitter[0] == one_plane[0] + 6U);
     CHECK(four_planes_blitter[0] == four_planes[0]);
     CHECK(four_planes_pf1_scroll[0] == four_planes[0]);
-    CHECK(four_planes_both_scroll[0] == four_planes[0] + 8U);
+    CHECK(four_planes_both_scroll[0] == four_planes[0]);
 }
 
 TEST_CASE("amiga500 high-resolution display DMA charges one lockout across longword transfers",
@@ -2284,8 +2303,8 @@ TEST_CASE("amiga500 high-resolution display DMA charges one lockout across longw
         sys->overlay_active = false;
 
         sys->write_custom_word(0x100U, bplcon0);
-        sys->write_custom_word(0x08EU, 0x2C00U);
-        sys->write_custom_word(0x090U, 0xF400U);
+        sys->write_custom_word(0x08EU, 0x2C81U);
+        sys->write_custom_word(0x090U, 0xF4C1U);
         sys->write_custom_word(0x092U, 0x003CU);
         sys->write_custom_word(0x094U, 0x00D4U);
         sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
@@ -2337,8 +2356,8 @@ TEST_CASE("amiga500 display DMA wait is already residual after prior instruction
     sys->overlay_active = false;
 
     sys->write_custom_word(0x100U, 0xC000U); // HIRES | BPU = 4.
-    sys->write_custom_word(0x08EU, 0x2C00U);
-    sys->write_custom_word(0x090U, 0xF400U);
+    sys->write_custom_word(0x08EU, 0x2C81U);
+    sys->write_custom_word(0x090U, 0xF4C1U);
     sys->write_custom_word(0x092U, 0x003CU);
     sys->write_custom_word(0x094U, 0x00D4U);
     sys->write_custom_word(0x096U,
@@ -2376,8 +2395,8 @@ TEST_CASE("amiga500 six-plane low-resolution display DMA steals CPU-open slots",
 
         sys->write_custom_word(0x100U, bplcon0);
         sys->write_custom_word(0x102U, bplcon1);
-        sys->write_custom_word(0x08EU, 0x2C00U);
-        sys->write_custom_word(0x090U, 0xF400U);
+        sys->write_custom_word(0x08EU, 0x2C81U);
+        sys->write_custom_word(0x090U, 0xF4C1U);
         sys->write_custom_word(0x092U, 0x0038U);
         sys->write_custom_word(0x094U, 0x00D0U);
         sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga500_system::setclr_bit |
@@ -2430,7 +2449,7 @@ TEST_CASE("amiga500 six-plane low-resolution display DMA steals CPU-open slots",
     CHECK(six_planes_blitter[1] == 6U);
     CHECK(six_planes_tail_no_scroll[1] == 0U);
     CHECK(six_planes_tail_pf1_scroll[1] == 0U);
-    CHECK(six_planes_tail_both_scroll[1] == 4U);
+    CHECK(six_planes_tail_both_scroll[1] == 0U);
     CHECK(five_planes[0] == four_planes[0] + 4U);
     CHECK(five_planes_second_clock[0] == four_planes[0] + 2U);
     CHECK(six_planes[0] == four_planes[0] + 4U);
@@ -2438,7 +2457,7 @@ TEST_CASE("amiga500 six-plane low-resolution display DMA steals CPU-open slots",
     CHECK(six_planes_longword[0] == four_planes_longword[0] + 8U);
     CHECK(six_planes_blitter[0] == four_planes[0] + 6U);
     CHECK(six_planes_tail_pf1_scroll[0] == six_planes_tail_no_scroll[0]);
-    CHECK(six_planes_tail_both_scroll[0] == six_planes_tail_no_scroll[0] + 4U);
+    CHECK(six_planes_tail_both_scroll[0] == six_planes_tail_no_scroll[0]);
 }
 
 TEST_CASE("amiga500 sprite DMA stalls CPU chip-RAM bus cycles during sprite slots",
@@ -2516,8 +2535,8 @@ TEST_CASE("amiga500 three-plane high-resolution display DMA steals CPU-open slot
         sys->overlay_active = false;
 
         sys->write_custom_word(0x100U, bplcon0);
-        sys->write_custom_word(0x08EU, 0x2C00U);
-        sys->write_custom_word(0x090U, 0xF400U);
+        sys->write_custom_word(0x08EU, 0x2C81U);
+        sys->write_custom_word(0x090U, 0xF4C1U);
         sys->write_custom_word(0x092U, 0x003CU);
         sys->write_custom_word(0x094U, 0x00D4U);
         sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga500_system::setclr_bit |

@@ -93,8 +93,6 @@ namespace mnemos::manifests::amiga500 {
         constexpr std::uint16_t adkcon_wordsync = 0x0400U;
         constexpr std::uint32_t chip_dma_address_mask = 0x001FFFFEU;
         constexpr std::uint32_t chip_dma_address_high_mask = 0x001FU;
-        constexpr std::uint32_t ocs_copper_address_mask = 0x0007FFFEU;
-        constexpr std::uint32_t ocs_copper_address_high_mask = 0x0007U;
         constexpr std::uint32_t ocs_disk_dma_address_mask = 0x0007FFFFU;
         constexpr std::size_t blit_a = 0U;
         constexpr std::size_t blit_b = 1U;
@@ -116,6 +114,12 @@ namespace mnemos::manifests::amiga500 {
         [[nodiscard]] std::size_t chip_ram_size_for_model(amiga500_model model) noexcept {
             return model == amiga500_model::amiga500_plus ? amiga500_system::chip_ram_size_1m
                                                           : amiga500_system::chip_ram_size;
+        }
+
+        [[nodiscard]] std::uint32_t copper_address_mask_for_model(amiga500_model model) noexcept {
+            return model == amiga500_model::amiga500_plus
+                       ? chips::video::agnus::ecs_1m_copper_address_mask
+                       : chips::video::agnus::ocs_copper_address_mask;
         }
 
         [[nodiscard]] std::uint32_t chip_ram_address_mask(std::size_t size) noexcept {
@@ -285,15 +289,22 @@ namespace mnemos::manifests::amiga500 {
                    (static_cast<std::uint32_t>(value) & 0x0000FFFEU);
         }
 
+        [[nodiscard]] std::uint16_t copper_address_high_mask(std::uint32_t address_mask) noexcept {
+            return static_cast<std::uint16_t>((address_mask >> 16U) & 0x001FU);
+        }
+
         [[nodiscard]] std::uint32_t merge_copper_ptr(std::uint32_t old, bool high,
-                                                     std::uint16_t value) noexcept {
+                                                     std::uint16_t value,
+                                                     std::uint32_t address_mask) noexcept {
+            const std::uint16_t high_mask = copper_address_high_mask(address_mask);
             if (high) {
-                return ((static_cast<std::uint32_t>(value) & ocs_copper_address_high_mask)
-                        << 16U) |
-                       (old & 0x0000FFFEU);
+                return (((static_cast<std::uint32_t>(value) & high_mask) << 16U) |
+                        (old & 0x0000FFFEU)) &
+                       address_mask;
             }
-            return (old & (ocs_copper_address_high_mask << 16U)) |
-                   (static_cast<std::uint32_t>(value) & 0x0000FFFEU);
+            return ((old & (static_cast<std::uint32_t>(high_mask) << 16U)) |
+                    (static_cast<std::uint32_t>(value) & 0x0000FFFEU)) &
+                   address_mask;
         }
 
         [[nodiscard]] std::size_t mirrored_chip_word_address(std::span<const std::uint8_t> ram,
@@ -940,19 +951,19 @@ namespace mnemos::manifests::amiga500 {
             agnus.write_copcon(value);
             return;
         case reg_cop1lch:
-            cop1lc = merge_copper_ptr(cop1lc, true, value);
+            cop1lc = merge_copper_ptr(cop1lc, true, value, copper_address_mask);
             agnus.write_cop1lc(cop1lc);
             return;
         case reg_cop1lcl:
-            cop1lc = merge_copper_ptr(cop1lc, false, value);
+            cop1lc = merge_copper_ptr(cop1lc, false, value, copper_address_mask);
             agnus.write_cop1lc(cop1lc);
             return;
         case reg_cop2lch:
-            cop2lc = merge_copper_ptr(cop2lc, true, value);
+            cop2lc = merge_copper_ptr(cop2lc, true, value, copper_address_mask);
             agnus.write_cop2lc(cop2lc);
             return;
         case reg_cop2lcl:
-            cop2lc = merge_copper_ptr(cop2lc, false, value);
+            cop2lc = merge_copper_ptr(cop2lc, false, value, copper_address_mask);
             agnus.write_cop2lc(cop2lc);
             return;
         case reg_copjmp1:
@@ -1126,11 +1137,13 @@ namespace mnemos::manifests::amiga500 {
             case reg_dsksync:
                 return disk_sync;
             case reg_cop1lch:
-                return static_cast<std::uint16_t>((cop1lc >> 16U) & ocs_copper_address_high_mask);
+                return static_cast<std::uint16_t>((cop1lc >> 16U) &
+                                                  copper_address_high_mask(copper_address_mask));
             case reg_cop1lcl:
                 return static_cast<std::uint16_t>(cop1lc & 0xFFFEU);
             case reg_cop2lch:
-                return static_cast<std::uint16_t>((cop2lc >> 16U) & ocs_copper_address_high_mask);
+                return static_cast<std::uint16_t>((cop2lc >> 16U) &
+                                                  copper_address_high_mask(copper_address_mask));
             case reg_cop2lcl:
                 return static_cast<std::uint16_t>(cop2lc & 0xFFFEU);
             case reg_potgo:
@@ -2490,8 +2503,8 @@ namespace mnemos::manifests::amiga500 {
         cia_a_irq = reader.boolean();
         cia_b_irq = reader.boolean();
         frame_index = reader.u64();
-        cop1lc = reader.u32() & ocs_copper_address_mask;
-        cop2lc = reader.u32() & ocs_copper_address_mask;
+        cop1lc = reader.u32() & copper_address_mask;
+        cop2lc = reader.u32() & copper_address_mask;
         custom_high_latch = reader.u16();
         disk_pointer = reader.u32() & chip_ram_address_mask(chip_ram.size());
         disk_length = reader.u16();
@@ -2734,6 +2747,7 @@ namespace mnemos::manifests::amiga500 {
         auto sys = std::make_unique<amiga500_system>();
         amiga500_system* s = sys.get();
         const std::size_t active_chip_ram_size = chip_ram_size_for_model(config.model);
+        s->copper_address_mask = copper_address_mask_for_model(config.model);
         s->chip_ram.assign(active_chip_ram_size, 0U);
         s->paula.resize_chipram(active_chip_ram_size);
         normalize_kickstart(s->kickstart_rom, kickstart_rom);
@@ -2744,6 +2758,7 @@ namespace mnemos::manifests::amiga500 {
                                                       : chips::video::agnus::scanlines_ntsc;
         const std::uint32_t hsync_hz = scanlines_per_frame * frame_hz;
         s->agnus.set_pal(pal);
+        s->agnus.set_copper_address_mask(s->copper_address_mask);
         s->agnus.attach_chip_ram(s->chip_ram);
         s->agnus.attach_palette(s->palette_bytes);
         s->paula.set_clock_divider(1);

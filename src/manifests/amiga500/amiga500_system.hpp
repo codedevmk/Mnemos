@@ -111,6 +111,7 @@ namespace mnemos::manifests::amiga500 {
         std::uint64_t blitter_cycles_remaining{};
         std::uint32_t cop1lc{};
         std::uint32_t cop2lc{};
+        std::uint32_t copper_address_mask{chips::video::agnus::ocs_copper_address_mask};
         std::uint16_t custom_high_latch{};
         std::uint32_t disk_pointer{};
         std::uint16_t disk_length{};
