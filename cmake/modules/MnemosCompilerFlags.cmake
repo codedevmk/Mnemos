@@ -18,6 +18,10 @@ function(mnemos_apply_project_warnings target visibility)
             -Wextra
             -Wpedantic
             -Werror
+            # Partial aggregate-init (only setting the fields a test/call site
+            # cares about, leaving the rest value-initialized) is this
+            # codebase's deliberate idiom for option/params structs, not a bug.
+            -Wno-missing-field-initializers
         )
     endif()
 endfunction()

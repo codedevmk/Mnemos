@@ -54,16 +54,14 @@ namespace mnemos::apps::player::adapters::amiga {
 
         class board_registers final : public instrumentation::register_view {
           public:
-            explicit board_registers(manifests::amiga::amiga_system& sys) noexcept
-                : sys_(&sys) {}
+            explicit board_registers(manifests::amiga::amiga_system& sys) noexcept : sys_(&sys) {}
 
             [[nodiscard]] std::span<const chips::register_descriptor> registers() override {
                 using chips::register_value_format;
                 const auto& sys = *sys_;
-                const auto& drive =
-                    sys.floppy_active_drive < sys.floppy_drives.size()
-                        ? sys.floppy_drives[sys.floppy_active_drive]
-                        : sys.floppy_drives[0U];
+                const auto& drive = sys.floppy_active_drive < sys.floppy_drives.size()
+                                        ? sys.floppy_drives[sys.floppy_active_drive]
+                                        : sys.floppy_drives[0U];
 
                 registers_ = {
                     chips::register_descriptor{
@@ -116,8 +114,8 @@ namespace mnemos::apps::player::adapters::amiga {
                     },
                     chips::register_descriptor{
                         .name = "BBUSY",
-                        .value = bool_value((sys.agnus.read_dmaconr() &
-                                             chips::video::agnus::dmacon_bbusy) != 0U),
+                        .value = bool_value(
+                            (sys.agnus.read_dmaconr() & chips::video::agnus::dmacon_bbusy) != 0U),
                         .bit_width = 1U,
                         .format = register_value_format::flags,
                     },
@@ -227,8 +225,7 @@ namespace mnemos::apps::player::adapters::amiga {
             board_registers registers_;
         };
 
-        std::vector<runtime::scheduled_chip>
-        build_schedule(manifests::amiga::amiga_system& sys) {
+        std::vector<runtime::scheduled_chip> build_schedule(manifests::amiga::amiga_system& sys) {
             return {
                 {&sys.agnus, 2U}, // OCS display/color clock from a 68K-cycle master.
                 {&sys.cpu, 1U},   {&sys.paula, 2U}, {&sys.cia_a, 10U}, {&sys.cia_b, 10U},
@@ -290,8 +287,7 @@ namespace mnemos::apps::player::adapters::amiga {
                 .cache_hint = std::move(cache_hint)};
         }
 
-        [[nodiscard]] const char*
-        model_family_id(manifests::amiga::amiga_model model) noexcept {
+        [[nodiscard]] const char* model_family_id(manifests::amiga::amiga_model model) noexcept {
             using model_t = manifests::amiga::amiga_model;
             switch (model) {
             case model_t::amiga500_plus:
@@ -307,8 +303,7 @@ namespace mnemos::apps::player::adapters::amiga {
             return "amiga500";
         }
 
-        [[nodiscard]] const char*
-        model_display_name(manifests::amiga::amiga_model model) noexcept {
+        [[nodiscard]] const char* model_display_name(manifests::amiga::amiga_model model) noexcept {
             using model_t = manifests::amiga::amiga_model;
             switch (model) {
             case model_t::amiga500_plus:
@@ -360,8 +355,7 @@ namespace mnemos::apps::player::adapters::amiga {
             return token;
         }
 
-        [[nodiscard]] std::optional<std::size_t>
-        parse_memory_size_token(std::string_view token) {
+        [[nodiscard]] std::optional<std::size_t> parse_memory_size_token(std::string_view token) {
             token = strip_token_padding(token);
             if (token.empty()) {
                 return std::nullopt;
@@ -399,18 +393,15 @@ namespace mnemos::apps::player::adapters::amiga {
             if (end == value.c_str() || *end != '\0') {
                 return std::nullopt;
             }
-            if (multiplier != 0U &&
-                parsed >
-                    (std::numeric_limits<unsigned long long>::max() /
-                     static_cast<unsigned long long>(multiplier))) {
+            if (multiplier != 0U && parsed > (std::numeric_limits<unsigned long long>::max() /
+                                              static_cast<unsigned long long>(multiplier))) {
                 return std::nullopt;
             }
             const unsigned long long bytes = parsed * static_cast<unsigned long long>(multiplier);
             if (bytes > manifests::amiga::amiga_system::fast_ram_max_size) {
                 return std::nullopt;
             }
-            if (bytes != 0U &&
-                (bytes % manifests::amiga::amiga_system::fast_ram_size_512k) != 0U) {
+            if (bytes != 0U && (bytes % manifests::amiga::amiga_system::fast_ram_size_512k) != 0U) {
                 return std::nullopt;
             }
             return static_cast<std::size_t>(bytes);
@@ -424,8 +415,7 @@ namespace mnemos::apps::player::adapters::amiga {
             return token.substr(prefix.size());
         }
 
-        bool apply_fast_ram_token(manifests::amiga::amiga_config& config,
-                                  std::string_view token) {
+        bool apply_fast_ram_token(manifests::amiga::amiga_config& config, std::string_view token) {
             if (token == "no-fast-ram" || token == "no-fast" || token == "fast-ram-none") {
                 config.fast_ram_size = 0U;
                 return true;
@@ -513,24 +503,19 @@ namespace mnemos::apps::player::adapters::amiga {
         pack_joystick(const frontend_sdk::controller_state& state) noexcept {
             std::uint8_t mask = 0U;
             if (state.up) {
-                mask =
-                    static_cast<std::uint8_t>(mask | manifests::amiga::amiga_system::joy_up);
+                mask = static_cast<std::uint8_t>(mask | manifests::amiga::amiga_system::joy_up);
             }
             if (state.down) {
-                mask = static_cast<std::uint8_t>(mask |
-                                                 manifests::amiga::amiga_system::joy_down);
+                mask = static_cast<std::uint8_t>(mask | manifests::amiga::amiga_system::joy_down);
             }
             if (state.left) {
-                mask = static_cast<std::uint8_t>(mask |
-                                                 manifests::amiga::amiga_system::joy_left);
+                mask = static_cast<std::uint8_t>(mask | manifests::amiga::amiga_system::joy_left);
             }
             if (state.right) {
-                mask = static_cast<std::uint8_t>(mask |
-                                                 manifests::amiga::amiga_system::joy_right);
+                mask = static_cast<std::uint8_t>(mask | manifests::amiga::amiga_system::joy_right);
             }
             if (state.a || state.trigger) {
-                mask = static_cast<std::uint8_t>(mask |
-                                                 manifests::amiga::amiga_system::joy_fire);
+                mask = static_cast<std::uint8_t>(mask | manifests::amiga::amiga_system::joy_fire);
             }
             if (state.b || state.c) {
                 mask = static_cast<std::uint8_t>(
@@ -627,8 +612,7 @@ namespace mnemos::apps::player::adapters::amiga {
 #if defined(_MSC_VER)
 #pragma warning(pop)
 #endif
-            if (env == nullptr || env[0] == '\0' ||
-                (env[0] == '0' && env[1] == '\0')) {
+            if (env == nullptr || env[0] == '\0' || (env[0] == '0' && env[1] == '\0')) {
                 return ranges;
             }
 
@@ -641,8 +625,7 @@ namespace mnemos::apps::player::adapters::amiga {
                 const std::size_t dash = token.find('-');
                 if (colon != std::string_view::npos) {
                     const std::uint32_t start = parse_trace_hex(token.substr(0U, colon), 0U);
-                    const std::uint32_t length =
-                        parse_trace_hex(token.substr(colon + 1U), 0U);
+                    const std::uint32_t length = parse_trace_hex(token.substr(colon + 1U), 0U);
                     if (length != 0U) {
                         ranges.push_back(trace_range{
                             .first = start & 0x00FFFFFFU,
@@ -675,8 +658,7 @@ namespace mnemos::apps::player::adapters::amiga {
 #if defined(_MSC_VER)
 #pragma warning(pop)
 #endif
-            if (env == nullptr || env[0] == '\0' ||
-                (env[0] == '0' && env[1] == '\0')) {
+            if (env == nullptr || env[0] == '\0' || (env[0] == '0' && env[1] == '\0')) {
                 return ranges;
             }
             if (env[0] == '1' && env[1] == '\0') {
@@ -731,9 +713,8 @@ namespace mnemos::apps::player::adapters::amiga {
             return false;
         }
 
-        [[nodiscard]] std::uint16_t
-        trace_fetch_word(manifests::amiga::amiga_system& sys,
-                         std::uint32_t address) noexcept {
+        [[nodiscard]] std::uint16_t trace_fetch_word(manifests::amiga::amiga_system& sys,
+                                                     std::uint32_t address) noexcept {
             const std::uint32_t a = address & 0x00FFFFFEU;
             const auto read_be = [](std::span<const std::uint8_t> bytes,
                                     std::size_t offset) noexcept -> std::uint16_t {
@@ -750,9 +731,9 @@ namespace mnemos::apps::player::adapters::amiga {
             if (a >= manifests::amiga::amiga_system::kickstart_base &&
                 a + 1U < manifests::amiga::amiga_system::kickstart_base +
                              manifests::amiga::amiga_system::kickstart_window_size) {
-                return read_be(sys.kickstart_rom,
-                               static_cast<std::size_t>(
-                                   a - manifests::amiga::amiga_system::kickstart_base));
+                return read_be(
+                    sys.kickstart_rom,
+                    static_cast<std::size_t>(a - manifests::amiga::amiga_system::kickstart_base));
             }
             return sys.bus.fetch16_be_opcode(a);
         }
@@ -784,8 +765,7 @@ namespace mnemos::apps::player::adapters::amiga {
             if ((a & 0x00FFF000U) == manifests::amiga::amiga_system::cia_a_base ||
                 (a & 0x00FFF000U) == manifests::amiga::amiga_system::cia_b_base) {
                 const std::uint8_t cia_reg = traced_cia_register(a);
-                const bool cia_timer_or_tod_read =
-                    !write && cia_reg >= 0x04U && cia_reg <= 0x0FU;
+                const bool cia_timer_or_tod_read = !write && cia_reg >= 0x04U && cia_reg <= 0x0FU;
                 const bool cia_a_port_a_read =
                     !write && (a & 0x00FFF000U) == manifests::amiga::amiga_system::cia_a_base &&
                     cia_reg == 0x00U;
@@ -1313,22 +1293,21 @@ namespace mnemos::apps::player::adapters::amiga {
     };
 
     amiga_adapter::amiga_adapter(std::vector<std::uint8_t> kickstart_rom,
-                                       const manifests::amiga::amiga_config& config,
-                                       std::string display_name,
-                                       frontend_sdk::scheduler_factory* scheduler_factory)
+                                 const manifests::amiga::amiga_config& config,
+                                 std::string display_name,
+                                 frontend_sdk::scheduler_factory* scheduler_factory)
         : amiga_adapter(std::move(kickstart_rom), config, std::move(display_name), {},
-                           scheduler_factory) {}
+                        scheduler_factory) {}
 
     amiga_adapter::amiga_adapter(std::vector<std::uint8_t> kickstart_rom,
-                                       const manifests::amiga::amiga_config& config,
-                                       std::string display_name,
-                                       std::vector<std::vector<std::uint8_t>> disks,
-                                       frontend_sdk::scheduler_factory* scheduler_factory)
+                                 const manifests::amiga::amiga_config& config,
+                                 std::string display_name,
+                                 std::vector<std::vector<std::uint8_t>> disks,
+                                 frontend_sdk::scheduler_factory* scheduler_factory)
         : session_(make_session_capabilities()),
           media_(make_media_capabilities(display_name, kickstart_rom.size(), disks, config.model)),
           sys_(manifests::amiga::assemble_amiga(std::move(kickstart_rom), config)),
-          chip_ram_view_("chip_ram", sys_->chip_ram),
-          fast_ram_view_("fast_ram", sys_->fast_ram),
+          chip_ram_view_("chip_ram", sys_->chip_ram), fast_ram_view_("fast_ram", sys_->fast_ram),
           scheduler_(
               frontend_sdk::make_scheduler(scheduler_factory, build_schedule(*sys_), &sys_->agnus)),
           region_(config.video_region), keyboard_layout_(config.keyboard_layout),
@@ -1351,11 +1330,11 @@ namespace mnemos::apps::player::adapters::amiga {
                              "sr=%04X d0=%08X d1=%08X d2=%08X d3=%08X "
                              "a0=%08X a1=%08X a2=%08X a3=%08X "
                              "a4=%08X a5=%08X a6=%08X a7=%08X\n",
-                             pc & 0x00FFFFFFU, trace_fetch_word(*sys_, pc),
-                             sys_->agnus.beam_line(), sys_->agnus.beam_clock(),
-                             static_cast<unsigned long long>(sys_->frame_index), regs.sr,
-                             regs.d[0], regs.d[1], regs.d[2], regs.d[3], regs.a[0], regs.a[1],
-                             regs.a[2], regs.a[3], regs.a[4], regs.a[5], regs.a[6], regs.a[7]);
+                             pc & 0x00FFFFFFU, trace_fetch_word(*sys_, pc), sys_->agnus.beam_line(),
+                             sys_->agnus.beam_clock(),
+                             static_cast<unsigned long long>(sys_->frame_index), regs.sr, regs.d[0],
+                             regs.d[1], regs.d[2], regs.d[3], regs.a[0], regs.a[1], regs.a[2],
+                             regs.a[3], regs.a[4], regs.a[5], regs.a[6], regs.a[7]);
             });
         }
         if (trace_enabled) {
@@ -1372,9 +1351,8 @@ namespace mnemos::apps::player::adapters::amiga {
                              sys_->overlay_active ? 1U : 0U, sys_->agnus.dmacon(),
                              sys_->agnus.read_dmaconr(),
                              static_cast<unsigned long long>(sys_->blitter_cycles_remaining),
-                             sys_->agnus.cop1lc(), sys_->agnus.cop2lc(),
-                             sys_->agnus.copper_pc(), sys_->intena, sys_->visible_intreq(),
-                             board_irq_level(*sys_));
+                             sys_->agnus.cop1lc(), sys_->agnus.cop2lc(), sys_->agnus.copper_pc(),
+                             sys_->intena, sys_->visible_intreq(), board_irq_level(*sys_));
                 sys_->reset_board_from_cpu();
                 std::fprintf(stderr,
                              "[amiga-reset] after  pc=%06X beam=%03u:%03u frame=%llu "
@@ -1388,16 +1366,15 @@ namespace mnemos::apps::player::adapters::amiga {
                              sys_->overlay_active ? 1U : 0U, sys_->agnus.dmacon(),
                              sys_->agnus.read_dmaconr(),
                              static_cast<unsigned long long>(sys_->blitter_cycles_remaining),
-                             sys_->agnus.cop1lc(), sys_->agnus.cop2lc(),
-                             sys_->agnus.copper_pc(), sys_->intena, sys_->visible_intreq(),
-                             board_irq_level(*sys_));
+                             sys_->agnus.cop1lc(), sys_->agnus.cop2lc(), sys_->agnus.copper_pc(),
+                             sys_->intena, sys_->visible_intreq(), board_irq_level(*sys_));
             });
         }
         if (trace_enabled || !ram_trace_ranges.empty()) {
-            sys_->bus.set_access_observer(
-                [this, trace_enabled, ram_trace_ranges,
-                 ram_trace_reads](const mnemos::topology::access_event& ev) {
-                if ((ev.write || ram_trace_reads) && traced_ram_access(ram_trace_ranges, ev.address)) {
+            sys_->bus.set_access_observer([this, trace_enabled, ram_trace_ranges, ram_trace_reads](
+                                              const mnemos::topology::access_event& ev) {
+                if ((ev.write || ram_trace_reads) &&
+                    traced_ram_access(ram_trace_ranges, ev.address)) {
                     const auto regs = sys_->cpu.cpu_registers();
                     std::fprintf(stderr,
                                  "[amiga-ram] pc=%06X beam=%03u:%03u %c %06X %02X "
@@ -1420,19 +1397,18 @@ namespace mnemos::apps::player::adapters::amiga {
                         sys_->floppy_active_drive < sys_->floppy_drives.size() &&
                         sys_->floppy_drives[sys_->floppy_active_drive].connected;
                     const std::uint8_t pra_pins = sys_->cia_a_port_a_inputs();
-                    std::fprintf(stderr,
-                                 "[amiga-ciaa] pc=%06X beam=%03u:%03u R %06X %02X "
-                                 "pra_pins=%02X drive=%02X conn=%u sel=%u motor=%u cyl=%u side=%u "
-                                 "pin_chng=%u pin_rdy=%u pin_tk0=%u pin_wpro=%u\n",
-                                 sys_->cpu.current_instruction_addr(), sys_->agnus.beam_line(),
-                                 sys_->agnus.beam_clock(), ev.address, ev.value,
-                                 pra_pins, sys_->floppy_active_drive, drive_connected ? 1U : 0U,
-                                 sys_->floppy_selected ? 1U : 0U,
-                                 sys_->floppy_motor_on ? 1U : 0U, sys_->floppy_cylinder(),
-                                 sys_->floppy_side(), (pra_pins & 0x04U) == 0U ? 1U : 0U,
-                                 (pra_pins & 0x20U) == 0U ? 1U : 0U,
-                                 (pra_pins & 0x10U) == 0U ? 1U : 0U,
-                                 (pra_pins & 0x08U) == 0U ? 1U : 0U);
+                    std::fprintf(
+                        stderr,
+                        "[amiga-ciaa] pc=%06X beam=%03u:%03u R %06X %02X "
+                        "pra_pins=%02X drive=%02X conn=%u sel=%u motor=%u cyl=%u side=%u "
+                        "pin_chng=%u pin_rdy=%u pin_tk0=%u pin_wpro=%u\n",
+                        sys_->cpu.current_instruction_addr(), sys_->agnus.beam_line(),
+                        sys_->agnus.beam_clock(), ev.address, ev.value, pra_pins,
+                        sys_->floppy_active_drive, drive_connected ? 1U : 0U,
+                        sys_->floppy_selected ? 1U : 0U, sys_->floppy_motor_on ? 1U : 0U,
+                        sys_->floppy_cylinder(), sys_->floppy_side(),
+                        (pra_pins & 0x04U) == 0U ? 1U : 0U, (pra_pins & 0x20U) == 0U ? 1U : 0U,
+                        (pra_pins & 0x10U) == 0U ? 1U : 0U, (pra_pins & 0x08U) == 0U ? 1U : 0U);
                     return;
                 }
                 if (ev.write && page == manifests::amiga::amiga_system::cia_b_base &&
@@ -1445,10 +1421,8 @@ namespace mnemos::apps::player::adapters::amiga {
                                  sys_->agnus.beam_clock(), ev.address, ev.value,
                                  sys_->cia_b.port_b_pins(), sys_->floppy_active_drive,
                                  sys_->floppy_selected_mask, sys_->floppy_selected ? 1U : 0U,
-                                 sys_->floppy_motor_on ? 1U : 0U,
-                                 sys_->floppy_step_line ? 1U : 0U,
-                                 sys_->floppy_direction_inward ? 1U : 0U,
-                                 sys_->floppy_side());
+                                 sys_->floppy_motor_on ? 1U : 0U, sys_->floppy_step_line ? 1U : 0U,
+                                 sys_->floppy_direction_inward ? 1U : 0U, sys_->floppy_side());
                     return;
                 }
                 if (traced_disk_register(reg, ev.write)) {
@@ -1463,15 +1437,13 @@ namespace mnemos::apps::player::adapters::amiga {
                                  "wordsync=%u drive=%02X conn=%u sel=%u motor=%u dmacon=%04X "
                                  "intena=%04X intreq=%04X irq=%u d0=%08X a0=%08X a1=%08X\n",
                                  sys_->cpu.current_instruction_addr(), sys_->agnus.beam_line(),
-                                 sys_->agnus.beam_clock(), ev.write ? 'W' : 'R',
-                                 ev.address, ev.value, sys_->disk_pointer, sys_->disk_length,
-                                 sys_->disk_dma_bytes_remaining, sys_->disk_adkcon,
-                                 sys_->disk_data, sys_->disk_shift, sys_->disk_sync,
-                                 sys_->disk_byte_valid ? 1U : 0U,
+                                 sys_->agnus.beam_clock(), ev.write ? 'W' : 'R', ev.address,
+                                 ev.value, sys_->disk_pointer, sys_->disk_length,
+                                 sys_->disk_dma_bytes_remaining, sys_->disk_adkcon, sys_->disk_data,
+                                 sys_->disk_shift, sys_->disk_sync, sys_->disk_byte_valid ? 1U : 0U,
                                  sys_->disk_sync_match ? 1U : 0U,
-                                 sys_->disk_wordsync_waiting ? 1U : 0U,
-                                 sys_->floppy_active_drive, drive_connected ? 1U : 0U,
-                                 sys_->floppy_selected ? 1U : 0U,
+                                 sys_->disk_wordsync_waiting ? 1U : 0U, sys_->floppy_active_drive,
+                                 drive_connected ? 1U : 0U, sys_->floppy_selected ? 1U : 0U,
                                  sys_->floppy_motor_on ? 1U : 0U, sys_->agnus.dmacon(),
                                  sys_->intena, sys_->visible_intreq(), board_irq_level(*sys_),
                                  regs.d[0], regs.a[0], regs.a[1]);
@@ -1484,8 +1456,8 @@ namespace mnemos::apps::player::adapters::amiga {
                                  "intena=%04X "
                                  "intreq=%04X irq=%u\n",
                                  sys_->cpu.current_instruction_addr(), sys_->agnus.beam_line(),
-                                 sys_->agnus.beam_clock(), ev.write ? 'W' : 'R',
-                                 ev.address, ev.value, sys_->intena, sys_->visible_intreq(),
+                                 sys_->agnus.beam_clock(), ev.write ? 'W' : 'R', ev.address,
+                                 ev.value, sys_->intena, sys_->visible_intreq(),
                                  board_irq_level(*sys_));
                     return;
                 }
@@ -1498,46 +1470,45 @@ namespace mnemos::apps::player::adapters::amiga {
                                  "bltcyc=%llu "
                                  "d0=%08X a0=%08X a1=%08X a6=%08X\n",
                                  sys_->cpu.current_instruction_addr(), sys_->agnus.beam_line(),
-                                 sys_->agnus.beam_clock(), ev.write ? 'W' : 'R',
-                                 ev.address, ev.value, sys_->agnus.cop1lc(),
-                                 sys_->agnus.cop2lc(), sys_->agnus.copper_pc(),
-                                 sys_->agnus.dmacon(), sys_->agnus.read_dmaconr(),
+                                 sys_->agnus.beam_clock(), ev.write ? 'W' : 'R', ev.address,
+                                 ev.value, sys_->agnus.cop1lc(), sys_->agnus.cop2lc(),
+                                 sys_->agnus.copper_pc(), sys_->agnus.dmacon(),
+                                 sys_->agnus.read_dmaconr(),
                                  static_cast<unsigned long long>(sys_->blitter_cycles_remaining),
                                  regs.d[0], regs.a[0], regs.a[1], regs.a[6]);
                     return;
                 }
                 std::fprintf(stderr, "[amiga-cia] pc=%06X beam=%03u:%03u %c %06X %02X\n",
                              sys_->cpu.current_instruction_addr(), sys_->agnus.beam_line(),
-                             sys_->agnus.beam_clock(), ev.write ? 'W' : 'R', ev.address,
-                             ev.value);
+                             sys_->agnus.beam_clock(), ev.write ? 'W' : 'R', ev.address, ev.value);
             });
         }
         sys_->agnus.set_custom_write_callback(
             [this, trace_enabled](std::uint16_t reg, std::uint16_t value) {
-            const std::uint16_t normalized = static_cast<std::uint16_t>(reg & 0x01FEU);
-            const std::uint32_t before_cop1 = sys_->agnus.cop1lc();
-            const std::uint32_t before_cop2 = sys_->agnus.cop2lc();
-            const std::uint32_t before_coppc = sys_->agnus.copper_pc();
-            const std::uint16_t before_dmacon = sys_->agnus.dmacon();
-            const std::uint16_t before_dmaconr = sys_->agnus.read_dmaconr();
-            const std::uint64_t before_bltcyc = sys_->blitter_cycles_remaining;
-            sys_->write_custom_word(reg, value);
-            if (!trace_enabled || !traced_copper_write_register(normalized)) {
-                return;
-            }
-            std::fprintf(stderr,
-                         "[amiga-copper] beam=%03u:%03u reg=%03X value=%04X "
-                         "pc=%06X->%06X cop1=%06X->%06X cop2=%06X->%06X "
-                         "dmacon=%04X->%04X dmaconr=%04X->%04X bltcyc=%llu->%llu "
-                         "intena=%04X intreq=%04X irq=%u\n",
-                         sys_->agnus.beam_line(), sys_->agnus.beam_clock(), normalized, value,
-                         before_coppc, sys_->agnus.copper_pc(), before_cop1,
-                         sys_->agnus.cop1lc(), before_cop2, sys_->agnus.cop2lc(), before_dmacon,
-                         sys_->agnus.dmacon(), before_dmaconr, sys_->agnus.read_dmaconr(),
-                         static_cast<unsigned long long>(before_bltcyc),
-                         static_cast<unsigned long long>(sys_->blitter_cycles_remaining),
-                         sys_->intena, sys_->visible_intreq(), board_irq_level(*sys_));
-        });
+                const std::uint16_t normalized = static_cast<std::uint16_t>(reg & 0x01FEU);
+                const std::uint32_t before_cop1 = sys_->agnus.cop1lc();
+                const std::uint32_t before_cop2 = sys_->agnus.cop2lc();
+                const std::uint32_t before_coppc = sys_->agnus.copper_pc();
+                const std::uint16_t before_dmacon = sys_->agnus.dmacon();
+                const std::uint16_t before_dmaconr = sys_->agnus.read_dmaconr();
+                const std::uint64_t before_bltcyc = sys_->blitter_cycles_remaining;
+                sys_->write_custom_word(reg, value);
+                if (!trace_enabled || !traced_copper_write_register(normalized)) {
+                    return;
+                }
+                std::fprintf(stderr,
+                             "[amiga-copper] beam=%03u:%03u reg=%03X value=%04X "
+                             "pc=%06X->%06X cop1=%06X->%06X cop2=%06X->%06X "
+                             "dmacon=%04X->%04X dmaconr=%04X->%04X bltcyc=%llu->%llu "
+                             "intena=%04X intreq=%04X irq=%u\n",
+                             sys_->agnus.beam_line(), sys_->agnus.beam_clock(), normalized, value,
+                             before_coppc, sys_->agnus.copper_pc(), before_cop1,
+                             sys_->agnus.cop1lc(), before_cop2, sys_->agnus.cop2lc(), before_dmacon,
+                             sys_->agnus.dmacon(), before_dmaconr, sys_->agnus.read_dmaconr(),
+                             static_cast<unsigned long long>(before_bltcyc),
+                             static_cast<unsigned long long>(sys_->blitter_cycles_remaining),
+                             sys_->intena, sys_->visible_intreq(), board_irq_level(*sys_));
+            });
         seed_keyboard_powerup_stream(*sys_, sys_->kickstart_rom);
         sys_->paula.enable_audio_capture(true);
         const std::size_t mounted_drives =
@@ -1594,12 +1565,11 @@ namespace mnemos::apps::player::adapters::amiga {
     }
 
     void amiga_adapter::apply_input(int port,
-                                       const frontend_sdk::controller_state& state) noexcept {
+                                    const frontend_sdk::controller_state& state) noexcept {
         if (port < 0 || port >= static_cast<int>(ports_.size())) {
             return;
         }
         const auto old_ports = ports_;
-        const auto old_state = old_ports[static_cast<std::size_t>(port)];
         ports_[static_cast<std::size_t>(port)] = state;
 
         if (port == 3) {
@@ -1653,15 +1623,13 @@ namespace mnemos::apps::player::adapters::amiga {
 
     std::vector<std::uint8_t> amiga_adapter::save_state() {
         if (trace_cia_bus()) {
-            std::fprintf(stderr,
-                         "[amiga-save] before intena=%04X intreq=%04X irq=%u frame=%llu\n",
+            std::fprintf(stderr, "[amiga-save] before intena=%04X intreq=%04X irq=%u frame=%llu\n",
                          sys_->intena, sys_->visible_intreq(), board_irq_level(*sys_),
                          static_cast<unsigned long long>(sys_->frame_index));
         }
         std::vector<std::uint8_t> state = runtime::write_save_state(build_save_target(*this));
         if (trace_cia_bus()) {
-            std::fprintf(stderr,
-                         "[amiga-save] after intena=%04X intreq=%04X irq=%u frame=%llu\n",
+            std::fprintf(stderr, "[amiga-save] after intena=%04X intreq=%04X irq=%u frame=%llu\n",
                          sys_->intena, sys_->visible_intreq(), board_irq_level(*sys_),
                          static_cast<unsigned long long>(sys_->frame_index));
         }
@@ -1807,8 +1775,7 @@ namespace mnemos::apps::player::adapters::amiga {
     }
 
     namespace {
-        void register_amiga_family(const char* family_id,
-                                   manifests::amiga::amiga_model model) {
+        void register_amiga_family(const char* family_id, manifests::amiga::amiga_model model) {
             mnemos::frontend_sdk::adapter_registry::instance().register_family(
                 family_id,
                 [model](mnemos::frontend_sdk::adapter_options opts)
@@ -1828,8 +1795,7 @@ namespace mnemos::apps::player::adapters::amiga {
 
         const auto register_amiga = [] {
             register_amiga_family("amiga500", manifests::amiga::amiga_model::amiga500);
-            register_amiga_family("amiga500plus",
-                                  manifests::amiga::amiga_model::amiga500_plus);
+            register_amiga_family("amiga500plus", manifests::amiga::amiga_model::amiga500_plus);
             register_amiga_family("amiga600", manifests::amiga::amiga_model::amiga600);
             register_amiga_family("amiga2000", manifests::amiga::amiga_model::amiga2000);
             return 0;

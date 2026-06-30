@@ -158,8 +158,9 @@ namespace {
             if (!known.contains(set_id)) {
                 return std::nullopt;
             }
-            return identified_m82_source{.set_id = set_id,
-                                         .rank = set_id == "dkgensanm82" ? 0U : 2U};
+            return identified_m82_source{
+                .set_id = set_id,
+                .rank = static_cast<std::uint8_t>(set_id == "dkgensanm82" ? 0U : 2U)};
         }
         if (!std::filesystem::is_regular_file(path, ec) ||
             !ends_with_zip(path.filename().string())) {
@@ -316,11 +317,8 @@ TEST_CASE("irem_m82_adapter validates real M82 ROM sets", "[irem_m82][data]") {
     const auto sources = index_m82_source_roots(roots);
     const auto expected_sets = embedded_set_names();
     const std::map<std::string, std::string, std::less<>> parents{
-        {"airduelu", "airduel"},
-        {"majtitlej", "majtitle"},
-        {"rtype2j", "rtype2"},
-        {"rtype2jc", "rtype2"},
-        {"rtype2m82b", "rtype2"},
+        {"airduelu", "airduel"}, {"majtitlej", "majtitle"}, {"rtype2j", "rtype2"},
+        {"rtype2jc", "rtype2"},  {"rtype2m82b", "rtype2"},
     };
     for (const auto& set_name : expected_sets) {
         INFO("set=" << set_name);

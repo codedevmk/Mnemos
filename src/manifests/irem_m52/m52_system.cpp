@@ -32,11 +32,6 @@ namespace mnemos::manifests::irem_m52 {
             return data[static_cast<std::size_t>(index % data.size())];
         }
 
-        [[nodiscard]] bool in_range(std::uint32_t address, std::uint32_t base,
-                                    std::size_t size) noexcept {
-            return address >= base && address < base + size;
-        }
-
         [[nodiscard]] std::uint32_t rgb(std::uint8_t r, std::uint8_t g, std::uint8_t b) noexcept {
             return (static_cast<std::uint32_t>(r) << 16U) | (static_cast<std::uint32_t>(g) << 8U) |
                    b;
@@ -78,8 +73,8 @@ namespace mnemos::manifests::irem_m52 {
             return (sample_byte(sprite_gfx, base, 0U) & (0x80U >> (x & 0x07U))) != 0U;
         }
 
-        void plot_layer_pixel(std::vector<std::uint32_t>& pixels, std::uint32_t x,
-                              std::uint32_t y, std::uint32_t color, bool flip_screen) noexcept {
+        void plot_layer_pixel(std::vector<std::uint32_t>& pixels, std::uint32_t x, std::uint32_t y,
+                              std::uint32_t color, bool flip_screen) noexcept {
             if (x >= visible_width || y >= visible_height) {
                 return;
             }
@@ -165,11 +160,10 @@ namespace mnemos::manifests::irem_m52 {
 
     void m52_video::compose(
         std::span<const std::uint8_t> /*main_program*/,
-        std::span<const std::uint8_t> /*sound_program*/,
-        std::span<const std::uint8_t> tx_gfx, std::span<const std::uint8_t> sprite_gfx,
-        std::span<const std::uint8_t> proms, std::span<const std::uint8_t> video_ram,
-        std::span<const std::uint8_t> color_ram, std::span<const std::uint8_t> sprite_ram,
-        std::span<const std::uint8_t> /*work_ram*/,
+        std::span<const std::uint8_t> /*sound_program*/, std::span<const std::uint8_t> tx_gfx,
+        std::span<const std::uint8_t> sprite_gfx, std::span<const std::uint8_t> proms,
+        std::span<const std::uint8_t> video_ram, std::span<const std::uint8_t> color_ram,
+        std::span<const std::uint8_t> sprite_ram, std::span<const std::uint8_t> /*work_ram*/,
         const std::array<std::uint8_t, 32>& scroll_regs, const std::array<std::uint8_t, 2>& bg_x,
         const std::array<std::uint8_t, 2>& bg_y, std::uint8_t bg_control, bool flip_screen,
         std::string_view rom_layout) {
@@ -207,9 +201,8 @@ namespace mnemos::manifests::irem_m52 {
             const int base_y = 241 - static_cast<int>(raw_y);
             const bool flip_x = (attr & 0x40U) != 0U;
             const bool flip_y = (attr & 0x80U) != 0U;
-            const std::uint32_t color =
-                prom_color(proms, static_cast<std::uint8_t>(attr & 0x3FU),
-                           static_cast<std::uint8_t>(tint ^ code));
+            const std::uint32_t color = prom_color(proms, static_cast<std::uint8_t>(attr & 0x3FU),
+                                                   static_cast<std::uint8_t>(tint ^ code));
             for (std::uint32_t py = 0; py < 16U; ++py) {
                 const int y = base_y + static_cast<int>(py);
                 if (y < 0 || y >= static_cast<int>(visible_height)) {
