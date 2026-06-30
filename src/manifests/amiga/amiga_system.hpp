@@ -1,5 +1,6 @@
 #pragma once
 
+#include "amiga_memory_sizes.hpp"
 #include "agnus.hpp"
 #include "bus.hpp"
 #include "cia8520.hpp"
@@ -27,14 +28,21 @@ namespace mnemos::manifests::amiga {
     // stays in src/chips; this type owns board wiring, Kickstart overlay, chip
     // RAM, custom register routing, CIA glue, drives, input, and expansions.
     struct amiga_system final {
-        static constexpr std::size_t chip_ram_size = 512U * 1024U;
-        static constexpr std::size_t chip_ram_size_1m = 1024U * 1024U;
-        static constexpr std::size_t fast_ram_size_512k = 512U * 1024U;
-        static constexpr std::size_t fast_ram_size_1m = 1024U * 1024U;
-        static constexpr std::size_t fast_ram_size_2m = 2U * 1024U * 1024U;
-        static constexpr std::size_t fast_ram_size_4m = 4U * 1024U * 1024U;
-        static constexpr std::size_t fast_ram_max_size = 8U * 1024U * 1024U;
-        static constexpr std::size_t kickstart_window_size = 512U * 1024U;
+        static constexpr std::size_t size_256k = amiga_size_256k;
+        static constexpr std::size_t size_512k = amiga_size_512k;
+        static constexpr std::size_t size_1m = amiga_size_1m;
+        static constexpr std::size_t size_2m = amiga_size_2m;
+        static constexpr std::size_t size_4m = amiga_size_4m;
+        static constexpr std::size_t size_8m = amiga_size_8m;
+
+        static constexpr std::size_t chip_ram_size = size_512k;
+        static constexpr std::size_t chip_ram_size_1m = size_1m;
+        static constexpr std::size_t fast_ram_size_512k = size_512k;
+        static constexpr std::size_t fast_ram_size_1m = size_1m;
+        static constexpr std::size_t fast_ram_size_2m = size_2m;
+        static constexpr std::size_t fast_ram_size_4m = size_4m;
+        static constexpr std::size_t fast_ram_max_size = size_8m;
+        static constexpr std::size_t kickstart_window_size = size_512k;
         static constexpr std::size_t floppy_cylinders = amiga_floppy_cylinders;
         static constexpr std::size_t floppy_heads = amiga_floppy_heads;
         static constexpr std::size_t floppy_track_count = amiga_floppy_track_count;

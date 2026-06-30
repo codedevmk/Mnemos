@@ -197,6 +197,25 @@ namespace {
     }
 } // namespace
 
+TEST_CASE("amiga memory size constants share a binary size vocabulary",
+          "[manifests][amiga][memory]") {
+    CHECK(amiga_system::size_256k == 256U * 1024U);
+    CHECK(amiga_system::size_512k == amiga_system::size_256k * 2U);
+    CHECK(amiga_system::size_1m == amiga_system::size_512k * 2U);
+    CHECK(amiga_system::size_2m == amiga_system::size_1m * 2U);
+    CHECK(amiga_system::size_4m == amiga_system::size_2m * 2U);
+    CHECK(amiga_system::size_8m == amiga_system::size_4m * 2U);
+
+    CHECK(amiga_system::chip_ram_size == amiga_system::size_512k);
+    CHECK(amiga_system::chip_ram_size_1m == amiga_system::size_1m);
+    CHECK(amiga_system::fast_ram_size_512k == amiga_system::size_512k);
+    CHECK(amiga_system::fast_ram_size_1m == amiga_system::size_1m);
+    CHECK(amiga_system::fast_ram_size_2m == amiga_system::size_2m);
+    CHECK(amiga_system::fast_ram_size_4m == amiga_system::size_4m);
+    CHECK(amiga_system::fast_ram_max_size == amiga_system::size_8m);
+    CHECK(amiga_system::kickstart_window_size == amiga_system::size_512k);
+}
+
 TEST_CASE("amiga model descriptors capture base chipset and expansion policy",
           "[manifests][amiga][models]") {
     const auto& a500 = amiga_model_profile(amiga_model::amiga500);

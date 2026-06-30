@@ -13,6 +13,8 @@ Current public systems using this module:
 
 Layout:
 
+- `amiga_memory_sizes.hpp` — shared binary size vocabulary for chip RAM, Fast
+  RAM, Kickstart windows, and expansion sizing.
 - `amiga_system.hpp/.cpp` — shared machine assembly and remaining integration
   glue.
 - `chipsets/` — OCS/ECS/AGA chipset profile policy around Agnus, Denise, and

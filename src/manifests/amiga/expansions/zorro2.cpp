@@ -1,28 +1,24 @@
 #include "expansions/zorro2.hpp"
 
+#include "amiga_memory_sizes.hpp"
+
 namespace mnemos::manifests::amiga {
 
     namespace {
-        constexpr std::size_t size_512k = 512U * 1024U;
-        constexpr std::size_t size_1m = 1024U * 1024U;
-        constexpr std::size_t size_2m = 2U * 1024U * 1024U;
-        constexpr std::size_t size_4m = 4U * 1024U * 1024U;
-        constexpr std::size_t size_8m = 8U * 1024U * 1024U;
-
         [[nodiscard]] std::uint8_t zorro2_size_code(std::size_t size) noexcept {
-            if (size >= size_8m) {
+            if (size >= amiga_size_8m) {
                 return 0U;
             }
-            if (size > size_4m) {
+            if (size > amiga_size_4m) {
                 return 0U;
             }
-            if (size > size_2m) {
+            if (size > amiga_size_2m) {
                 return 7U;
             }
-            if (size > size_1m) {
+            if (size > amiga_size_1m) {
                 return 6U;
             }
-            if (size > size_512k) {
+            if (size > amiga_size_512k) {
                 return 5U;
             }
             return 4U;
