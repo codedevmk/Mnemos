@@ -4,6 +4,8 @@
 #include "state.hpp"
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <memory>
 
 namespace mnemos::chips::video {
@@ -54,6 +56,74 @@ namespace mnemos::chips::video {
         constexpr std::uint32_t chip_address_mask = 0x001FFFFEU;
         constexpr std::uint32_t chip_address_high_mask = 0x001FU;
         constexpr std::uint32_t copper_address_mask = 0x0007FFFEU;
+
+        struct copper_trace_config final {
+            bool enabled{};
+            std::uint32_t first{};
+            std::uint32_t last{};
+        };
+
+        [[nodiscard]] std::uint32_t parse_trace_hex(const char* text,
+                                                    const char** end) noexcept {
+            std::uint32_t value = 0U;
+            const char* cursor = text;
+            while (*cursor == '0' && (cursor[1] == 'x' || cursor[1] == 'X')) {
+                cursor += 2;
+            }
+            while (*cursor != '\0') {
+                std::uint32_t digit = 0U;
+                if (*cursor >= '0' && *cursor <= '9') {
+                    digit = static_cast<std::uint32_t>(*cursor - '0');
+                } else if (*cursor >= 'a' && *cursor <= 'f') {
+                    digit = static_cast<std::uint32_t>(10 + *cursor - 'a');
+                } else if (*cursor >= 'A' && *cursor <= 'F') {
+                    digit = static_cast<std::uint32_t>(10 + *cursor - 'A');
+                } else {
+                    break;
+                }
+                value = static_cast<std::uint32_t>((value << 4U) | digit);
+                ++cursor;
+            }
+            *end = cursor;
+            return value;
+        }
+
+        [[nodiscard]] copper_trace_config copper_trace_from_env() noexcept {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+            const char* env = std::getenv("MNEMOS_AGNUS_COPPER_TRACE");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            if (env == nullptr || env[0] == '\0' || (env[0] == '0' && env[1] == '\0')) {
+                return {};
+            }
+            if (env[0] == '1' && env[1] == '\0') {
+                return {.enabled = true, .first = 0U, .last = copper_address_mask};
+            }
+
+            const char* end = env;
+            const std::uint32_t first = parse_trace_hex(env, &end) & copper_address_mask;
+            if (*end != '-') {
+                return {.enabled = true, .first = first, .last = first};
+            }
+            const std::uint32_t last = parse_trace_hex(end + 1, &end) & copper_address_mask;
+            return {.enabled = true, .first = first, .last = last};
+        }
+
+        [[nodiscard]] bool copper_trace_matches(std::uint32_t pc) noexcept {
+            static const copper_trace_config config = copper_trace_from_env();
+            if (!config.enabled) {
+                return false;
+            }
+            const std::uint32_t clipped_pc = pc & copper_address_mask;
+            if (config.first <= config.last) {
+                return clipped_pc >= config.first && clipped_pc <= config.last;
+            }
+            return clipped_pc >= config.first || clipped_pc <= config.last;
+        }
 
         [[nodiscard]] constexpr std::uint32_t vblank_end_line(bool pal) noexcept {
             return pal ? 24U : 20U;
@@ -704,12 +774,15 @@ namespace mnemos::chips::video {
 
         const std::uint16_t ir1 = chip_word(copper_pc_);
         const std::uint16_t ir2 = chip_word(copper_pc_ + 2U);
+        const std::uint32_t instruction_pc = copper_pc_;
+        const bool trace_instruction = copper_trace_matches(instruction_pc);
 
         const bool is_move = (ir1 & 0x0001U) == 0U;
         if (is_move) {
             const std::uint16_t reg_addr = static_cast<std::uint16_t>(ir1 & 0x01FEU);
             const std::uint32_t previous_pc = copper_pc_;
-            if (copper_can_write_register(reg_addr, copper_danger_)) {
+            const bool write_allowed = copper_can_write_register(reg_addr, copper_danger_);
+            if (write_allowed) {
                 apply_copper_move(reg_addr, ir2);
             }
             if (copper_pc_ == previous_pc) {
@@ -718,14 +791,22 @@ namespace mnemos::chips::video {
             if (copper_running_) {
                 copper_delay_ = copper_move_skip_cycles - 1U;
             }
+            if (trace_instruction) {
+                std::fprintf(stderr,
+                             "[agnus-copper] beam=%03u:%03u pc=%06X ir1=%04X ir2=%04X "
+                             "MOVE reg=%03X allowed=%u next=%06X delay=%u\n",
+                             scanline_, color_clock_, instruction_pc, ir1, ir2, reg_addr,
+                             write_allowed ? 1U : 0U, copper_pc_, copper_delay_);
+            }
             return;
         }
 
-        // WAIT / SKIP. Latch the comparator (VE bit 7 forced on per the
-        // manual) and compare against the beam.
+        // WAIT / SKIP. The upper byte of IR2 is the vertical compare-enable
+        // mask as programmed; Kickstart uses zero-masked impossible waits to
+        // park secondary copper lists.
         const std::uint16_t wait_vp = static_cast<std::uint16_t>((ir1 >> 8U) & 0x00FFU);
         const std::uint16_t wait_hp = static_cast<std::uint16_t>(ir1 & 0x00FEU);
-        const std::uint16_t wait_ve = static_cast<std::uint16_t>(((ir2 >> 8U) & 0x007FU) | 0x0080U);
+        const std::uint16_t wait_ve = static_cast<std::uint16_t>((ir2 >> 8U) & 0x00FFU);
         const std::uint16_t wait_he = static_cast<std::uint16_t>(ir2 & 0x00FEU);
         const bool wait_bfd = (ir2 & copper_bfd_mask) != 0U;
         const bool is_skip = (ir2 & 0x0001U) != 0U;
@@ -742,6 +823,16 @@ namespace mnemos::chips::video {
             past = false;
         } else if (!wait_bfd && blitter_busy_) {
             past = false;
+        }
+        if (trace_instruction) {
+            std::fprintf(stderr,
+                         "[agnus-copper] beam=%03u:%03u pc=%06X ir1=%04X ir2=%04X "
+                         "%s vp=%02X/%02X ve=%02X hp=%02X/%02X he=%02X bfd=%u "
+                         "past=%u blt=%u\n",
+                         scanline_, color_clock_, instruction_pc, ir1, ir2,
+                         is_skip ? "SKIP" : "WAIT", vp_beam, vp_target, wait_ve, hp_beam,
+                         hp_target, wait_he, wait_bfd ? 1U : 0U, past ? 1U : 0U,
+                         blitter_busy_ ? 1U : 0U);
         }
 
         if (is_skip) {

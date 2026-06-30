@@ -65,6 +65,52 @@ namespace {
         return parsed == 0ULL ? fallback : parsed;
     }
 
+    struct frame_color_stats final {
+        std::size_t non_black{};
+        std::size_t non_background{};
+        std::size_t center_non_background{};
+        std::size_t distinct_colors{};
+        std::uint32_t background{};
+    };
+
+    [[nodiscard]] frame_color_stats analyze_frame_colors(
+        const mnemos::chips::frame_buffer_view& frame) {
+        if (frame.pixels == nullptr || frame.width == 0U || frame.height == 0U) {
+            return {};
+        }
+
+        frame_color_stats stats{.background = frame.pixels[0] & 0x00FFFFFFU};
+        std::vector<std::uint32_t> colors;
+        colors.reserve(8U);
+
+        const std::uint32_t stride = frame.effective_stride();
+        const std::uint32_t center_left = frame.width / 5U;
+        const std::uint32_t center_right = (frame.width * 4U) / 5U;
+        const std::uint32_t center_top = frame.height / 6U;
+        const std::uint32_t center_bottom = (frame.height * 5U) / 6U;
+        for (std::uint32_t y = 0; y < frame.height; ++y) {
+            const std::uint32_t* row = frame.pixels + static_cast<std::size_t>(y) * stride;
+            for (std::uint32_t x = 0; x < frame.width; ++x) {
+                const std::uint32_t rgb = row[x] & 0x00FFFFFFU;
+                if (rgb != 0U) {
+                    ++stats.non_black;
+                }
+                if (rgb != stats.background) {
+                    ++stats.non_background;
+                    if (x >= center_left && x < center_right && y >= center_top &&
+                        y < center_bottom) {
+                        ++stats.center_non_background;
+                    }
+                }
+                if (std::find(colors.begin(), colors.end(), rgb) == colors.end()) {
+                    colors.push_back(rgb);
+                }
+            }
+        }
+        stats.distinct_colors = colors.size();
+        return stats;
+    }
+
     [[nodiscard]] std::vector<std::uint8_t> tiny_kickstart() {
         std::vector<std::uint8_t> rom(amiga500_system::kickstart_window_size, 0x00U);
         const auto w16 = [&](std::size_t off, std::uint16_t v) {
@@ -922,6 +968,56 @@ TEST_CASE("amiga500 adapter player save-state preserves frontend input cursors",
     mouse.aim_y = 18;
     restored.apply_input(3, mouse);
     CHECK(restored.system().read_custom_word(0x00AU) == 0xFE03U);
+}
+
+TEST_CASE("amiga500 adapter renders the real Kickstart insert-disk prompt",
+          "[apps][player][amiga500][data][video]") {
+    const auto kickstart_path = get_env("MNEMOS_AMIGA500_KICKSTART");
+    if (!kickstart_path) {
+        SKIP("set MNEMOS_AMIGA500_KICKSTART to run the copyrighted-data Kickstart "
+             "insert-disk prompt gate");
+    }
+
+    auto kickstart = read_file(fs::path(*kickstart_path));
+    REQUIRE(kickstart.has_value());
+    REQUIRE((kickstart->size() == amiga500_system::kickstart_window_size ||
+             kickstart->size() == amiga500_system::kickstart_window_size / 2U));
+
+    amiga500_adapter adapter(std::move(*kickstart), {}, fs::path(*kickstart_path).filename().string());
+    const std::uint64_t frames = get_env_u64("MNEMOS_AMIGA500_PROMPT_FRAMES", 900U);
+    for (std::uint64_t frame = 0U; frame < frames; ++frame) {
+        adapter.step_one_frame();
+    }
+
+    const auto view = adapter.current_frame();
+    const auto color_stats = analyze_frame_colors(view);
+    const auto regs = adapter.system().cpu.cpu_registers();
+    INFO("frames: " << frames);
+    INFO("pc: " << regs.pc);
+    INFO("sr: " << regs.sr);
+    INFO("frame index: " << adapter.system().frame_index);
+    INFO("dmacon: " << adapter.system().agnus.dmacon());
+    INFO("dmaconr: " << adapter.system().agnus.read_dmaconr());
+    INFO("cop1lc: " << adapter.system().agnus.cop1lc());
+    INFO("cop2lc: " << adapter.system().agnus.cop2lc());
+    INFO("copper pc: " << adapter.system().agnus.copper_pc());
+    INFO("bplcon0: " << adapter.system().read_custom_word(0x100U));
+    INFO("color00: " << adapter.system().read_custom_word(0x180U));
+    INFO("color01: " << adapter.system().read_custom_word(0x182U));
+    INFO("background color: " << color_stats.background);
+    INFO("distinct colors: " << color_stats.distinct_colors);
+    INFO("non-background pixels: " << color_stats.non_background);
+    INFO("center non-background pixels: " << color_stats.center_non_background);
+    INFO("non-black pixels: " << color_stats.non_black << " of "
+                              << static_cast<std::size_t>(view.width) * view.height);
+    CHECK(view.width == agnus::visible_width);
+    CHECK(view.height == agnus::visible_height_pal);
+    CHECK(color_stats.non_black > (static_cast<std::size_t>(view.width) * view.height) / 2U);
+    CHECK(color_stats.distinct_colors >= 4U);
+    CHECK(color_stats.non_background > 4096U);
+    CHECK(color_stats.non_background < 10000U);
+    CHECK(color_stats.center_non_background > 4096U);
+    CHECK(color_stats.center_non_background < 10000U);
 }
 
 TEST_CASE("amiga500 adapter boots real Kickstart with an ADF disk when data is supplied",

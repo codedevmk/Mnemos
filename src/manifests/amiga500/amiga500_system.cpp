@@ -1905,7 +1905,9 @@ namespace mnemos::manifests::amiga500 {
         const std::int32_t minor_error_step = blitter_modulo[blit_a];
         const std::int32_t major_error_step = blitter_modulo[blit_b];
         const std::int32_t c_row_step = blitter_modulo[blit_c];
-        const std::int32_t d_row_step = blitter_modulo[blit_d];
+        // In line mode the read/modify/write destination follows BLTCMOD;
+        // Kickstart leaves BLTDMOD zero for these blits.
+        const std::int32_t d_row_step = blitter_modulo[blit_c];
         const bool major_horizontal = (bltcon1 & bltcon1_line_sud) != 0U;
         const int major_direction = (bltcon1 & bltcon1_line_aul) != 0U ? -1 : 1;
         const int minor_direction = (bltcon1 & bltcon1_line_sul) != 0U ? -1 : 1;
@@ -2056,15 +2058,15 @@ namespace mnemos::manifests::amiga500 {
             for (std::uint32_t x = 0U; x < width_words; ++x) {
                 std::uint16_t a = use_channel[blit_a] ? read_chip_word(chip_ram, ptr[blit_a])
                                                       : blitter_data[blit_a];
+                std::uint16_t mask = 0xFFFFU;
+                if (x == 0U) {
+                    mask = static_cast<std::uint16_t>(mask & bltafwm);
+                }
+                if (x + 1U == width_words) {
+                    mask = static_cast<std::uint16_t>(mask & bltalwm);
+                }
+                a = static_cast<std::uint16_t>(a & mask);
                 if (use_channel[blit_a]) {
-                    std::uint16_t mask = 0xFFFFU;
-                    if (x == 0U) {
-                        mask = static_cast<std::uint16_t>(mask & bltafwm);
-                    }
-                    if (x + 1U == width_words) {
-                        mask = static_cast<std::uint16_t>(mask & bltalwm);
-                    }
-                    a = static_cast<std::uint16_t>(a & mask);
                     blitter_data[blit_a] = a;
                 }
                 const std::uint16_t shifted_a = shifted_word(previous_a, a, ashift);

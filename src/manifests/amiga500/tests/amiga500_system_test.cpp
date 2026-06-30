@@ -2659,6 +2659,34 @@ TEST_CASE("amiga500 blitter area fill honors fill carry input", "[manifests][ami
     CHECK((sys->read_custom_word(0x002U) & agnus::dmacon_bzero) == 0U);
 }
 
+TEST_CASE("amiga500 blitter masks latched A when A DMA is disabled",
+          "[manifests][amiga500][blitter]") {
+    auto sys = assemble_amiga500(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+
+    write_chip_word(*sys, 0x0100U, 0x0000U);
+    write_chip_word(*sys, 0x0102U, 0x0000U);
+    sys->write_custom_word(0x048U, 0x0000U);
+    sys->write_custom_word(0x04AU, 0x0100U);
+    sys->write_custom_word(0x054U, 0x0000U);
+    sys->write_custom_word(0x056U, 0x0100U);
+    sys->write_custom_word(0x044U, 0x00FFU);
+    sys->write_custom_word(0x046U, 0xF000U);
+    sys->write_custom_word(0x072U, 0xFFFFU);
+    sys->write_custom_word(0x074U, 0xFFFFU);
+    sys->write_custom_word(0x040U, 0x03CAU); // USEC|USED, D=(A&B)|(~A&C).
+    sys->write_custom_word(0x042U, 0x0000U);
+    sys->write_custom_word(0x096U,
+                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                                                      agnus::dmacon_dmaen | agnus::dmacon_blten));
+
+    sys->write_custom_word(0x058U, 0x0042U);
+    run_blitter_to_idle(*sys);
+
+    CHECK(read_chip_word(*sys, 0x0100U) == 0x00FFU);
+    CHECK(read_chip_word(*sys, 0x0102U) == 0xF000U);
+}
+
 TEST_CASE("amiga500 blitter line mode draws a shallow octant line",
           "[manifests][amiga500][blitter]") {
     auto sys = assemble_amiga500(tiny_kickstart());
@@ -2690,6 +2718,36 @@ TEST_CASE("amiga500 blitter line mode draws a shallow octant line",
     CHECK((sys->read_custom_word(0x002U) & agnus::dmacon_bbusy) == 0U);
     CHECK((sys->read_custom_word(0x002U) & agnus::dmacon_bzero) == 0U);
     CHECK((sys->read_custom_word(0x01EU) & amiga500_system::int_blit) != 0U);
+}
+
+TEST_CASE("amiga500 blitter line mode steps destination rows with C modulo",
+          "[manifests][amiga500][blitter]") {
+    auto sys = assemble_amiga500(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+
+    sys->write_custom_word(0x048U, 0x0000U); // BLTCPTH
+    sys->write_custom_word(0x04AU, 0x0200U); // BLTCPTL
+    sys->write_custom_word(0x054U, 0x0000U); // BLTDPTH
+    sys->write_custom_word(0x056U, 0x0200U); // BLTDPTL
+    sys->write_custom_word(0x050U, 0x0000U); // BLTAPTH
+    sys->write_custom_word(0x052U, 0xFFFEU);
+    sys->write_custom_word(0x064U, 0xFFF4U);
+    sys->write_custom_word(0x062U, 0x0008U);
+    sys->write_custom_word(0x060U, 0x0020U);
+    sys->write_custom_word(0x066U, 0x0000U); // Kickstart leaves BLTDMOD unused in line mode.
+    sys->write_custom_word(0x072U, 0xFFFFU);
+    sys->write_custom_word(0x040U, 0x0BCAU);
+    sys->write_custom_word(0x042U, 0x0051U);
+    sys->write_custom_word(0x096U,
+                           static_cast<std::uint16_t>(amiga500_system::setclr_bit |
+                                                      agnus::dmacon_dmaen | agnus::dmacon_blten));
+
+    sys->write_custom_word(0x058U, 0x0182U);
+    run_blitter_to_idle(*sys);
+
+    CHECK(read_chip_word(*sys, 0x0200U) == 0xC000U);
+    CHECK(read_chip_word(*sys, 0x0220U) == 0x3000U);
+    CHECK(read_chip_word(*sys, 0x0240U) == 0x0C00U);
 }
 
 TEST_CASE("amiga500 blitter line mode draws a steep octant line",

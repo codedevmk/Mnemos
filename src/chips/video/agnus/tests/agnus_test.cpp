@@ -1565,6 +1565,31 @@ TEST_CASE("agnus copper terminal WAIT cannot pass during the active frame", "[ag
     CHECK(chip.dma_bitplane());
 }
 
+TEST_CASE("agnus copper WAIT honors disabled vertical compare mask bits", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+
+    constexpr std::uint32_t list = 0x100U;
+    write_word(chip_ram, list + 0U, 0x0096U); // MOVE DMACON: set BPLEN.
+    write_word(chip_ram, list + 2U,
+               static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_bplen));
+    write_word(chip_ram, list + 4U, 0x00FFU); // WAIT VP masked off, HP=$FE: impossible.
+    write_word(chip_ram, list + 6U, 0x00FEU);
+    write_word(chip_ram, list + 8U, 0x0096U); // Would clear BPLEN if VE bit 7 were forced.
+    write_word(chip_ram, list + 10U, agnus::dmacon_bplen);
+
+    chip.attach_chip_ram(chip_ram);
+    chip.write_cop1lc(list);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_copen));
+
+    chip.tick(pal_vblank_exit_ticks + 1U);
+    REQUIRE(chip.dma_bitplane());
+
+    chip.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) * 256U);
+    CHECK(chip.dma_bitplane());
+}
+
 TEST_CASE("agnus Copper location pointers are clipped to the OCS 18-bit address bus", "[agnus]") {
     agnus chip;
 
