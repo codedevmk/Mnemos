@@ -8,7 +8,7 @@ mnemos_fetch_sdl3()
 # `chips/shared/region.hpp`; system-specific cart-header parsers live in each
 # manifest. Currently wired: Genesis, SMS, C64, Sega CD, 32X, M10, M14, M15, M27, M47, M52, M57, M58,
 # M62, M63, travrusa, Red Alert, M72, M75, M78, M81, M82, M84, M85, M90, M92, M102, M107, M119, Taito F2,
-# Taito G-NET, CPS1, CPS2, Spectrum, NES, MSX, MSX2, Amiga 500.
+# Taito G-NET, CPS1, CPS2, Spectrum, NES, MSX, MSX2, Amiga 500/500+/600/2000.
 add_subdirectory(adapters/common)
 add_subdirectory(adapters/genesis)
 add_subdirectory(adapters/sms)

@@ -8,7 +8,7 @@ Currently wired:
 
 - **Genesis / Mega Drive** - `.md`, `.gen`, `.smd`, `.bin`, `.68k`
 - **Sega Master System / Game Gear** - `.sms`, `.sg`, `.gg`
-- **Commodore 64, ZX Spectrum, NES, MSX, MSX2, Amiga 500**
+- **Commodore 64, ZX Spectrum, NES, MSX, MSX2, Amiga 500/500+/600/2000**
 - **Sega CD, Sega 32X, Irem M72, Taito F2, Capcom CPS1/CPS2**
 
 ## Stack
@@ -40,6 +40,10 @@ Currently wired:
 
 - `--keyboard-layout <token>` selects the host physical keyboard layout for
   computer adapters that expose a keyboard port.
-- Amiga 500 accepts `us`, `de`, `qwertz`, `fr`, `azerty`, `en-gb`, `es`, `it`,
-  `sv`, `fi`, `dk`, and `nb-no`. `MNEMOS_AMIGA500_KEYBOARD_LAYOUT` remains the
-  fallback when the CLI option is absent.
+- Amiga 500/500+/600/2000 accepts `us`, `de`, `qwertz`, `fr`, `azerty`,
+  `en-gb`, `es`, `it`, `sv`, `fi`, `dk`, and `nb-no`.
+  `MNEMOS_AMIGA500_KEYBOARD_LAYOUT` remains the fallback when the CLI option is
+  absent.
+- Amiga 2000 defaults to the base OCS/512 KiB profile. Use
+  `--amiga-model ecs-1m` or `MNEMOS_AMIGA2000_MODEL=ecs-1m` for an upgraded
+  ECS / 1 MiB Kickstart 2.x-style configuration.

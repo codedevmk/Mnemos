@@ -390,17 +390,45 @@ namespace {
         return layout;
     }
 
+    [[nodiscard]] std::string
+    amiga_model_override(const std::optional<std::string>& override,
+                         mnemos::apps::player::adapters::system_family family) {
+        if (override.has_value() && !override->empty()) {
+            return *override;
+        }
+        if (family == mnemos::apps::player::adapters::system_family::amiga2000) {
+            if (const char* model_env = MNEMOS_PLAYER_GETENV("MNEMOS_AMIGA2000_MODEL");
+                model_env != nullptr && model_env[0] != '\0') {
+                return std::string{model_env};
+            }
+        }
+        if (const char* model_env = MNEMOS_PLAYER_GETENV("MNEMOS_AMIGA_MODEL");
+            model_env != nullptr && model_env[0] != '\0') {
+            return std::string{model_env};
+        }
+        return {};
+    }
+
     [[nodiscard]] bool
     is_amiga500_family(mnemos::apps::player::adapters::system_family family) noexcept {
         using mnemos::apps::player::adapters::system_family;
-        return family == system_family::amiga500 || family == system_family::amiga500_plus;
+        return family == system_family::amiga500 || family == system_family::amiga500_plus ||
+               family == system_family::amiga600 || family == system_family::amiga2000;
     }
 
     [[nodiscard]] const char*
     amiga500_kickstart_env_var(mnemos::apps::player::adapters::system_family family) noexcept {
-        return family == mnemos::apps::player::adapters::system_family::amiga500_plus
-                   ? "MNEMOS_AMIGA500PLUS_KICKSTART"
-                   : "MNEMOS_AMIGA500_KICKSTART";
+        using mnemos::apps::player::adapters::system_family;
+        switch (family) {
+        case system_family::amiga500_plus:
+            return "MNEMOS_AMIGA500PLUS_KICKSTART";
+        case system_family::amiga600:
+            return "MNEMOS_AMIGA600_KICKSTART";
+        case system_family::amiga2000:
+            return "MNEMOS_AMIGA2000_KICKSTART";
+        default:
+            return "MNEMOS_AMIGA500_KICKSTART";
+        }
     }
 
     [[nodiscard]] const char*
@@ -473,6 +501,8 @@ namespace mnemos::apps::player {
             adapter_options.msx2 = options.msx2;
             adapter_options.keyboard_layout_override =
                 amiga500_keyboard_layout_override(options.keyboard_layout_override);
+            adapter_options.amiga_model_override =
+                amiga_model_override(options.amiga_model_override, family);
             outcome.system = frontend_sdk::adapter_registry::instance().create(
                 family_id(family), std::move(adapter_options));
             if (!outcome.system) {
@@ -602,6 +632,8 @@ namespace mnemos::apps::player {
             break;
         case system_family::amiga500:
         case system_family::amiga500_plus:
+        case system_family::amiga600:
+        case system_family::amiga2000:
             cart_default = mnemos::video_region::pal;
             break;
         case system_family::msx2:
@@ -1005,7 +1037,8 @@ namespace mnemos::apps::player {
              .disc_path = std::move(disc_path),
              .rom_path = options.rom_paths.front(),
              .bios_images = std::move(bios_images),
-             .keyboard_layout_override = std::move(keyboard_layout_override)});
+             .keyboard_layout_override = std::move(keyboard_layout_override),
+             .amiga_model_override = amiga_model_override(options.amiga_model_override, family)});
         if (!outcome.system) {
             std::fprintf(stderr, "[mnemos_player] no adapter registered for family '%s'\n",
                          family_id(family));

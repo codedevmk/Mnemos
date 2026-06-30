@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -290,14 +291,82 @@ namespace mnemos::apps::player::adapters::amiga500 {
 
         [[nodiscard]] const char*
         model_family_id(manifests::amiga500::amiga500_model model) noexcept {
-            return model == manifests::amiga500::amiga500_model::amiga500_plus ? "amiga500plus"
-                                                                               : "amiga500";
+            using model_t = manifests::amiga500::amiga500_model;
+            switch (model) {
+            case model_t::amiga500_plus:
+                return "amiga500plus";
+            case model_t::amiga600:
+                return "amiga600";
+            case model_t::amiga2000:
+            case model_t::amiga2000_ecs_1m:
+                return "amiga2000";
+            case model_t::amiga500:
+                break;
+            }
+            return "amiga500";
         }
 
         [[nodiscard]] const char*
         model_display_name(manifests::amiga500::amiga500_model model) noexcept {
-            return model == manifests::amiga500::amiga500_model::amiga500_plus ? "Amiga 500+"
-                                                                               : "Amiga 500";
+            using model_t = manifests::amiga500::amiga500_model;
+            switch (model) {
+            case model_t::amiga500_plus:
+                return "Amiga 500+";
+            case model_t::amiga600:
+                return "Amiga 600";
+            case model_t::amiga2000:
+            case model_t::amiga2000_ecs_1m:
+                return "Amiga 2000";
+            case model_t::amiga500:
+                break;
+            }
+            return "Amiga 500";
+        }
+
+        [[nodiscard]] const char*
+        model_configuration_label(manifests::amiga500::amiga500_model model) noexcept {
+            using model_t = manifests::amiga500::amiga500_model;
+            switch (model) {
+            case model_t::amiga2000:
+                return "OCS base";
+            case model_t::amiga2000_ecs_1m:
+                return "ECS / 1 MiB upgrade";
+            default:
+                return "";
+            }
+        }
+
+        [[nodiscard]] std::string normalize_amiga_model_token(std::string_view token) {
+            std::string out;
+            out.reserve(token.size());
+            for (char c : token) {
+                if (c == '_' || c == ' ') {
+                    out.push_back('-');
+                } else {
+                    out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+                }
+            }
+            return out;
+        }
+
+        [[nodiscard]] manifests::amiga500::amiga500_model
+        resolve_amiga_model_override(manifests::amiga500::amiga500_model base_model,
+                                     std::string_view override) {
+            using model_t = manifests::amiga500::amiga500_model;
+            if (base_model != model_t::amiga2000) {
+                return base_model;
+            }
+            const std::string token = normalize_amiga_model_token(override);
+            if (token.empty() || token == "base" || token == "ocs" || token == "ocs-512k" ||
+                token == "512k") {
+                return model_t::amiga2000;
+            }
+            if (token == "ecs" || token == "ecs-1m" || token == "ecs1m" || token == "1m" ||
+                token == "ks2" || token == "kickstart2" || token == "kickstart-2" ||
+                token == "kickstart-2.0" || token == "2.0") {
+                return model_t::amiga2000_ecs_1m;
+            }
+            return base_model;
         }
 
         [[nodiscard]] std::string chip_ram_label(std::size_t bytes) {
@@ -1358,6 +1427,10 @@ namespace mnemos::apps::player::adapters::amiga500 {
 
         spec_.push_back({.label = "System", .value = model_display_name(model_)});
         spec_.push_back({.label = "Chip RAM", .value = chip_ram_label(sys_->chip_ram.size())});
+        if (const std::string_view config_label = model_configuration_label(model_);
+            !config_label.empty()) {
+            spec_.push_back({.label = "Configuration", .value = std::string{config_label}});
+        }
         spec_.push_back(
             {.label = "Region",
              .value = config.video_region == mnemos::video_region::pal ? "PAL" : "NTSC"});
@@ -1600,11 +1673,13 @@ namespace mnemos::apps::player::adapters::amiga500 {
                 family_id,
                 [model](mnemos::frontend_sdk::adapter_options opts)
                     -> std::unique_ptr<mnemos::frontend_sdk::player_system> {
+                    const auto selected_model =
+                        resolve_amiga_model_override(model, opts.amiga_model_override);
                     const auto config = manifests::amiga500::amiga500_config{
                         .video_region = opts.video_region,
                         .keyboard_layout =
                             keyboard_layout_from_token(opts.keyboard_layout_override),
-                        .model = model};
+                        .model = selected_model};
                     return std::make_unique<amiga500_adapter>(
                         std::move(opts.rom), config, std::move(opts.display_name),
                         std::move(opts.additional_media), opts.scheduler_factory_override);
@@ -1615,6 +1690,8 @@ namespace mnemos::apps::player::adapters::amiga500 {
             register_amiga_family("amiga500", manifests::amiga500::amiga500_model::amiga500);
             register_amiga_family("amiga500plus",
                                   manifests::amiga500::amiga500_model::amiga500_plus);
+            register_amiga_family("amiga600", manifests::amiga500::amiga500_model::amiga600);
+            register_amiga_family("amiga2000", manifests::amiga500::amiga500_model::amiga2000);
             return 0;
         }();
     } // namespace

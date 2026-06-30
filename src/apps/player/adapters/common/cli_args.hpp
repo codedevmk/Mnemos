@@ -75,6 +75,11 @@ namespace mnemos::apps::player::adapters {
     // empty, or option-shaped values leave the adapter default in place.
     [[nodiscard]] std::optional<std::string> parse_keyboard_layout_arg(int argc, char* argv[]);
 
+    // Select an Amiga machine configuration token (`--amiga-model <token>`).
+    // Currently consumed by `--system amiga2000`: base/ocs keeps the baseline
+    // 512 KiB OCS setup, ecs-1m/ks2 selects the common ECS + 1 MiB upgrade.
+    [[nodiscard]] std::optional<std::string> parse_amiga_model_arg(int argc, char* argv[]);
+
     struct screenshot_request final {
         std::string path;
         std::uint64_t frames{};
