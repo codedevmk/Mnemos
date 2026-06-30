@@ -21,6 +21,14 @@ namespace {
     using mnemos::manifests::amiga::amiga_floppy_sectors_per_track;
     using mnemos::manifests::amiga::amiga_floppy_track_count;
     using mnemos::manifests::amiga::amiga_fast_ram_size_for_config;
+    using mnemos::manifests::amiga::amiga_keyboard_dequeue_code;
+    using mnemos::manifests::amiga::amiga_keyboard_enqueue_key;
+    using mnemos::manifests::amiga::amiga_keyboard_press_caps_lock;
+    using mnemos::manifests::amiga::amiga_keyboard_queue_capacity;
+    using mnemos::manifests::amiga::amiga_keyboard_queue_state;
+    using mnemos::manifests::amiga::amiga_keyboard_raw_key_count;
+    using mnemos::manifests::amiga::amiga_keyboard_reset_warning_code;
+    using mnemos::manifests::amiga::amiga_keyboard_sdr;
     using mnemos::manifests::amiga::amiga_encode_joystick;
     using mnemos::manifests::amiga::amiga_joy_fire;
     using mnemos::manifests::amiga::amiga_joy_middle_fire;
@@ -93,8 +101,7 @@ namespace {
     [[nodiscard]] bool joy_right(std::uint16_t joy) { return (joy & 0x0002U) != 0U; }
 
     [[nodiscard]] std::uint8_t keyboard_sdr(std::uint8_t raw_code) noexcept {
-        const auto inverted = static_cast<std::uint8_t>(~raw_code);
-        return static_cast<std::uint8_t>((inverted << 1U) | (inverted >> 7U));
+        return amiga_keyboard_sdr(raw_code);
     }
 
     void write_chip_word(amiga_system& sys, std::uint32_t address, std::uint16_t value) {
@@ -503,6 +510,32 @@ TEST_CASE("amiga500 keyboard events arrive through CIA-A serial input",
     sys->cia_a.tick(1U);
     CHECK(sys->cia_a.irq_asserted());
     CHECK((sys->cia_a.read(0x0DU) & 0x08U) != 0U);
+}
+
+TEST_CASE("amiga keyboard helpers preserve raw queue semantics",
+          "[manifests][amiga][devices][keyboard]") {
+    CHECK(amiga_system::keyboard_raw_key_count == amiga_keyboard_raw_key_count);
+    CHECK(amiga_system::keyboard_queue_capacity == amiga_keyboard_queue_capacity);
+    CHECK(amiga_system::keyboard_reset_warning_code == amiga_keyboard_reset_warning_code);
+    CHECK(amiga_keyboard_sdr(0x44U) == 0x77U);
+    CHECK(amiga_keyboard_sdr(0xCCU) == 0x66U);
+
+    amiga_keyboard_queue_state keyboard{};
+    REQUIRE(amiga_keyboard_enqueue_key(keyboard, 0xA0U, true));
+    CHECK(keyboard.key_down[0x20U]);
+    CHECK_FALSE(amiga_keyboard_enqueue_key(keyboard, 0x20U, true));
+
+    std::uint8_t code = 0U;
+    REQUIRE(amiga_keyboard_dequeue_code(keyboard, code));
+    CHECK(code == 0x20U);
+    REQUIRE(amiga_keyboard_enqueue_key(keyboard, 0x20U, false));
+    REQUIRE(amiga_keyboard_dequeue_code(keyboard, code));
+    CHECK(code == 0xA0U);
+
+    REQUIRE(amiga_keyboard_press_caps_lock(keyboard));
+    CHECK(keyboard.caps_lock_led);
+    REQUIRE(amiga_keyboard_dequeue_code(keyboard, code));
+    CHECK(code == 0x62U);
 }
 
 TEST_CASE("amiga500 keyboard queue waits for CIA serial acknowledgement",
@@ -3263,7 +3296,7 @@ TEST_CASE("amiga500 save_state restores overlay and chip RAM", "[manifests][amig
     sys->set_pot_position(0U, 1U, 1U);
     sys->write_custom_word(0x034U, 0x0001U);
     REQUIRE(sys->mount_floppy(tiny_adf()));
-    sys->keyboard_caps_lock_led = false;
+    sys->keyboard.caps_lock_led = false;
     CHECK((sys->cia_a.read(0x00U) & 0x04U) == 0U);
 
     mnemos::chips::state_reader reader(blob);
