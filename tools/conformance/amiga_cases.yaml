@@ -16,15 +16,15 @@
       "regression_guard": true,
       "golden": {
         "root": "testdata/golden/tier_a/amiga/a500_ocs_ce/a500_ocs_ce_kickstart_boot_dev",
-        "trace_sha256": null,
-        "framebuffer_sha256": null,
-        "audio_sha256": null
+        "trace_sha256": "9b490ac2a3d4b187dd7fa0c42c2e79204e8d0eb1fadd81f3b752dfd7bb5cffe5",
+        "framebuffer_sha256": "aad100274e28b13d4fb34df4a517341d519085ccb69a3a3dbf12c5146a67a6df",
+        "audio_sha256": "a8eac8b0d3b1fde368813438dd5ba415a796fd6dd0a2a42fb6a5a2dfb2429576"
       },
       "winuae_baseline": {
         "root": "testdata/baseline/winuae_6_0_3/amiga/a500_ocs_ce/a500_ocs_ce_kickstart_boot_dev",
-        "trace_sha256": null,
-        "framebuffer_sha256": null,
-        "audio_sha256": null
+        "trace_sha256": "9b490ac2a3d4b187dd7fa0c42c2e79204e8d0eb1fadd81f3b752dfd7bb5cffe5",
+        "framebuffer_sha256": "aad100274e28b13d4fb34df4a517341d519085ccb69a3a3dbf12c5146a67a6df",
+        "audio_sha256": "a8eac8b0d3b1fde368813438dd5ba415a796fd6dd0a2a42fb6a5a2dfb2429576"
       }
     },
     {
@@ -40,15 +40,15 @@
       "regression_guard": true,
       "golden": {
         "root": "testdata/golden/tier_a/amiga/a500_ocs_ce/a500_ocs_ce_kickstart_boot_test",
-        "trace_sha256": null,
-        "framebuffer_sha256": null,
-        "audio_sha256": null
+        "trace_sha256": "9b490ac2a3d4b187dd7fa0c42c2e79204e8d0eb1fadd81f3b752dfd7bb5cffe5",
+        "framebuffer_sha256": "aad100274e28b13d4fb34df4a517341d519085ccb69a3a3dbf12c5146a67a6df",
+        "audio_sha256": "a8eac8b0d3b1fde368813438dd5ba415a796fd6dd0a2a42fb6a5a2dfb2429576"
       },
       "winuae_baseline": {
         "root": "testdata/baseline/winuae_6_0_3/amiga/a500_ocs_ce/a500_ocs_ce_kickstart_boot_test",
-        "trace_sha256": null,
-        "framebuffer_sha256": null,
-        "audio_sha256": null
+        "trace_sha256": "9b490ac2a3d4b187dd7fa0c42c2e79204e8d0eb1fadd81f3b752dfd7bb5cffe5",
+        "framebuffer_sha256": "aad100274e28b13d4fb34df4a517341d519085ccb69a3a3dbf12c5146a67a6df",
+        "audio_sha256": "a8eac8b0d3b1fde368813438dd5ba415a796fd6dd0a2a42fb6a5a2dfb2429576"
       }
     }
   ]
