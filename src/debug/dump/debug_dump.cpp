@@ -7,6 +7,7 @@
 #include "ppm_image.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <cstdio>
 #include <string>
 #include <string_view>
@@ -80,6 +81,14 @@ namespace mnemos::debug {
             for (unsigned i = 0; i < digits; ++i) {
                 const unsigned shift = (digits - 1U - i) * 4U;
                 out.push_back(hex[(value >> shift) & 0x0FU]);
+            }
+        }
+
+        void append_decimal(std::string& out, std::uint64_t value) {
+            char buf[24];
+            const auto result = std::to_chars(buf, buf + sizeof(buf), value);
+            if (result.ec == std::errc{}) {
+                out.append(buf, result.ptr);
             }
         }
 
@@ -177,14 +186,15 @@ namespace mnemos::debug {
     }
 
     struct trace_csv_session::state final {
-        std::ofstream* out{};
+        std::string* bytes{};
         const std::uint64_t* frame{};
         std::uint64_t inst{};
     };
 
     struct trace_csv_session::sink final {
         chips::ichip* target{};
-        std::ofstream out{};
+        std::string path{};
+        std::string bytes{};
         std::unique_ptr<state> cb_state{};
     };
 
@@ -208,30 +218,38 @@ namespace mnemos::debug {
                                            trace_index);
             auto sink = std::make_unique<trace_csv_session::sink>();
             sink->target = chip;
-            sink->out.open(path);
-            if (!sink->out) {
-                ++trace_index;
-                continue;
-            }
-            sink->out << "frame,inst,pc,cycles\n";
+            sink->path = path;
+#ifdef _WIN32
+            static constexpr std::string_view newline = "\r\n";
+#else
+            static constexpr std::string_view newline = "\n";
+#endif
+            sink->bytes.reserve(2U * 1024U * 1024U);
+            sink->bytes += "frame,inst,pc,cycles";
+            sink->bytes += newline;
 
             // Allocate per-sink callback state on the heap so captured pointers
             // remain stable even as the sink list grows.
             sink->cb_state = std::make_unique<state>();
-            sink->cb_state->out = &sink->out;
+            sink->cb_state->bytes = &sink->bytes;
             sink->cb_state->frame = &frame_counter;
             sink->cb_state->inst = 0;
 
             state* s = sink->cb_state.get();
             trace->install([s](const instrumentation::trace_event& ev) {
-                char buf[80];
                 const std::uint64_t frame = s->frame != nullptr ? *s->frame : 0U;
-                std::snprintf(buf, sizeof(buf), "%llu,%llu,%06X,%llu\n",
-                              static_cast<unsigned long long>(frame),
-                              static_cast<unsigned long long>(s->inst),
-                              static_cast<unsigned int>(ev.pc),
-                              static_cast<unsigned long long>(ev.cycles));
-                *s->out << buf;
+                append_decimal(*s->bytes, frame);
+                s->bytes->push_back(44);
+                append_decimal(*s->bytes, s->inst);
+                s->bytes->push_back(44);
+                append_hex(*s->bytes, ev.pc, 24U);
+                s->bytes->push_back(44);
+                append_decimal(*s->bytes, ev.cycles);
+#ifdef _WIN32
+                s->bytes->append("\r\n", 2U);
+#else
+                s->bytes->push_back(10);
+#endif
                 ++s->inst;
             });
             sinks_.push_back(std::move(sink));
@@ -245,6 +263,16 @@ namespace mnemos::debug {
                 if (auto* trace = sink->target->introspection().trace()) {
                     trace->install({});
                 }
+            }
+        }
+        for (const auto& sink : sinks_) {
+            if (sink == nullptr || sink->path.empty()) {
+                continue;
+            }
+            const std::span<const std::uint8_t> bytes(
+                reinterpret_cast<const std::uint8_t*>(sink->bytes.data()), sink->bytes.size());
+            if (!dump_bytes(sink->path, bytes)) {
+                std::fprintf(stderr, "[debug_dump] could not write %s\n", sink->path.c_str());
             }
         }
     }
