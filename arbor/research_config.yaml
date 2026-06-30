@@ -1,6 +1,6 @@
 # research_config.yaml — Mnemos Amiga emulation superiority vs WinUAE 6.0.3
 # Per-project task + budget only. LLM/provider/keys live in `arbor setup` (~/.arbor/config.yaml).
-# The eval contract, protected dirs, profiles, and timeouts live in the plugin (mnemos_amiga.plugin.yaml).
+# The eval contract, protected dirs, profiles, and timeouts live in the plugin (plugins/mnemos_amiga.yaml).
 #
 # PRECONDITIONS (Arbor will refuse without these): runnable eval script + dev/test data + clean git.
 #   - Headless deterministic Mnemos run mode with trace/framebuffer/audio export + hashing.
@@ -30,7 +30,7 @@ task: >
   the repo. Keep the build zero-warning and the harness deterministic.
 
 # Domain plugin: carries eval contract, protected paths, required outputs, timeout presets,
-# and smoke/pilot/full profiles. See mnemos_amiga.plugin.yaml.
+# and smoke/pilot/full profiles. See plugins/mnemos_amiga.yaml.
 plugin: mnemos_amiga
 
 coordinator:
