@@ -1,0 +1,55 @@
+{
+  "schema": "mnemos.amiga.eval_cases/1",
+  "default_master_hz": 7093790.0,
+  "default_ptr_floor": 1.0,
+  "cases": [
+    {
+      "id": "a500_ocs_ce_kickstart_boot_dev",
+      "split": "dev",
+      "tier": "a500_ocs_ce",
+      "system": "amiga500",
+      "region": "pal",
+      "cycles": 709379,
+      "master_hz": 7093790.0,
+      "kickstart_env": "MNEMOS_AMIGA500_KICKSTART",
+      "disks": [],
+      "regression_guard": true,
+      "golden": {
+        "root": "testdata/golden/tier_a/amiga/a500_ocs_ce/a500_ocs_ce_kickstart_boot_dev",
+        "trace_sha256": null,
+        "framebuffer_sha256": null,
+        "audio_sha256": null
+      },
+      "winuae_baseline": {
+        "root": "testdata/baseline/winuae_6_0_3/amiga/a500_ocs_ce/a500_ocs_ce_kickstart_boot_dev",
+        "trace_sha256": null,
+        "framebuffer_sha256": null,
+        "audio_sha256": null
+      }
+    },
+    {
+      "id": "a500_ocs_ce_kickstart_boot_test",
+      "split": "test",
+      "tier": "a500_ocs_ce",
+      "system": "amiga500",
+      "region": "pal",
+      "cycles": 709379,
+      "master_hz": 7093790.0,
+      "kickstart_env": "MNEMOS_AMIGA500_KICKSTART",
+      "disks": [],
+      "regression_guard": true,
+      "golden": {
+        "root": "testdata/golden/tier_a/amiga/a500_ocs_ce/a500_ocs_ce_kickstart_boot_test",
+        "trace_sha256": null,
+        "framebuffer_sha256": null,
+        "audio_sha256": null
+      },
+      "winuae_baseline": {
+        "root": "testdata/baseline/winuae_6_0_3/amiga/a500_ocs_ce/a500_ocs_ce_kickstart_boot_test",
+        "trace_sha256": null,
+        "framebuffer_sha256": null,
+        "audio_sha256": null
+      }
+    }
+  ]
+}
