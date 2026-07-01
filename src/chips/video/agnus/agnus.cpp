@@ -1878,6 +1878,80 @@ namespace mnemos::chips::video {
 
     instrumentation::ichip_introspection& agnus::introspection() noexcept { return introspection_; }
 
+    std::span<const register_descriptor>
+    agnus::introspection_surface::register_snapshot::registers() {
+        using register_value_format::flags;
+        using register_value_format::signed_integer;
+        using register_value_format::unsigned_integer;
+
+        const agnus& a = *owner_;
+        std::size_t out = 0U;
+        const auto push = [&](std::string_view name, std::uint64_t value, std::uint8_t bits,
+                              register_value_format format) {
+            registers_[out++] = register_descriptor{
+                .name = name,
+                .value = value,
+                .bit_width = bits,
+                .format = format,
+            };
+        };
+
+        push("DMACON", a.dmacon_, 16U, flags);
+        push("DMACONR", a.read_dmaconr(), 16U, flags);
+        push("BEAMV", a.scanline_, 10U, unsigned_integer);
+        push("BEAMH", a.color_clock_, 8U, unsigned_integer);
+        push("FRAME", a.frame_index_, 64U, unsigned_integer);
+        push("PAL", a.is_pal_ ? 1U : 0U, 1U, flags);
+        push("HIRES", a.hires_enabled() ? 1U : 0U, 1U, flags);
+        push("ACTIVEW", a.active_width(), 16U, unsigned_integer);
+        push("ACTIVEH", a.active_height(), 16U, unsigned_integer);
+        push("BPLCOUNT", a.bitplane_count(), 3U, unsigned_integer);
+        push("BPLCON0", a.bplcon0_, 16U, flags);
+        push("BPLCON1", a.bplcon1_, 16U, flags);
+        push("BPLCON2", a.bplcon2_, 16U, flags);
+        push("CLXCON", a.clxcon_, 16U, flags);
+        push("CLXDAT", a.clxdat_, 16U, flags);
+        push("BPL1MOD", static_cast<std::uint16_t>(a.modulo_odd_), 16U, signed_integer);
+        push("BPL2MOD", static_cast<std::uint16_t>(a.modulo_even_), 16U, signed_integer);
+        push("DIWSTRT", a.diwstrt_, 16U, unsigned_integer);
+        push("DIWSTOP", a.diwstop_, 16U, unsigned_integer);
+        push("DDFSTRT", a.ddfstrt_, 16U, unsigned_integer);
+        push("DDFSTOP", a.ddfstop_, 16U, unsigned_integer);
+        push("COP1LC", a.cop1lc_, 24U, unsigned_integer);
+        push("COP2LC", a.cop2lc_, 24U, unsigned_integer);
+        push("COPPC", a.copper_pc_, 24U, unsigned_integer);
+        push("COPRUN", a.copper_running_ ? 1U : 0U, 1U, flags);
+        push("COPDLY", a.copper_delay_, 8U, unsigned_integer);
+        push("COPDANG", a.copper_danger_ ? 1U : 0U, 1U, flags);
+        push("COPMASK", a.copper_address_mask_, 24U, unsigned_integer);
+
+        static constexpr std::array<std::string_view, max_bitplanes> bitplane_names{
+            "BPL1PT", "BPL2PT", "BPL3PT", "BPL4PT", "BPL5PT", "BPL6PT"};
+        for (std::uint32_t i = 0U; i < max_bitplanes; ++i) {
+            push(bitplane_names[i], a.bitplane_pointer_[i], 24U, unsigned_integer);
+        }
+
+        static constexpr std::array<std::string_view, max_sprites> sprite_pointer_names{
+            "SPR0PT", "SPR1PT", "SPR2PT", "SPR3PT", "SPR4PT", "SPR5PT", "SPR6PT",
+            "SPR7PT"};
+        for (std::uint32_t i = 0U; i < max_sprites; ++i) {
+            push(sprite_pointer_names[i], a.sprite_[i].pointer, 24U, unsigned_integer);
+        }
+
+        static constexpr std::array<std::string_view, max_sprites> sprite_pos_names{
+            "SPR0POS", "SPR1POS", "SPR2POS", "SPR3POS", "SPR4POS", "SPR5POS", "SPR6POS",
+            "SPR7POS"};
+        static constexpr std::array<std::string_view, max_sprites> sprite_ctl_names{
+            "SPR0CTL", "SPR1CTL", "SPR2CTL", "SPR3CTL", "SPR4CTL", "SPR5CTL", "SPR6CTL",
+            "SPR7CTL"};
+        for (std::uint32_t i = 0U; i < max_sprites; ++i) {
+            push(sprite_pos_names[i], a.sprite_[i].pos, 16U, unsigned_integer);
+            push(sprite_ctl_names[i], a.sprite_[i].ctl, 16U, unsigned_integer);
+        }
+
+        return std::span<const register_descriptor>(registers_.data(), out);
+    }
+
     frame_buffer_view agnus::introspection_surface::sample_layer::view() const {
         return owner_->debug_sample_layer_view(kind_);
     }

@@ -308,10 +308,14 @@ namespace mnemos::chips::video {
         class introspection_surface final : public instrumentation::ichip_introspection {
           public:
             explicit introspection_surface(agnus& owner) noexcept
-                : palette_(owner),
+                : registers_(owner),
+                  palette_(owner),
                   bitplanes_(owner, "bitplanes", sample_layer_kind::bitplanes),
                   playfields_(owner, "playfields", sample_layer_kind::playfields),
                   sprites_(owner, "sprites", sample_layer_kind::sprites) {}
+            [[nodiscard]] instrumentation::register_view* registers() override {
+                return &registers_;
+            }
             [[nodiscard]] std::span<instrumentation::debug_layer* const> debug_layers() override {
                 layer_ptr_[0] = &palette_;
                 layer_ptr_[1] = &bitplanes_;
@@ -321,6 +325,16 @@ namespace mnemos::chips::video {
             }
 
           private:
+            class register_snapshot final : public instrumentation::register_view {
+              public:
+                explicit register_snapshot(agnus& owner) noexcept : owner_(&owner) {}
+                [[nodiscard]] std::span<const register_descriptor> registers() override;
+
+              private:
+                agnus* owner_;
+                std::array<register_descriptor, 58> registers_{};
+            };
+
             class sample_layer final : public instrumentation::debug_layer {
               public:
                 sample_layer(agnus& owner, std::string_view name, sample_layer_kind kind) noexcept
@@ -344,6 +358,7 @@ namespace mnemos::chips::video {
                 agnus* owner_;
             };
 
+            register_snapshot registers_;
             palette_layer palette_;
             sample_layer bitplanes_;
             sample_layer playfields_;

@@ -5,6 +5,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <cstdint>
 #include <string_view>
 #include <vector>
@@ -108,6 +109,21 @@ TEST_CASE("agnus registers through the chip registry", "[agnus]") {
 
 TEST_CASE("agnus exposes palette and renderer sample debug layers", "[agnus][debug]") {
     agnus chip;
+
+    auto* registers = chip.introspection().registers();
+    REQUIRE(registers != nullptr);
+    const auto regs = registers->registers();
+    CHECK(regs.size() == 58U);
+    const auto find_reg = [&](std::string_view name) {
+        return std::find_if(regs.begin(), regs.end(), [&](const auto& reg) {
+            return reg.name == name;
+        });
+    };
+    CHECK(find_reg("BPLCON0") != regs.end());
+    CHECK(find_reg("DIWSTRT") != regs.end());
+    CHECK(find_reg("COPPC") != regs.end());
+    CHECK(find_reg("BPL1PT") != regs.end());
+    CHECK(find_reg("SPR0POS") != regs.end());
 
     const auto layers = chip.introspection().debug_layers();
     REQUIRE(layers.size() == 4U);
