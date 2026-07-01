@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -66,13 +67,13 @@ namespace {
         chip.set_diwstrt(0x2C81U);
         chip.set_diwstop(0xF4C1U);
         chip.set_ddfstrt(0x003CU); // standard high-resolution fetch start
-        chip.set_ddfstop(0x00D4U); // standard high-resolution fetch stop => 40 words/line
+        chip.set_ddfstop(0x00D0U); // Workbench-compatible high-resolution 40-word line
     }
 
     [[nodiscard]] constexpr std::uint16_t sprite_pos(std::uint32_t visible_y,
                                                      std::uint32_t visible_x) noexcept {
         const std::uint32_t beam_y = agnus::display_line_origin + visible_y;
-        const std::uint32_t beam_x = agnus::display_clock_origin + visible_x;
+        const std::uint32_t beam_x = agnus::sprite_hstart_origin + visible_x;
         return static_cast<std::uint16_t>(((beam_y & 0xFFU) << 8U) | ((beam_x >> 1U) & 0xFFU));
     }
 
@@ -80,10 +81,20 @@ namespace {
     sprite_ctl(std::uint32_t visible_y, std::uint32_t visible_x, std::uint32_t height) noexcept {
         const std::uint32_t beam_y = agnus::display_line_origin + visible_y;
         const std::uint32_t stop_y = beam_y + height;
-        const std::uint32_t beam_x = agnus::display_clock_origin + visible_x;
+        const std::uint32_t beam_x = agnus::sprite_hstart_origin + visible_x;
         return static_cast<std::uint16_t>(
             ((stop_y & 0xFFU) << 8U) | ((beam_x & 0x01U) != 0U ? 0x0001U : 0U) |
             ((stop_y & 0x100U) != 0U ? 0x0002U : 0U) | ((beam_y & 0x100U) != 0U ? 0x0004U : 0U));
+    }
+
+    [[nodiscard]] mnemos::instrumentation::debug_layer* find_debug_layer(agnus& chip,
+                                                                         std::string_view name) {
+        for (mnemos::instrumentation::debug_layer* layer : chip.introspection().debug_layers()) {
+            if (layer != nullptr && layer->name() == name) {
+                return layer;
+            }
+        }
+        return nullptr;
     }
 
 } // namespace
@@ -93,6 +104,21 @@ TEST_CASE("agnus registers through the chip registry", "[agnus]") {
     REQUIRE(chip != nullptr);
     CHECK(chip->metadata().klass == mnemos::chips::chip_class::video);
     CHECK(chip->metadata().manufacturer == "Commodore");
+}
+
+TEST_CASE("agnus exposes palette and renderer sample debug layers", "[agnus][debug]") {
+    agnus chip;
+
+    const auto layers = chip.introspection().debug_layers();
+    REQUIRE(layers.size() == 4U);
+    REQUIRE(layers[0] != nullptr);
+    REQUIRE(layers[1] != nullptr);
+    REQUIRE(layers[2] != nullptr);
+    REQUIRE(layers[3] != nullptr);
+    CHECK(layers[0]->name() == "palette");
+    CHECK(layers[1]->name() == "bitplanes");
+    CHECK(layers[2]->name() == "playfields");
+    CHECK(layers[3]->name() == "sprites");
 }
 
 TEST_CASE("agnus reset clears the beam and DMA state", "[agnus]") {
@@ -367,6 +393,58 @@ TEST_CASE("agnus BPLCON0 HIRES fetches and exposes 640-pixel bitplane rows", "[a
     CHECK(frame.pixels[agnus::visible_width_hires - 1U] == 0x00FF0000U);
 }
 
+TEST_CASE("agnus high-resolution DDF 3c-d0 advances by forty words per line", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    const auto palette = make_palette(1U, 0x0F00U);
+
+    write_word(chip_ram, 0U, 0x8000U);
+    write_word(chip_ram, 40U * 2U, 0x8000U);
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    program_full_window_hires(chip);
+    chip.set_bitplane_pointer(0U, 0U);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    chip.tick(frame_ticks);
+    const auto frame = chip.framebuffer();
+
+    CHECK(frame.pixels[0] == 0x00FF0000U);
+    CHECK(frame.pixels[agnus::framebuffer_stride] == 0x00FF0000U);
+}
+
+TEST_CASE("agnus latches high-resolution frame width across low-resolution footer copper",
+          "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    const auto palette = make_palette(1U, 0x0F00U);
+
+    write_word(chip_ram, 0U, 0x8000U);
+    write_word(chip_ram, 39U * 2U, 0x0001U);
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    program_full_window_hires(chip, 0x1000U); // One plane, low-res at frame start.
+    chip.set_bitplane_pointer(0U, 0U);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    constexpr std::uint64_t ticks_to_first_visible_line =
+        static_cast<std::uint64_t>(agnus::display_line_origin) * agnus::color_clocks_per_line;
+    chip.tick(ticks_to_first_visible_line);
+    chip.set_bplcon0(0x9000U); // Workbench-style high-resolution body.
+    chip.tick(agnus::color_clocks_per_line);
+    chip.set_bplcon0(0x1000U); // Footer/bottom border returns to low-resolution mode.
+    chip.tick(frame_ticks - ticks_to_first_visible_line - agnus::color_clocks_per_line);
+
+    const auto frame = chip.framebuffer();
+
+    CHECK(chip.hires_enabled() == false);
+    CHECK(frame.width == agnus::visible_width_hires);
+    CHECK(frame.pixels[0] == 0x00FF0000U);
+    CHECK(frame.pixels[agnus::visible_width_hires - 1U] == 0x00FF0000U);
+}
+
 TEST_CASE("agnus clips high-resolution fetch guard words to the horizontal display window",
           "[agnus]") {
     agnus chip;
@@ -579,6 +657,32 @@ TEST_CASE("agnus renders manual sprite registers over the backdrop", "[agnus]") 
     CHECK(frame.pixels[1] == 0x0000FF00U);
 }
 
+TEST_CASE("agnus maps hardware sprite hstart to visible x zero", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> palette(agnus::palette_entries * 2U, 0U);
+    set_palette_word(palette, 17U, 0x0F00U); // COLOR17 = red.
+
+    constexpr std::uint32_t beam_y = agnus::display_line_origin;
+    constexpr std::uint32_t stop_y = beam_y + 1U;
+
+    chip.attach_palette(palette);
+    chip.write_sprite_pos(0U,
+                           static_cast<std::uint16_t>(((beam_y & 0xFFU) << 8U) |
+                                                      ((agnus::sprite_hstart_origin >> 1U) &
+                                                       0xFFU)));
+    chip.write_sprite_ctl(
+        0U, static_cast<std::uint16_t>(((stop_y & 0xFFU) << 8U) |
+                                       ((agnus::sprite_hstart_origin & 0x01U) != 0U ? 0x0001U
+                                                                                    : 0x0000U)));
+    chip.write_sprite_data_a(0U, 0x8000U);
+
+    chip.tick(frame_ticks);
+    const auto frame = chip.framebuffer();
+
+    CHECK(frame.pixels[0] == 0x00FF0000U);
+    CHECK(frame.pixels[64U] == 0x00000000U);
+}
+
 TEST_CASE("agnus keeps hardware sprites low-resolution on high-resolution playfields", "[agnus]") {
     agnus chip;
     std::vector<std::uint8_t> palette(agnus::palette_entries * 2U, 0U);
@@ -709,6 +813,79 @@ TEST_CASE("agnus sprite DMA pointers advance and require a field rewrite", "[agn
     chip.set_sprite_pointer(0U, sprite_base);
     chip.tick(frame_ticks);
     CHECK(chip.framebuffer().pixels[0] == 0x00FF0000U);
+}
+
+TEST_CASE("agnus sprite DMA renders from the pointer captured for the visible field",
+          "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    std::vector<std::uint8_t> palette(agnus::palette_entries * 2U, 0U);
+    set_palette_word(palette, 17U, 0x0F00U); // COLOR17 = red.
+
+    constexpr std::uint32_t visible_sprite_base = 0x200U;
+    write_word(chip_ram, visible_sprite_base + 0U, sprite_pos(0U, 0U));
+    write_word(chip_ram, visible_sprite_base + 2U, sprite_ctl(0U, 0U, 1U));
+    write_word(chip_ram, visible_sprite_base + 4U, 0x8000U);
+    write_word(chip_ram, visible_sprite_base + 6U, 0x0000U);
+    write_word(chip_ram, visible_sprite_base + 8U, 0x0000U);
+    write_word(chip_ram, visible_sprite_base + 10U, 0x0000U);
+
+    constexpr std::uint32_t next_frame_blank_base = 0x300U;
+    write_word(chip_ram, next_frame_blank_base + 0U, 0x0000U);
+    write_word(chip_ram, next_frame_blank_base + 2U, 0x0000U);
+
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    chip.set_sprite_pointer(0U, visible_sprite_base);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_spren));
+
+    constexpr std::uint64_t after_first_visible_line =
+        static_cast<std::uint64_t>(agnus::display_line_origin + 1U) *
+        agnus::color_clocks_per_line;
+    chip.tick(after_first_visible_line);
+    chip.set_sprite_pointer(0U, next_frame_blank_base);
+    chip.tick(frame_ticks - after_first_visible_line);
+
+    CHECK(chip.framebuffer().pixels[0] == 0x00FF0000U);
+    CHECK(chip.sprite_pointer(0U) == next_frame_blank_base);
+
+    chip.tick(frame_ticks);
+    CHECK(chip.framebuffer().pixels[0] == 0x00000000U);
+}
+
+TEST_CASE("agnus sprite DMA samples data at the sprite fetch line", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    std::vector<std::uint8_t> palette(agnus::palette_entries * 2U, 0U);
+    set_palette_word(palette, 17U, 0x0F00U); // COLOR17 = red.
+
+    constexpr std::uint32_t visible_y = 8U;
+    constexpr std::uint32_t sprite_base = 0x200U;
+    write_word(chip_ram, sprite_base + 0U, sprite_pos(visible_y, 0U));
+    write_word(chip_ram, sprite_base + 2U, sprite_ctl(visible_y, 0U, 1U));
+    write_word(chip_ram, sprite_base + 4U, 0x0000U);
+    write_word(chip_ram, sprite_base + 6U, 0x0000U);
+    write_word(chip_ram, sprite_base + 8U, 0x0000U);
+    write_word(chip_ram, sprite_base + 10U, 0x0000U);
+
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    chip.set_sprite_pointer(0U, sprite_base);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_spren));
+
+    constexpr std::uint64_t before_sprite_fetch_line =
+        static_cast<std::uint64_t>(agnus::display_line_origin + visible_y - 1U) *
+        agnus::color_clocks_per_line;
+    chip.tick(before_sprite_fetch_line);
+    write_word(chip_ram, sprite_base + 4U, 0x8000U);
+    write_word(chip_ram, sprite_base + 6U, 0x0000U);
+    chip.tick(frame_ticks - before_sprite_fetch_line);
+
+    const auto frame = chip.framebuffer();
+    const auto sprite_pixel = static_cast<std::size_t>(visible_y) * frame.effective_stride();
+    CHECK(frame.pixels[sprite_pixel] == 0x00FF0000U);
 }
 
 TEST_CASE("agnus reuses a sprite DMA channel from the next control block", "[agnus]") {
@@ -874,6 +1051,83 @@ TEST_CASE("agnus display DMA stealing first zero-height reload word preserves ne
 
     CHECK(frame.pixels[frame.effective_stride()] == 0x00000000U);
     CHECK(chip.sprite_pointer(5U) == sprite5_base + 4U);
+}
+
+TEST_CASE("agnus samples attached sprite-pair palette state per rendered line", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    std::vector<std::uint8_t> palette(agnus::palette_entries * 2U, 0U);
+    set_palette_word(palette, 21U, 0x00F0U); // attached value 5 -> COLOR21 green.
+
+    constexpr std::uint32_t sprite0_base = 0x400U;
+    write_word(chip_ram, sprite0_base + 0U, sprite_pos(0U, 0U));
+    write_word(chip_ram, sprite0_base + 2U, sprite_ctl(0U, 0U, 1U));
+    write_word(chip_ram, sprite0_base + 4U, 0x8000U); // even value 1 at x=0.
+    write_word(chip_ram, sprite0_base + 6U, 0x0000U);
+    write_word(chip_ram, sprite0_base + 8U, 0x0000U);
+    write_word(chip_ram, sprite0_base + 10U, 0x0000U);
+
+    constexpr std::uint32_t sprite1_base = 0x440U;
+    write_word(chip_ram, sprite1_base + 0U, sprite_pos(0U, 0U));
+    write_word(chip_ram, sprite1_base + 2U,
+               static_cast<std::uint16_t>(sprite_ctl(0U, 0U, 1U) | 0x0080U));
+    write_word(chip_ram, sprite1_base + 4U, 0x8000U); // odd value 1 -> attached value 5.
+    write_word(chip_ram, sprite1_base + 6U, 0x0000U);
+    write_word(chip_ram, sprite1_base + 8U, sprite_pos(2U, 0U));
+    write_word(chip_ram, sprite1_base + 10U, sprite_ctl(2U, 0U, 1U)); // later non-attached.
+    write_word(chip_ram, sprite1_base + 12U, 0x0000U);
+    write_word(chip_ram, sprite1_base + 14U, 0x0000U);
+    write_word(chip_ram, sprite1_base + 16U, 0x0000U);
+    write_word(chip_ram, sprite1_base + 18U, 0x0000U);
+
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    chip.set_sprite_pointer(0U, sprite0_base);
+    chip.set_sprite_pointer(1U, sprite1_base);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_spren));
+
+    chip.tick(frame_ticks);
+
+    CHECK(chip.framebuffer().pixels[0] == 0x0000FF00U);
+}
+
+TEST_CASE("agnus debug layers separate playfield and sprite samples", "[agnus][debug]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    std::vector<std::uint8_t> palette(agnus::palette_entries * 2U, 0U);
+    set_palette_word(palette, 1U, 0x0F00U);  // playfield COLOR01 = red.
+    set_palette_word(palette, 17U, 0x00F0U); // sprite COLOR17 = green.
+
+    program_full_window(chip);
+    set_plane_word(chip_ram, chip, 0U, 0x8000U);
+
+    constexpr std::uint32_t sprite_base = 0x200U;
+    write_word(chip_ram, sprite_base + 0U, sprite_pos(0U, 0U));
+    write_word(chip_ram, sprite_base + 2U, sprite_ctl(0U, 0U, 1U));
+    write_word(chip_ram, sprite_base + 4U, 0x8000U);
+    write_word(chip_ram, sprite_base + 6U, 0x0000U);
+    write_word(chip_ram, sprite_base + 8U, 0x0000U);
+    write_word(chip_ram, sprite_base + 10U, 0x0000U);
+
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    chip.set_sprite_pointer(0U, sprite_base);
+    chip.write_dmacon(static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen |
+                                                 agnus::dmacon_bplen | agnus::dmacon_spren));
+
+    chip.tick(frame_ticks);
+
+    auto* playfields = find_debug_layer(chip, "playfields");
+    auto* sprites = find_debug_layer(chip, "sprites");
+    auto* bitplanes = find_debug_layer(chip, "bitplanes");
+    REQUIRE(playfields != nullptr);
+    REQUIRE(sprites != nullptr);
+    REQUIRE(bitplanes != nullptr);
+
+    CHECK(playfields->view().pixels[0] == 0x00FF0000U);
+    CHECK(sprites->view().pixels[0] == 0x0000FF00U);
+    CHECK(bitplanes->view().pixels[0] != 0x00000000U);
 }
 
 TEST_CASE("agnus attaches odd sprite pairs into the 15-colour sprite palette", "[agnus]") {
@@ -1501,7 +1755,7 @@ TEST_CASE("agnus display DMA steals a sprite stop-line control reload", "[agnus]
     constexpr std::uint32_t sprite7_base = 0x240U;
     constexpr std::uint32_t beam_y = agnus::display_line_origin - 1U;
     constexpr std::uint32_t stop_y = agnus::display_line_origin;
-    constexpr std::uint32_t beam_x = agnus::display_clock_origin + 4U;
+    constexpr std::uint32_t beam_x = agnus::sprite_hstart_origin + 4U;
     const auto pos =
         static_cast<std::uint16_t>(((beam_y & 0xFFU) << 8U) | ((beam_x >> 1U) & 0xFFU));
     const auto ctl = static_cast<std::uint16_t>(
@@ -1534,7 +1788,7 @@ TEST_CASE("agnus display DMA stealing second sprite control word preserves next 
     constexpr std::uint32_t sprite5_base = 0x340U;
     constexpr std::uint32_t beam_y = agnus::display_line_origin - 1U;
     constexpr std::uint32_t stop_y = agnus::display_line_origin;
-    constexpr std::uint32_t beam_x = agnus::display_clock_origin;
+    constexpr std::uint32_t beam_x = agnus::sprite_hstart_origin;
     const auto pos =
         static_cast<std::uint16_t>(((beam_y & 0xFFU) << 8U) | ((beam_x >> 1U) & 0xFFU));
     const auto ctl = static_cast<std::uint16_t>(

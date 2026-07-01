@@ -304,7 +304,8 @@ namespace mnemos::apps::player::adapters {
         }
 
         [[nodiscard]] bool is_tool_backed_archive_path(std::string_view path) {
-            return lowercase_extension(path) == ".7z";
+            const std::string ext = lowercase_extension(path);
+            return ext == ".7z" || ext == ".rar" || ext == ".lha" || ext == ".lzh";
         }
 
         [[nodiscard]] bool extension_matches(std::string_view name,
@@ -871,22 +872,36 @@ namespace mnemos::apps::player::adapters {
                 return std::nullopt;
             }
 
-            std::vector<std::string> entry_names;
+            struct tool_entry final {
+                std::size_t index{};
+                std::string name;
+                bool nested_zip{};
+            };
+            std::vector<tool_entry> entries;
+            std::size_t entry_index = 0U;
             for (std::string& entry : read_text_lines(listing_path)) {
-                if (entry.empty() || entry.back() == '/' ||
-                    !archive_entry_extension_matches(entry, extensions)) {
+                const std::size_t current_index = entry_index++;
+                if (entry.empty() || entry.back() == '/' || archive_entry_is_metadata(entry)) {
                     continue;
                 }
-                entry_names.push_back(std::move(entry));
+                const std::string ext = lowercase_extension(entry);
+                if (archive_entry_extension_matches(entry, extensions)) {
+                    entries.push_back(
+                        tool_entry{.index = current_index, .name = std::move(entry)});
+                } else if (ext == ".zip") {
+                    entries.push_back(tool_entry{
+                        .index = current_index, .name = std::move(entry), .nested_zip = true});
+                }
             }
-            if (entry_names.empty()) {
+            if (entries.empty()) {
                 return std::nullopt;
             }
 
             std::vector<loaded_rom> media;
-            media.reserve(entry_names.size());
-            for (std::size_t i = 0U; i < entry_names.size(); ++i) {
-                const auto entry_arg = shell_quote_arg(entry_names[i]);
+            std::vector<nested_zip_media> nested;
+            media.reserve(entries.size());
+            for (std::size_t i = 0U; i < entries.size(); ++i) {
+                const auto entry_arg = shell_quote_arg(entries[i].name);
                 if (!entry_arg) {
                     return std::nullopt;
                 }
@@ -907,17 +922,41 @@ namespace mnemos::apps::player::adapters {
                 if (!bytes) {
                     return std::nullopt;
                 }
-                auto loaded = decode_gzip_or_raw(std::move(*bytes), entry_names[i]);
-                if (!loaded) {
-                    return std::nullopt;
+                if (entries[i].nested_zip) {
+                    auto archive = compression::zip_archive::open(*bytes);
+                    if (!archive) {
+                        continue;
+                    }
+                    auto inner = load_zip_entries_by_extension(*archive, extensions, 1U);
+                    if (!inner || inner->empty()) {
+                        continue;
+                    }
+                    const auto marker = find_disk_marker(entries[i].name);
+                    nested.push_back(nested_zip_media{.outer_index = entries[i].index,
+                                                      .group_key =
+                                                          nested_disk_group_key(entries[i].name),
+                                                      .disk_number =
+                                                          marker ? marker->number : 0U,
+                                                      .disk_total = marker ? marker->total : 0U,
+                                                      .has_disk_marker = marker.has_value(),
+                                                      .media = std::move(*inner)});
+                } else {
+                    auto loaded = decode_gzip_or_raw(std::move(*bytes), entries[i].name);
+                    if (!loaded) {
+                        return std::nullopt;
+                    }
+                    media.push_back(std::move(*loaded));
                 }
-                media.push_back(std::move(*loaded));
             }
 
-            if (auto complete = choose_complete_direct_disk_sequence(media); complete.has_value()) {
-                return complete;
+            if (!media.empty()) {
+                if (auto complete = choose_complete_direct_disk_sequence(media);
+                    complete.has_value()) {
+                    return complete;
+                }
+                return media;
             }
-            return media;
+            return choose_nested_zip_media(nested);
         }
     } // namespace
 

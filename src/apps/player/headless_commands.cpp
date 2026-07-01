@@ -254,7 +254,6 @@ namespace mnemos::apps::player {
     std::optional<int> run_headless_request(frontend_sdk::player_system* system,
                                             const headless_requests& requests, int argc,
                                             char* argv[]) {
-        using adapters::input_for_frame;
         using adapters::load_save_state_file;
         using adapters::parse_press_events;
         using adapters::save_save_state_file;
@@ -313,9 +312,7 @@ namespace mnemos::apps::player {
             for (std::uint64_t i = 0; i < requests.save_state->frames; ++i) {
                 const std::uint64_t frame = i + 1U;
                 breadcrumb.mark("before_input", frame);
-                if (!press_events.empty()) {
-                    system->apply_input(0, input_for_frame(press_events, frame));
-                }
+                apply_press_events(*system, press_events, frame);
                 apply_disk_swaps(*system, swap_frames, frame);
                 breadcrumb.mark("before_step", frame);
                 system->step_one_frame();

@@ -93,6 +93,12 @@ namespace mnemos::chips::video {
         // display-window registers are programmed against these origins.
         static constexpr std::uint32_t display_clock_origin = 0x81U / 2U; // DIWSTRT.H default
         static constexpr std::uint32_t display_line_origin = 0x2CU;       // DIWSTRT.V default
+        // SPRxPOS/CTL stores an absolute 9-bit low-resolution beam coordinate:
+        // POS bits 7:0 are HSTART bits 8:1 and CTL bit 0 is HSTART bit 0.
+        // The standard display window starts at raw HSTART $081, matching
+        // DIWSTRT.H, so framebuffer X zero subtracts the raw display origin
+        // rather than the colour-clock origin used by VHPOSR.
+        static constexpr std::uint32_t sprite_hstart_origin = 0x81U;
 
         // DMACON bit positions. Bit 15 on write is the SET/CLR selector.
         static constexpr std::uint16_t dmacon_set = 1U << 15U;
@@ -141,6 +147,9 @@ namespace mnemos::chips::video {
         // the vertical-blank window, and the active visible height.
         void set_pal(bool is_pal) noexcept;
         [[nodiscard]] bool is_pal() const noexcept { return is_pal_; }
+        void set_ecs_display_fetch_timing(bool enabled) noexcept {
+            ecs_display_fetch_timing_ = enabled;
+        }
 
         // DMACON write with bit-15 set/clear semantics. Read-only bits
         // (BBUSY, BZERO) are ignored on write.
@@ -222,6 +231,10 @@ namespace mnemos::chips::video {
         void write_sprite_ctl(std::uint32_t sprite, std::uint16_t value) noexcept;
         void write_sprite_data_a(std::uint32_t sprite, std::uint16_t value) noexcept;
         void write_sprite_data_b(std::uint32_t sprite, std::uint16_t value) noexcept;
+        [[nodiscard]] std::uint16_t sprite_pos(std::uint32_t sprite) const noexcept;
+        [[nodiscard]] std::uint16_t sprite_ctl(std::uint32_t sprite) const noexcept;
+        [[nodiscard]] std::uint16_t sprite_data_a(std::uint32_t sprite) const noexcept;
+        [[nodiscard]] std::uint16_t sprite_data_b(std::uint32_t sprite) const noexcept;
 
         // Copper list base pointers + control. COPJMP1/COPJMP2 reload the
         // live program counter. Copper MOVEs cannot target $000-$03e, while
@@ -286,15 +299,41 @@ namespace mnemos::chips::video {
             std::uint32_t beam_clock{};
         };
 
+        enum class sample_layer_kind : std::uint8_t {
+            bitplanes,
+            playfields,
+            sprites,
+        };
+
         class introspection_surface final : public instrumentation::ichip_introspection {
           public:
-            explicit introspection_surface(agnus& owner) noexcept : palette_(owner) {}
+            explicit introspection_surface(agnus& owner) noexcept
+                : palette_(owner),
+                  bitplanes_(owner, "bitplanes", sample_layer_kind::bitplanes),
+                  playfields_(owner, "playfields", sample_layer_kind::playfields),
+                  sprites_(owner, "sprites", sample_layer_kind::sprites) {}
             [[nodiscard]] std::span<instrumentation::debug_layer* const> debug_layers() override {
                 layer_ptr_[0] = &palette_;
+                layer_ptr_[1] = &bitplanes_;
+                layer_ptr_[2] = &playfields_;
+                layer_ptr_[3] = &sprites_;
                 return layer_ptr_;
             }
 
           private:
+            class sample_layer final : public instrumentation::debug_layer {
+              public:
+                sample_layer(agnus& owner, std::string_view name, sample_layer_kind kind) noexcept
+                    : owner_(&owner), name_(name), kind_(kind) {}
+                [[nodiscard]] std::string_view name() const noexcept override { return name_; }
+                [[nodiscard]] frame_buffer_view view() const override;
+
+              private:
+                agnus* owner_;
+                std::string_view name_;
+                sample_layer_kind kind_{};
+            };
+
             class palette_layer final : public instrumentation::debug_layer {
               public:
                 explicit palette_layer(agnus& owner) noexcept : owner_(&owner) {}
@@ -306,11 +345,15 @@ namespace mnemos::chips::video {
             };
 
             palette_layer palette_;
-            std::array<instrumentation::debug_layer*, 1> layer_ptr_{};
+            sample_layer bitplanes_;
+            sample_layer playfields_;
+            sample_layer sprites_;
+            std::array<instrumentation::debug_layer*, 4> layer_ptr_{};
         };
 
         [[nodiscard]] std::uint16_t chip_word(std::uint32_t byte_address) const noexcept;
         [[nodiscard]] std::uint16_t palette_word(std::uint32_t index) const noexcept;
+        [[nodiscard]] frame_buffer_view debug_sample_layer_view(sample_layer_kind kind) const;
         [[nodiscard]] std::uint32_t bitplane_count() const noexcept;
         [[nodiscard]] display_dma_slot
         display_dma_slot_at(std::uint32_t instruction_cycles_before_access) const noexcept;
@@ -333,12 +376,21 @@ namespace mnemos::chips::video {
         void run_copper() noexcept;
         void apply_copper_move(std::uint16_t reg_addr, std::uint16_t value) noexcept;
         void begin_frame_render() noexcept;
+        void capture_sprite_render_pointers() noexcept;
+        void commit_dma_sprite_pointers() noexcept;
         void render_scanline(std::uint32_t beam_line) noexcept;
         void render_sprites(std::uint32_t height) noexcept;
-        void render_dma_sprite(std::uint32_t sprite) noexcept;
+        void render_dma_sprite_line(std::uint32_t sprite, std::uint32_t base_pointer,
+                                    std::uint32_t beam_line) noexcept;
+        void render_dma_sprite(std::uint32_t sprite, std::uint32_t base_pointer,
+                               std::uint32_t pointer_generation, bool render_pixels,
+                               bool commit_pointer) noexcept;
         void render_manual_sprite(std::uint32_t sprite) noexcept;
         void render_sprite_line(std::uint32_t sprite, std::int32_t x, std::uint32_t visible_line,
-                                std::uint16_t data_a, std::uint16_t data_b) noexcept;
+                                std::uint16_t data_a, std::uint16_t data_b,
+                                bool attached_pair) noexcept;
+        void commit_sprite_dma_pointer(std::uint32_t sprite, std::uint32_t byte_address,
+                                       std::uint32_t pointer_generation) noexcept;
         [[nodiscard]] bool playfield_blocks_sprite(std::uint8_t playfields,
                                                    std::uint32_t sprite_group) const noexcept;
         [[nodiscard]] bool collision_bitplane_match(std::uint8_t plane_bits) const noexcept;
@@ -363,8 +415,11 @@ namespace mnemos::chips::video {
             static_cast<std::size_t>(framebuffer_stride) * visible_height_pal);
         std::vector<std::uint16_t> sprite_sample_ = std::vector<std::uint16_t>(
             static_cast<std::size_t>(framebuffer_stride) * visible_height_pal);
+        std::vector<std::uint8_t> sprite_attach_sample_ = std::vector<std::uint8_t>(
+            static_cast<std::size_t>(framebuffer_stride) * visible_height_pal);
         // The decoded palette swatch debug view, rebuilt on demand.
         mutable std::vector<std::uint32_t> palette_sheet_;
+        mutable std::vector<std::uint32_t> sample_layer_sheet_;
 
         std::span<const std::uint8_t> chip_ram_{};
         std::span<const std::uint8_t> palette_{};
@@ -376,9 +431,11 @@ namespace mnemos::chips::video {
 
         // Beam generator.
         bool is_pal_{true};
+        bool ecs_display_fetch_timing_{};
         std::uint32_t scanline_{};
         std::uint32_t color_clock_{};
         bool long_frame_{};
+        std::uint32_t frame_width_{visible_width_lores};
         bool vblank_active_{};
         bool hblank_active_{};
 
@@ -397,6 +454,10 @@ namespace mnemos::chips::video {
         std::uint16_t ddfstop_{};
 
         std::array<sprite_state, max_sprites> sprite_{};
+        std::array<std::uint32_t, max_sprites> sprite_pointer_generation_{};
+        std::array<std::uint32_t, max_sprites> sprite_render_pointer_{};
+        std::array<std::uint32_t, max_sprites> sprite_render_pointer_generation_{};
+        bool sprite_render_pointers_captured_{};
 
         // Copper.
         std::uint32_t cop1lc_{};

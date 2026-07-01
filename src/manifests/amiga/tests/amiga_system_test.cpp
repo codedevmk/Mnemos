@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <vector>
 
 namespace {
@@ -115,6 +116,25 @@ namespace {
         sys.bus.write8(address + 1U, static_cast<std::uint8_t>(value));
     }
 
+    [[nodiscard]] constexpr std::uint16_t sprite_pos_word(std::uint32_t visible_y,
+                                                          std::uint32_t visible_x) noexcept {
+        const std::uint32_t beam_y = agnus::display_line_origin + visible_y;
+        const std::uint32_t beam_x = agnus::sprite_hstart_origin + visible_x;
+        return static_cast<std::uint16_t>(((beam_y & 0xFFU) << 8U) | ((beam_x >> 1U) & 0xFFU));
+    }
+
+    [[nodiscard]] constexpr std::uint16_t sprite_ctl_word(std::uint32_t visible_y,
+                                                          std::uint32_t visible_x,
+                                                          std::uint32_t height) noexcept {
+        const std::uint32_t beam_y = agnus::display_line_origin + visible_y;
+        const std::uint32_t beam_x = agnus::sprite_hstart_origin + visible_x;
+        const std::uint32_t stop_y = beam_y + height;
+        return static_cast<std::uint16_t>(
+            ((stop_y & 0xFFU) << 8U) | ((beam_x & 0x01U) != 0U ? 0x0001U : 0x0000U) |
+            ((stop_y & 0x100U) != 0U ? 0x0002U : 0x0000U) |
+            ((beam_y & 0x100U) != 0U ? 0x0004U : 0x0000U));
+    }
+
     void assign_first_zorro2_board(amiga_system& sys, std::uint8_t base_page = 0x20U) {
         REQUIRE(sys.zorro2_autoconfig_pending());
         sys.bus.write8(amiga_system::zorro2_autoconfig_base + 0x4AU,
@@ -132,6 +152,16 @@ namespace {
         sys.kickstart_rom[offset + 1U] = static_cast<std::uint8_t>(value >> 16U);
         sys.kickstart_rom[offset + 2U] = static_cast<std::uint8_t>(value >> 8U);
         sys.kickstart_rom[offset + 3U] = static_cast<std::uint8_t>(value);
+    }
+
+    void append_be16(std::vector<std::uint8_t>& out, std::uint16_t value) {
+        out.push_back(static_cast<std::uint8_t>(value >> 8U));
+        out.push_back(static_cast<std::uint8_t>(value));
+    }
+
+    void append_be32(std::vector<std::uint8_t>& out, std::uint32_t value) {
+        append_be16(out, static_cast<std::uint16_t>(value >> 16U));
+        append_be16(out, static_cast<std::uint16_t>(value));
     }
 
     [[nodiscard]] std::uint16_t read_chip_word(const amiga_system& sys,
@@ -163,6 +193,49 @@ namespace {
     [[nodiscard]] std::uint16_t read_track_word(const std::vector<std::uint8_t>& data,
                                                 std::size_t offset) noexcept {
         return static_cast<std::uint16_t>((data[offset + 0U] << 8U) | data[offset + 1U]);
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t>
+    extended_adf_with_raw_side(std::span<const std::uint8_t> raw_track) {
+        constexpr std::size_t track_count = amiga_system::floppy_track_count + 6U;
+        std::vector<std::uint8_t> image{};
+        image.insert(image.end(), {'U', 'A', 'E', '-', '1', 'A', 'D', 'F'});
+        append_be16(image, 0U); // reserved flags
+        append_be16(image, static_cast<std::uint16_t>(track_count));
+
+        for (std::size_t track = 0U; track < track_count; ++track) {
+            append_be16(image, 0U); // reserved
+            if (track == 1U) {
+                append_be16(image, 1U); // raw MFM track
+                append_be32(image, static_cast<std::uint32_t>(raw_track.size()));
+                append_be32(image, static_cast<std::uint32_t>(raw_track.size() * 8U));
+            } else if (track < amiga_system::floppy_track_count) {
+                append_be16(image, 0U); // normal AmigaDOS track
+                append_be32(image,
+                            static_cast<std::uint32_t>(amiga_system::floppy_sectors_per_track *
+                                                       amiga_system::floppy_sector_size));
+                append_be32(image,
+                            static_cast<std::uint32_t>(amiga_system::floppy_sectors_per_track *
+                                                       amiga_system::floppy_sector_size * 8U));
+            } else {
+                append_be16(image, 1U); // zero-length overtrack placeholder
+                append_be32(image, 0U);
+                append_be32(image, 0U);
+            }
+        }
+
+        for (std::size_t track = 0U; track < amiga_system::floppy_track_count; ++track) {
+            if (track == 1U) {
+                image.insert(image.end(), raw_track.begin(), raw_track.end());
+                continue;
+            }
+            for (std::size_t byte = 0U;
+                 byte < amiga_system::floppy_sectors_per_track * amiga_system::floppy_sector_size;
+                 ++byte) {
+                image.push_back(static_cast<std::uint8_t>((track + byte) & 0xFFU));
+            }
+        }
+        return image;
     }
 
     template <std::size_t N>
@@ -396,6 +469,32 @@ TEST_CASE("amiga floppy drive profile preserves public DD geometry", "[manifests
     CHECK(amiga_system::floppy_sector_size == amiga_floppy_sector_size);
     CHECK(amiga_system::floppy_dd_size == amiga_floppy_dd_size);
     CHECK(amiga_system::floppy_drive_count == amiga_floppy_drive_count);
+}
+
+TEST_CASE("amiga floppy mounts UAE-1ADF extended images with raw MFM tracks",
+          "[manifests][amiga500][disk]") {
+    const std::array<std::uint8_t, 8> raw_track{
+        0x44U, 0x89U, 0xAAU, 0x55U, 0x10U, 0x21U, 0x32U, 0x43U};
+    const std::vector<std::uint8_t> extended = extended_adf_with_raw_side(raw_track);
+    REQUIRE(amiga_system::supported_floppy_image(extended));
+
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+    REQUIRE(sys->mount_floppy(extended));
+    CHECK(sys->floppy_loaded());
+    CHECK(sys->floppy_size() == amiga_system::floppy_dd_size);
+    CHECK(sys->floppy_drives[0U].image[0U] == 0U);
+    CHECK(sys->floppy_drives[0U].image[amiga_system::floppy_sectors_per_track *
+                                      amiga_system::floppy_sector_size * 2U] == 2U);
+    REQUIRE(sys->floppy_drives[0U].raw_track_cache[1U].size() == raw_track.size());
+    CHECK(std::equal(raw_track.begin(), raw_track.end(),
+                     sys->floppy_drives[0U].raw_track_cache[1U].begin()));
+
+    select_df0(*sys);
+    sys->cia_b.write(0x01U, 0x71U); // Keep DF0 selected and motor on, select side 1.
+    CHECK(sys->floppy_side() == 1U);
+    CHECK(sys->floppy_drives[0U].track_stream ==
+          std::vector<std::uint8_t>(raw_track.begin(), raw_track.end()));
 }
 
 TEST_CASE("amiga input helpers preserve public controller semantics",
@@ -1102,7 +1201,7 @@ TEST_CASE("amiga500 BPLCON0 HIRES custom register exposes 640-pixel OCS rows",
     sys->write_custom_word(0x08EU, 0x2C81U);
     sys->write_custom_word(0x090U, 0xF4C1U);
     sys->write_custom_word(0x092U, 0x003CU);
-    sys->write_custom_word(0x094U, 0x00D4U);
+    sys->write_custom_word(0x094U, 0x00D0U);
     sys->write_custom_word(0x0E0U, 0x0000U); // BPL1PTH
     sys->write_custom_word(0x0E2U, 0x0000U); // BPL1PTL
     sys->write_custom_word(0x096U,
@@ -1117,6 +1216,36 @@ TEST_CASE("amiga500 BPLCON0 HIRES custom register exposes 640-pixel OCS rows",
     CHECK(frame.effective_stride() == agnus::framebuffer_stride);
     CHECK(frame.pixels[0] == 0x00FF0000U);
     CHECK(frame.pixels[agnus::visible_width_hires - 1U] == 0x00FF0000U);
+}
+
+TEST_CASE("amiga500plus ECS high-resolution DDF 3c-d4 advances by forty words",
+          "[manifests][amiga500plus][video]") {
+    const amiga_config config{.model = amiga_model::amiga500_plus};
+    auto sys = assemble_amiga(tiny_kickstart(), config);
+    REQUIRE(sys != nullptr);
+
+    write_chip_word(*sys, 0x0000U, 0x8000U);
+    write_chip_word(*sys, 40U * 2U, 0x8000U);
+    sys->write_custom_word(0x180U, 0x000FU); // COLOR00 = blue backdrop
+    sys->write_custom_word(0x182U, 0x0F00U); // COLOR01 = red foreground
+    sys->write_custom_word(0x100U, 0x9000U); // HIRES | BPU = 1
+    sys->write_custom_word(0x08EU, 0x2C81U);
+    sys->write_custom_word(0x090U, 0xF4C1U);
+    sys->write_custom_word(0x092U, 0x003CU);
+    sys->write_custom_word(0x094U, 0x00D4U);
+    sys->write_custom_word(0x0E0U, 0x0000U); // BPL1PTH
+    sys->write_custom_word(0x0E2U, 0x0000U); // BPL1PTL
+    sys->write_custom_word(0x096U,
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                      agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    sys->agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) *
+                    agnus::scanlines_pal);
+    const auto frame = sys->agnus.framebuffer();
+
+    CHECK(frame.width == agnus::visible_width_hires);
+    CHECK(frame.pixels[0] == 0x00FF0000U);
+    CHECK(frame.pixels[agnus::framebuffer_stride] == 0x00FF0000U);
 }
 
 TEST_CASE("amiga500 DMACON routes audio DMA to Paula", "[manifests][amiga500]") {
@@ -1138,6 +1267,33 @@ TEST_CASE("amiga500 DMACON routes audio DMA to Paula", "[manifests][amiga500]") 
     std::array<std::int16_t, 4> samples{};
     sys->paula.generate(samples);
     CHECK(samples[0] != 0);
+}
+
+TEST_CASE("amiga500 Agnus cycle callback clocks Paula capture",
+          "[manifests][amiga500][audio]") {
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+
+    sys->paula.enable_audio_capture(true);
+    sys->bus.write8(0x000100U, 0x10U);
+    sys->bus.write8(0x000101U, 0xF0U);
+    sys->write_custom_word(0x0A0U, 0x0000U); // AUD0LCH
+    sys->write_custom_word(0x0A2U, 0x0100U); // AUD0LCL
+    sys->write_custom_word(0x0A4U, 0x0001U); // AUD0LEN
+    sys->write_custom_word(0x0A6U, 0x0001U); // AUD0PER
+    sys->write_custom_word(0x0A8U, 0x0040U); // AUD0VOL
+    sys->write_custom_word(0x096U,
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                      agnus::dmacon_dmaen | agnus::dmacon_aud0en));
+
+    sys->agnus.tick(8U);
+
+    REQUIRE(sys->paula.pending_samples() >= 2U);
+    std::array<std::int16_t, 16> samples{};
+    const std::size_t pairs = sys->paula.drain_samples(samples.data(), samples.size() / 2U);
+    REQUIRE(pairs > 0U);
+    CHECK(std::any_of(samples.begin(), samples.begin() + static_cast<std::ptrdiff_t>(pairs * 2U),
+                      [](std::int16_t sample) { return sample != 0; }));
 }
 
 TEST_CASE("amiga500 Paula buffer wrap requests and acknowledges AUDx interrupts",
@@ -2960,7 +3116,7 @@ TEST_CASE("amiga500 display DMA stalls blitter busy countdown",
     sys->write_custom_word(0x08EU, 0x2C81U);
     sys->write_custom_word(0x090U, 0xF4C1U);
     sys->write_custom_word(0x092U, 0x003CU);
-    sys->write_custom_word(0x094U, 0x00D4U);
+    sys->write_custom_word(0x094U, 0x00D0U);
     sys->write_custom_word(
         0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit | agnus::dmacon_dmaen |
                                            agnus::dmacon_bplen | agnus::dmacon_blten));
@@ -3117,7 +3273,7 @@ TEST_CASE("amiga500 high-resolution display DMA stalls CPU chip-RAM bus cycles d
         sys->write_custom_word(0x08EU, 0x2C81U);
         sys->write_custom_word(0x090U, 0xF4C1U);
         sys->write_custom_word(0x092U, 0x003CU);
-        sys->write_custom_word(0x094U, 0x00D4U);
+        sys->write_custom_word(0x094U, 0x00D0U);
         sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                                   agnus::dmacon_dmaen |
                                                                   agnus::dmacon_bplen));
@@ -3191,7 +3347,7 @@ TEST_CASE("amiga500 high-resolution display DMA charges one lockout across longw
         sys->write_custom_word(0x08EU, 0x2C81U);
         sys->write_custom_word(0x090U, 0xF4C1U);
         sys->write_custom_word(0x092U, 0x003CU);
-        sys->write_custom_word(0x094U, 0x00D4U);
+        sys->write_custom_word(0x094U, 0x00D0U);
         sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                                   agnus::dmacon_dmaen |
                                                                   agnus::dmacon_bplen));
@@ -3244,7 +3400,7 @@ TEST_CASE("amiga500 display DMA wait is already residual after prior instruction
     sys->write_custom_word(0x08EU, 0x2C81U);
     sys->write_custom_word(0x090U, 0xF4C1U);
     sys->write_custom_word(0x092U, 0x003CU);
-    sys->write_custom_word(0x094U, 0x00D4U);
+    sys->write_custom_word(0x094U, 0x00D0U);
     sys->write_custom_word(0x096U,
                            static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_bplen));
@@ -3359,7 +3515,7 @@ TEST_CASE("amiga500 sprite DMA stalls CPU chip-RAM bus cycles during sprite slot
         write_chip_word(*sys, data_address, 0x2468U);
         sys->overlay_active = false;
 
-        write_chip_word(*sys, sprite_base + 0U, 0x2C20U); // SPR0POS: line 0, x 0.
+        write_chip_word(*sys, sprite_base + 0U, 0x2C40U); // SPR0POS: line 0, x 0.
         write_chip_word(*sys, sprite_base + 2U, 0x2E00U); // Two visible lines.
         write_chip_word(*sys, sprite_base + 4U, 0x8000U);
         write_chip_word(*sys, sprite_base + 6U, 0x0000U);
@@ -3423,7 +3579,7 @@ TEST_CASE("amiga500 three-plane high-resolution display DMA steals CPU-open slot
         sys->write_custom_word(0x08EU, 0x2C81U);
         sys->write_custom_word(0x090U, 0xF4C1U);
         sys->write_custom_word(0x092U, 0x003CU);
-        sys->write_custom_word(0x094U, 0x00D4U);
+        sys->write_custom_word(0x094U, 0x00D0U);
         sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                                   agnus::dmacon_dmaen |
                                                                   agnus::dmacon_bplen));
@@ -3818,8 +3974,8 @@ TEST_CASE("amiga500 custom sprite registers render through Agnus", "[manifests][
 
     sys->write_custom_word(0x1A2U, 0x0F00U); // COLOR17 = red
     sys->write_custom_word(0x1A4U, 0x00F0U); // COLOR18 = green
-    sys->write_custom_word(0x140U, 0x2C20U); // SPR0POS: visible line 0, x 0.
-    sys->write_custom_word(0x142U, 0x2D00U); // SPR0CTL: one visible line.
+    sys->write_custom_word(0x140U, sprite_pos_word(0U, 0U));
+    sys->write_custom_word(0x142U, sprite_ctl_word(0U, 0U, 1U));
     sys->write_custom_word(0x146U, 0x4000U); // SPR0DATB: pixel 1 high bit.
     sys->write_custom_word(0x144U, 0x8000U); // SPR0DATA: pixel 0 low bit, arm.
 
@@ -3831,6 +3987,27 @@ TEST_CASE("amiga500 custom sprite registers render through Agnus", "[manifests][
     CHECK(frame.pixels[1] == 0x0000FF00U);
 }
 
+TEST_CASE("amiga500 byte writes to custom sprite registers preserve the companion byte",
+          "[manifests][amiga500][video]") {
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+
+    sys->write_custom_word(0x1A2U, 0x0F00U); // COLOR17 = red.
+    const std::uint16_t pos = sprite_pos_word(0U, 0U);
+    const std::uint16_t ctl = sprite_ctl_word(0U, 0U, 1U);
+    sys->write_custom_byte(amiga_system::custom_base + 0x140U, static_cast<std::uint8_t>(pos >> 8U));
+    sys->write_custom_byte(amiga_system::custom_base + 0x141U, static_cast<std::uint8_t>(pos));
+    sys->write_custom_byte(amiga_system::custom_base + 0x142U, static_cast<std::uint8_t>(ctl >> 8U));
+    sys->write_custom_byte(amiga_system::custom_base + 0x143U, static_cast<std::uint8_t>(ctl));
+    sys->write_custom_byte(amiga_system::custom_base + 0x144U, 0x80U);
+    sys->write_custom_byte(amiga_system::custom_base + 0x145U, 0x00U);
+
+    sys->agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) *
+                    agnus::scanlines_pal);
+
+    CHECK(sys->agnus.framebuffer().pixels[0] == 0x00FF0000U);
+}
+
 TEST_CASE("amiga500 sprites stay low-resolution on high-resolution custom display",
           "[manifests][amiga500][video]") {
     auto sys = assemble_amiga(tiny_kickstart());
@@ -3839,8 +4016,8 @@ TEST_CASE("amiga500 sprites stay low-resolution on high-resolution custom displa
     sys->write_custom_word(0x100U, 0x8000U); // HIRES with no bitplanes.
     sys->write_custom_word(0x1A2U, 0x0F00U); // COLOR17 = red.
     sys->write_custom_word(0x1A4U, 0x00F0U); // COLOR18 = green.
-    sys->write_custom_word(0x140U, 0x2C20U); // SPR0POS: visible line 0, x 1 lores.
-    sys->write_custom_word(0x142U, 0x2D01U); // SPR0CTL: one line, odd hstart bit.
+    sys->write_custom_word(0x140U, sprite_pos_word(0U, 1U));
+    sys->write_custom_word(0x142U, sprite_ctl_word(0U, 1U, 1U));
     sys->write_custom_word(0x146U, 0x4000U); // SPR0DATB: second sprite pixel.
     sys->write_custom_word(0x144U, 0x8000U); // SPR0DATA: first sprite pixel, arm.
 
@@ -3863,8 +4040,8 @@ TEST_CASE("amiga500 sprite DMA pointers advance until custom registers rewrite t
     REQUIRE(sys != nullptr);
 
     constexpr std::uint32_t sprite_base = 0x0400U;
-    write_chip_word(*sys, sprite_base + 0U, 0x2C20U); // SPR0POS: visible line 0, x 0.
-    write_chip_word(*sys, sprite_base + 2U, 0x2D00U); // SPR0CTL: one visible line.
+    write_chip_word(*sys, sprite_base + 0U, sprite_pos_word(0U, 0U));
+    write_chip_word(*sys, sprite_base + 2U, sprite_ctl_word(0U, 0U, 1U));
     write_chip_word(*sys, sprite_base + 4U, 0x8000U);
     write_chip_word(*sys, sprite_base + 6U, 0x0000U);
     write_chip_word(*sys, sprite_base + 8U, 0x0000U);
@@ -3890,6 +4067,44 @@ TEST_CASE("amiga500 sprite DMA pointers advance until custom registers rewrite t
     sys->agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) *
                     agnus::scanlines_pal);
     CHECK(sys->agnus.framebuffer().pixels[0] == 0x00FF0000U);
+}
+
+TEST_CASE("amiga500 sprite DMA descriptors carry attached-pair palette state",
+          "[manifests][amiga500][video]") {
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+
+    constexpr std::uint32_t sprite0_base = 0x0400U;
+    constexpr std::uint32_t sprite1_base = 0x0500U;
+    write_chip_word(*sys, sprite0_base + 0U, sprite_pos_word(0U, 0U));
+    write_chip_word(*sys, sprite0_base + 2U, sprite_ctl_word(0U, 0U, 1U));
+    write_chip_word(*sys, sprite0_base + 4U, 0x8000U); // Low attached bits = 1.
+    write_chip_word(*sys, sprite0_base + 6U, 0x0000U);
+    write_chip_word(*sys, sprite0_base + 8U, 0x0000U);
+    write_chip_word(*sys, sprite0_base + 10U, 0x0000U);
+
+    write_chip_word(*sys, sprite1_base + 0U, sprite_pos_word(0U, 0U));
+    write_chip_word(*sys, sprite1_base + 2U,
+                    static_cast<std::uint16_t>(sprite_ctl_word(0U, 0U, 1U) | 0x0080U));
+    write_chip_word(*sys, sprite1_base + 4U, 0x0000U);
+    write_chip_word(*sys, sprite1_base + 6U, 0x8000U); // High attached bits = 2.
+    write_chip_word(*sys, sprite1_base + 8U, 0x0000U);
+    write_chip_word(*sys, sprite1_base + 10U, 0x0000U);
+
+    sys->write_custom_word(0x1A2U, 0x0F00U); // COLOR17 = red if not attached.
+    sys->write_custom_word(0x1B2U, 0x000FU); // COLOR25 = blue if attached value 9.
+    sys->write_custom_word(0x120U, 0x0000U); // SPR0PTH.
+    sys->write_custom_word(0x122U, static_cast<std::uint16_t>(sprite0_base));
+    sys->write_custom_word(0x124U, 0x0000U); // SPR1PTH.
+    sys->write_custom_word(0x126U, static_cast<std::uint16_t>(sprite1_base));
+    sys->write_custom_word(0x096U,
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                      agnus::dmacon_dmaen | agnus::dmacon_spren));
+
+    sys->agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) *
+                    agnus::scanlines_pal);
+
+    CHECK(sys->agnus.framebuffer().pixels[0] == 0x000000FFU);
 }
 
 TEST_CASE("amiga500 bitplane DMA pointers advance until custom registers rewrite them",
@@ -3925,8 +4140,8 @@ TEST_CASE("amiga500 BPLCON2 custom priority places sprites ahead of a playfield"
     program_one_plane_display(*sys);
     sys->write_custom_word(0x1A2U, 0x00F0U); // COLOR17 = green sprite.
     sys->write_custom_word(0x104U, 0x0020U); // PF2 priority slot 4: behind sprites.
-    sys->write_custom_word(0x140U, 0x2C20U);
-    sys->write_custom_word(0x142U, 0x2D00U);
+    sys->write_custom_word(0x140U, sprite_pos_word(0U, 0U));
+    sys->write_custom_word(0x142U, sprite_ctl_word(0U, 0U, 1U));
     sys->write_custom_word(0x144U, 0x8000U);
 
     sys->agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) *
@@ -3945,11 +4160,11 @@ TEST_CASE("amiga500 CLXCON and CLXDAT expose OCS collision latches",
     sys->bus.write8(0x000001U, 0x00U);
     program_one_plane_display(*sys);
     sys->write_custom_word(0x098U, 0x0041U); // Include BPL1 and require BPL1=1.
-    sys->write_custom_word(0x140U, 0x2C20U); // SPR0 over the first playfield pixel.
-    sys->write_custom_word(0x142U, 0x2D00U);
+    sys->write_custom_word(0x140U, sprite_pos_word(0U, 0U)); // SPR0 over first playfield pixel.
+    sys->write_custom_word(0x142U, sprite_ctl_word(0U, 0U, 1U));
     sys->write_custom_word(0x144U, 0x8000U);
-    sys->write_custom_word(0x150U, 0x2C20U); // SPR2 overlaps SPR0.
-    sys->write_custom_word(0x152U, 0x2D00U);
+    sys->write_custom_word(0x150U, sprite_pos_word(0U, 0U)); // SPR2 overlaps SPR0.
+    sys->write_custom_word(0x152U, sprite_ctl_word(0U, 0U, 1U));
     sys->write_custom_word(0x154U, 0x8000U);
 
     sys->agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) *

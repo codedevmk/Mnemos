@@ -287,9 +287,10 @@ namespace mnemos::apps::player::adapters::amiga {
                 .cache_hint = std::move(cache_hint)};
         }
 
-        [[nodiscard]] std::string unsupported_adf_size_detail(std::size_t byte_count) {
+        [[nodiscard]] std::string unsupported_adf_image_detail(std::size_t byte_count) {
             return "expected " + std::to_string(manifests::amiga::amiga_system::floppy_dd_size) +
-                   "-byte standard DD ADF; got " + std::to_string(byte_count) + " bytes";
+                   "-byte standard DD ADF or supported UAE-1ADF extended ADF; got " +
+                   std::to_string(byte_count) + " bytes";
         }
 
         [[nodiscard]] const char* model_family_id(manifests::amiga::amiga_model model) noexcept {
@@ -548,7 +549,7 @@ namespace mnemos::apps::player::adapters::amiga {
         using raw_key_bitmap =
             std::array<bool, manifests::amiga::amiga_system::keyboard_raw_key_count>;
 
-        constexpr std::uint32_t amiga_adapter_state_version = 1U;
+        constexpr std::uint32_t amiga_adapter_state_version = 2U;
         constexpr double audio_fraction_scale = 4294967295.0;
         constexpr std::uint16_t hid_caps_lock = 0x39U;
 
@@ -820,6 +821,50 @@ namespace mnemos::apps::player::adapters::amiga {
             }
         }
 
+        [[nodiscard]] bool traced_sprite_register(std::uint32_t reg, bool write) noexcept {
+            if (!write) {
+                return false;
+            }
+            const std::uint32_t normalized = reg & 0x01FEU;
+            return (normalized >= 0x120U && normalized < 0x140U) ||
+                   (normalized >= 0x140U && normalized < 0x180U);
+        }
+
+        [[nodiscard]] bool traced_display_register(std::uint32_t reg, bool write) noexcept {
+            if (!write) {
+                return false;
+            }
+            const std::uint32_t normalized = reg & 0x01FEU;
+            return (normalized >= 0x08EU && normalized <= 0x094U) ||
+                   (normalized >= 0x0E0U && normalized < 0x0F8U) ||
+                   (normalized >= 0x100U && normalized <= 0x10AU);
+        }
+
+        [[nodiscard]] const char* sprite_register_name(std::uint32_t reg) noexcept {
+            const std::uint32_t normalized = reg & 0x01FEU;
+            if (normalized >= 0x120U && normalized < 0x140U) {
+                return ((normalized - 0x120U) & 0x02U) == 0U ? "PTH" : "PTL";
+            }
+            switch ((normalized - 0x140U) & 0x06U) {
+            case 0x00U:
+                return "POS";
+            case 0x02U:
+                return "CTL";
+            case 0x04U:
+                return "DATAA";
+            case 0x06U:
+                return "DATAB";
+            default:
+                return "?";
+            }
+        }
+
+        [[nodiscard]] std::uint32_t sprite_register_index(std::uint32_t reg) noexcept {
+            const std::uint32_t normalized = reg & 0x01FEU;
+            return normalized < 0x140U ? ((normalized - 0x120U) / 4U)
+                                       : ((normalized - 0x140U) / 8U);
+        }
+
         [[nodiscard]] bool normalized_custom_register(std::uint32_t address,
                                                       std::uint32_t& reg) noexcept {
             const std::uint32_t a = address & 0x00FFFFFFU;
@@ -857,6 +902,12 @@ namespace mnemos::apps::player::adapters::amiga {
             if (traced_blitter_register(reg, write)) {
                 return true;
             }
+            if (traced_sprite_register(reg, write)) {
+                return true;
+            }
+            if (traced_display_register(reg, write)) {
+                return true;
+            }
             if (reg == 0x00DFF080U || reg == 0x00DFF082U || reg == 0x00DFF084U ||
                 reg == 0x00DFF086U || reg == 0x00DFF088U || reg == 0x00DFF08AU ||
                 reg == 0x00DFF096U || reg == 0x00DFF09AU || reg == 0x00DFF09CU ||
@@ -867,6 +918,12 @@ namespace mnemos::apps::player::adapters::amiga {
         }
 
         [[nodiscard]] bool traced_copper_write_register(std::uint16_t reg) noexcept {
+            if (traced_sprite_register(reg, true)) {
+                return true;
+            }
+            if (traced_display_register(reg, true)) {
+                return true;
+            }
             switch (reg & 0x01FEU) {
             case 0x080U:
             case 0x082U:
@@ -927,6 +984,8 @@ namespace mnemos::apps::player::adapters::amiga {
             writer.u16(state.paddle);
             writer.u16(std::bit_cast<std::uint16_t>(state.aim_x));
             writer.u16(std::bit_cast<std::uint16_t>(state.aim_y));
+            writer.u16(std::bit_cast<std::uint16_t>(state.mouse_delta_x));
+            writer.u16(std::bit_cast<std::uint16_t>(state.mouse_delta_y));
             writer.boolean(state.trigger);
             for (const bool pressed : state.keyboard_usage) {
                 writer.boolean(pressed);
@@ -954,6 +1013,8 @@ namespace mnemos::apps::player::adapters::amiga {
             state.paddle = reader.u16();
             state.aim_x = std::bit_cast<std::int16_t>(reader.u16());
             state.aim_y = std::bit_cast<std::int16_t>(reader.u16());
+            state.mouse_delta_x = std::bit_cast<std::int16_t>(reader.u16());
+            state.mouse_delta_y = std::bit_cast<std::int16_t>(reader.u16());
             state.trigger = reader.boolean();
             for (bool& pressed : state.keyboard_usage) {
                 pressed = reader.boolean();
@@ -1297,11 +1358,11 @@ namespace mnemos::apps::player::adapters::amiga {
                 auto disk =
                     make_media("disk." + std::to_string(i), label, disks[i].size(), provider_id,
                                disks.size() == 1U ? "resident" : "resident_removable");
-                if (disks[i].size() != manifests::amiga::amiga_system::floppy_dd_size) {
+                if (!manifests::amiga::amiga_system::supported_floppy_image(disks[i])) {
                     disk.revision_supported = false;
                     disk.validation_issues.push_back(frontend_sdk::media_validation_issue{
                         .code = "media.amiga.adf.unsupported_size",
-                        .detail = unsupported_adf_size_detail(disks[i].size())});
+                        .detail = unsupported_adf_image_detail(disks[i].size())});
                 }
                 media.media.push_back(std::move(disk));
             }
@@ -1600,6 +1661,24 @@ namespace mnemos::apps::player::adapters::amiga {
                                  regs.a[1], regs.a[6]);
                     return;
                 }
+                if (custom_reg && traced_sprite_register(reg, ev.write)) {
+                    const auto regs = sys_->cpu.cpu_registers();
+                    const std::uint32_t sprite = sprite_register_index(reg);
+                    std::fprintf(stderr,
+                                 "[amiga-sprite] pc=%06X beam=%03u:%03u W %06X %02X "
+                                 "spr=%u reg=%s ptr=%06X pos=%04X ctl=%04X data=%04X/%04X "
+                                 "dmacon=%04X dmaconr=%04X d0=%08X d1=%08X a0=%08X a1=%08X "
+                                 "a6=%08X\n",
+                                 sys_->cpu.current_instruction_addr(), sys_->agnus.beam_line(),
+                                 sys_->agnus.beam_clock(), ev.address, ev.value, sprite,
+                                 sprite_register_name(reg), sys_->agnus.sprite_pointer(sprite),
+                                 sys_->agnus.sprite_pos(sprite), sys_->agnus.sprite_ctl(sprite),
+                                 sys_->agnus.sprite_data_a(sprite),
+                                 sys_->agnus.sprite_data_b(sprite), sys_->agnus.dmacon(),
+                                 sys_->agnus.read_dmaconr(), regs.d[0], regs.d[1], regs.a[0],
+                                 regs.a[1], regs.a[6]);
+                    return;
+                }
                 if (custom_reg && reg == 0x00DFF096U) {
                     const auto regs = sys_->cpu.cpu_registers();
                     const bool audio_dma = sys_->agnus.dma_audio(0) || sys_->agnus.dma_audio(1) ||
@@ -1666,6 +1745,23 @@ namespace mnemos::apps::player::adapters::amiga {
                 const std::uint64_t before_bltcyc = sys_->blitter_cycles_remaining;
                 sys_->write_custom_word(reg, value);
                 if (!trace_enabled || !traced_copper_write_register(normalized)) {
+                    return;
+                }
+                if (traced_sprite_register(normalized, true)) {
+                    const std::uint32_t sprite = sprite_register_index(normalized);
+                    std::fprintf(stderr,
+                                 "[amiga-copper-sprite] beam=%03u:%03u reg=%03X value=%04X "
+                                 "spr=%u name=%s ptr=%06X pos=%04X ctl=%04X data=%04X/%04X "
+                                 "pc=%06X->%06X dmacon=%04X->%04X dmaconr=%04X->%04X "
+                                 "intena=%04X intreq=%04X irq=%u\n",
+                                 sys_->agnus.beam_line(), sys_->agnus.beam_clock(), normalized,
+                                 value, sprite, sprite_register_name(normalized),
+                                 sys_->agnus.sprite_pointer(sprite), sys_->agnus.sprite_pos(sprite),
+                                 sys_->agnus.sprite_ctl(sprite), sys_->agnus.sprite_data_a(sprite),
+                                 sys_->agnus.sprite_data_b(sprite), before_coppc,
+                                 sys_->agnus.copper_pc(), before_dmacon, sys_->agnus.dmacon(),
+                                 before_dmaconr, sys_->agnus.read_dmaconr(), sys_->intena,
+                                 sys_->visible_intreq(), board_irq_level(*sys_));
                     return;
                 }
                 std::fprintf(stderr,
@@ -1745,20 +1841,24 @@ namespace mnemos::apps::player::adapters::amiga {
         ports_[static_cast<std::size_t>(port)] = state;
 
         if (port == 3) {
-            std::int16_t delta_x = 0;
-            std::int16_t delta_y = 0;
-            if (state.aim_x < 0 || state.aim_y < 0) {
+            std::int16_t delta_x = state.mouse_delta_x;
+            std::int16_t delta_y = state.mouse_delta_y;
+            if (delta_x != 0 || delta_y != 0) {
                 mouse_position_valid_ = false;
             } else {
-                if (mouse_position_valid_) {
-                    delta_x = static_cast<std::int16_t>(static_cast<int>(state.aim_x) -
-                                                        static_cast<int>(mouse_x_));
-                    delta_y = static_cast<std::int16_t>(static_cast<int>(state.aim_y) -
-                                                        static_cast<int>(mouse_y_));
+                if (state.aim_x < 0 || state.aim_y < 0) {
+                    mouse_position_valid_ = false;
+                } else {
+                    if (mouse_position_valid_) {
+                        delta_x = static_cast<std::int16_t>(static_cast<int>(state.aim_x) -
+                                                            static_cast<int>(mouse_x_));
+                        delta_y = static_cast<std::int16_t>(static_cast<int>(state.aim_y) -
+                                                            static_cast<int>(mouse_y_));
+                    }
+                    mouse_position_valid_ = true;
+                    mouse_x_ = state.aim_x;
+                    mouse_y_ = state.aim_y;
                 }
-                mouse_position_valid_ = true;
-                mouse_x_ = state.aim_x;
-                mouse_y_ = state.aim_y;
             }
             sys_->set_mouse(0U, delta_x, delta_y, state.trigger, state.a, state.b);
             return;
@@ -1922,7 +2022,7 @@ namespace mnemos::apps::player::adapters::amiga {
 
         runtime::save_target target;
         target.manifest_id = model_family_id(adapter.model_);
-        target.manifest_rev = 4U;
+        target.manifest_rev = 6U;
         target.master_cycle = sched.master_cycle();
         target.chips.push_back({"cpu", &sys.cpu});
         target.chips.push_back({"agnus", &sys.agnus});

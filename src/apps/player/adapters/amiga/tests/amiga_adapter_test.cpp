@@ -217,6 +217,63 @@ namespace {
         sys.cia_b.write(0x03U, 0xFFU);
         sys.cia_b.write(0x01U, 0x6DU);
     }
+
+    void run_real_kickstart_adf_boot_gate(const char* kickstart_env,
+                                          const char* adf_env,
+                                          amiga_config config,
+                                          const char* frames_env,
+                                          std::uint64_t fallback_frames) {
+        const auto kickstart_path = get_env(kickstart_env);
+        const auto adf_path = get_env(adf_env);
+        if (!kickstart_path || !adf_path) {
+            SKIP("set " << kickstart_env << " and " << adf_env
+                        << " to run this copyrighted-data Amiga boot gate");
+        }
+
+        auto kickstart = read_file(fs::path(*kickstart_path));
+        REQUIRE(kickstart.has_value());
+        REQUIRE((kickstart->size() == amiga_system::kickstart_window_size ||
+                 kickstart->size() == amiga_system::kickstart_window_size / 2U));
+
+        auto adf = read_file(fs::path(*adf_path));
+        REQUIRE(adf.has_value());
+        REQUIRE(adf->size() == amiga_system::floppy_dd_size);
+
+        std::vector<std::vector<std::uint8_t>> disks;
+        disks.push_back(std::move(*adf));
+        amiga_adapter adapter(std::move(*kickstart), config, fs::path(*adf_path).filename().string(),
+                              std::move(disks));
+
+        REQUIRE(adapter.system().floppy_loaded());
+        CHECK(adapter.system().floppy_size() == amiga_system::floppy_dd_size);
+        CHECK(adapter.system().kickstart_overlay_active());
+
+        const auto initial_regs = adapter.system().cpu.cpu_registers();
+        CHECK(initial_regs.pc >= amiga_system::kickstart_base);
+
+        const std::uint64_t frames = get_env_u64(frames_env, fallback_frames);
+        bool pc_moved = false;
+        for (std::uint64_t frame = 0U; frame < frames; ++frame) {
+            adapter.step_one_frame();
+            if (adapter.system().cpu.cpu_registers().pc != initial_regs.pc) {
+                pc_moved = true;
+            }
+        }
+
+        const auto final_regs = adapter.system().cpu.cpu_registers();
+        INFO("frames: " << frames);
+        INFO("initial pc: " << initial_regs.pc);
+        INFO("final pc: " << final_regs.pc);
+        INFO("final sr: " << final_regs.sr);
+        INFO("vblank frames: " << adapter.system().frame_index);
+
+        CHECK(pc_moved);
+        CHECK(adapter.system().frame_index > 0U);
+        CHECK(adapter.system().frame_index <= frames);
+        CHECK(adapter.system().frame_index + 64U >= frames);
+        CHECK(adapter.scheduler().master_cycle() > 0U);
+        CHECK_FALSE(adapter.system().kickstart_overlay_active());
+    }
 } // namespace
 
 TEST_CASE("amiga adapter constructs and steps frames", "[apps][player][amiga500]") {
@@ -266,6 +323,39 @@ TEST_CASE("amiga adapter publishes session and media metadata", "[apps][player][
     REQUIRE(media.media.size() == 1U);
     CHECK(media.media[0].id == "kickstart");
     CHECK(media.media[0].provider_id == "amiga500.kickstart");
+}
+
+TEST_CASE("amiga adapter drains Paula audio through the 48 kHz player path",
+          "[apps][player][amiga500][audio]") {
+    amiga_adapter adapter(tiny_kickstart());
+
+    auto audio = adapter.drain_audio();
+    CHECK(audio.frame_count == 0U);
+    CHECK(audio.sample_rate == 48000U);
+
+    auto& sys = adapter.system();
+    write_chip_word(sys, 0x000100U, 0x10F0U);
+    sys.write_custom_word(0x0A0U, 0x0000U); // AUD0LCH
+    sys.write_custom_word(0x0A2U, 0x0100U); // AUD0LCL
+    sys.write_custom_word(0x0A4U, 0x0001U); // AUD0LEN
+    sys.write_custom_word(0x0A6U, 0x0001U); // AUD0PER
+    sys.write_custom_word(0x0A8U, 0x0040U); // AUD0VOL
+    sys.write_custom_word(0x096U,
+                          static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                     agnus::dmacon_dmaen | agnus::dmacon_aud0en));
+    sys.agnus.tick(8U);
+
+    audio = adapter.drain_audio();
+    CHECK(audio.sample_rate == 48000U);
+    CHECK(audio.frame_count >= 959U);
+    CHECK(audio.frame_count <= 961U);
+    REQUIRE(audio.samples != nullptr);
+
+    const auto* const begin = audio.samples;
+    const auto* const end = begin + static_cast<std::size_t>(audio.frame_count) * 2U;
+    CHECK(std::any_of(begin, end, [](std::int16_t sample) { return sample != 0; }));
+
+    CHECK(adapter.drain_audio().frame_count == 0U);
 }
 
 TEST_CASE("amiga adapter configures Amiga 500+ metadata and chip RAM",
@@ -1041,6 +1131,28 @@ TEST_CASE("amiga adapter converts frontend mouse movement to Amiga counters",
     CHECK((adapter.system().read_custom_word(0x016U) & 0x0400U) != 0U);
 }
 
+TEST_CASE("amiga adapter accepts frontend relative mouse deltas",
+          "[apps][player][amiga500][input]") {
+    amiga_adapter adapter(tiny_kickstart());
+
+    mnemos::frontend_sdk::controller_state mouse{};
+    mouse.mouse_delta_x = 3;
+    mouse.mouse_delta_y = -2;
+    mouse.trigger = true;
+    adapter.apply_input(3, mouse);
+
+    CHECK(adapter.system().read_custom_word(0x00AU) == 0xFE03U);
+    CHECK((adapter.system().cia_a.read(0x00U) & 0x40U) == 0U);
+
+    mouse = {};
+    mouse.aim_x = 40;
+    mouse.aim_y = 40;
+    adapter.apply_input(3, mouse);
+
+    CHECK(adapter.system().read_custom_word(0x00AU) == 0xFE03U);
+    CHECK((adapter.system().cia_a.read(0x00U) & 0x40U) != 0U);
+}
+
 TEST_CASE("amiga adapter routes frontend analog axes to POT counters",
           "[apps][player][amiga500][input]") {
     amiga_adapter adapter(tiny_kickstart());
@@ -1254,54 +1366,25 @@ TEST_CASE("amiga adapter renders the real Kickstart insert-disk prompt",
 
 TEST_CASE("amiga adapter boots real Kickstart with an ADF disk when data is supplied",
           "[apps][player][amiga500][data]") {
-    const auto kickstart_path = get_env("MNEMOS_AMIGA500_KICKSTART");
-    const auto adf_path = get_env("MNEMOS_AMIGA500_ADF");
-    if (!kickstart_path || !adf_path) {
-        SKIP("set MNEMOS_AMIGA500_KICKSTART and MNEMOS_AMIGA500_ADF to run the "
-             "copyrighted-data Amiga500 boot gate");
-    }
+    run_real_kickstart_adf_boot_gate("MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_ADF",
+                                     {}, "MNEMOS_AMIGA500_BOOT_FRAMES", 300U);
+}
 
-    auto kickstart = read_file(fs::path(*kickstart_path));
-    REQUIRE(kickstart.has_value());
-    REQUIRE((kickstart->size() == amiga_system::kickstart_window_size ||
-             kickstart->size() == amiga_system::kickstart_window_size / 2U));
+TEST_CASE("amiga adapter boots real Amiga 500+ Kickstart with an ADF disk when data is supplied",
+          "[apps][player][amiga500plus][data]") {
+    const amiga_config config{.video_region = mnemos::video_region::pal,
+                              .keyboard_layout = amiga_keyboard_layout::us,
+                              .model = amiga_model::amiga500_plus};
+    run_real_kickstart_adf_boot_gate("MNEMOS_AMIGA500PLUS_KICKSTART",
+                                     "MNEMOS_AMIGA500PLUS_ADF", config,
+                                     "MNEMOS_AMIGA500PLUS_BOOT_FRAMES", 300U);
+}
 
-    auto adf = read_file(fs::path(*adf_path));
-    REQUIRE(adf.has_value());
-    REQUIRE(adf->size() == amiga_system::floppy_dd_size);
-
-    std::vector<std::vector<std::uint8_t>> disks;
-    disks.push_back(std::move(*adf));
-    amiga_adapter adapter(std::move(*kickstart), {}, fs::path(*adf_path).filename().string(),
-                          std::move(disks));
-
-    REQUIRE(adapter.system().floppy_loaded());
-    CHECK(adapter.system().floppy_size() == amiga_system::floppy_dd_size);
-    CHECK(adapter.system().kickstart_overlay_active());
-
-    const auto initial_regs = adapter.system().cpu.cpu_registers();
-    CHECK(initial_regs.pc >= amiga_system::kickstart_base);
-
-    const std::uint64_t frames = get_env_u64("MNEMOS_AMIGA500_BOOT_FRAMES", 300U);
-    bool pc_moved = false;
-    for (std::uint64_t frame = 0U; frame < frames; ++frame) {
-        adapter.step_one_frame();
-        if (adapter.system().cpu.cpu_registers().pc != initial_regs.pc) {
-            pc_moved = true;
-        }
-    }
-
-    const auto final_regs = adapter.system().cpu.cpu_registers();
-    INFO("frames: " << frames);
-    INFO("initial pc: " << initial_regs.pc);
-    INFO("final pc: " << final_regs.pc);
-    INFO("final sr: " << final_regs.sr);
-    INFO("vblank frames: " << adapter.system().frame_index);
-
-    CHECK(pc_moved);
-    CHECK(adapter.system().frame_index > 0U);
-    CHECK(adapter.system().frame_index <= frames);
-    CHECK(adapter.system().frame_index + 64U >= frames);
-    CHECK(adapter.scheduler().master_cycle() > 0U);
-    CHECK_FALSE(adapter.system().kickstart_overlay_active());
+TEST_CASE("amiga adapter boots real Amiga 600 Kickstart with an ADF disk when data is supplied",
+          "[apps][player][amiga600][data]") {
+    const amiga_config config{.video_region = mnemos::video_region::pal,
+                              .keyboard_layout = amiga_keyboard_layout::us,
+                              .model = amiga_model::amiga600};
+    run_real_kickstart_adf_boot_gate("MNEMOS_AMIGA600_KICKSTART", "MNEMOS_AMIGA600_ADF",
+                                     config, "MNEMOS_AMIGA600_BOOT_FRAMES", 300U);
 }

@@ -167,7 +167,7 @@ namespace mnemos::chips::video {
 
         [[nodiscard]] std::int32_t sprite_visible_x(std::uint16_t pos, std::uint16_t ctl) noexcept {
             return static_cast<std::int32_t>(sprite_hstart(pos, ctl)) -
-                   static_cast<std::int32_t>(agnus::display_clock_origin);
+                   static_cast<std::int32_t>(agnus::sprite_hstart_origin);
         }
 
         [[nodiscard]] std::uint32_t sprite_value(std::uint16_t packed,
@@ -205,13 +205,16 @@ namespace mnemos::chips::video {
 
     void agnus::reset(reset_kind /*kind*/) {
         const bool was_pal = is_pal_;
+        const bool was_ecs_display_fetch_timing = ecs_display_fetch_timing_;
         dmacon_ = 0U;
         blitter_busy_ = false;
         blitter_zero_ = false;
         is_pal_ = was_pal;
+        ecs_display_fetch_timing_ = was_ecs_display_fetch_timing;
         scanline_ = 0U;
         color_clock_ = 0U;
         long_frame_ = false;
+        frame_width_ = visible_width_lores;
         vblank_active_ = false;
         hblank_active_ = false;
         bitplane_pointer_.fill(0U);
@@ -227,6 +230,10 @@ namespace mnemos::chips::video {
         ddfstrt_ = 0U;
         ddfstop_ = 0U;
         sprite_ = {};
+        sprite_pointer_generation_ = {};
+        sprite_render_pointer_ = {};
+        sprite_render_pointer_generation_ = {};
+        sprite_render_pointers_captured_ = false;
         cop1lc_ = 0U;
         cop2lc_ = 0U;
         copper_pc_ = 0U;
@@ -255,6 +262,9 @@ namespace mnemos::chips::video {
                 if (scanline_ == 0U) {
                     begin_frame_render();
                 }
+                if (scanline_ == display_line_origin) {
+                    capture_sprite_render_pointers();
+                }
                 if (scanline_ == 0U && dma_copper()) {
                     // Real OCS reloads COP1LC as vertical blank begins. The
                     // OS header list then waits into vblank before jumping to
@@ -269,6 +279,19 @@ namespace mnemos::chips::video {
             }
             // The copper walks during the visible field, one slot per clock.
             run_copper();
+            if (color_clock_ >= sprite_dma_first_slot &&
+                color_clock_ < sprite_dma_first_slot + sprite_dma_slot_count &&
+                ((color_clock_ - sprite_dma_first_slot) % sprite_dma_slots_per_channel) == 0U &&
+                scanline_ >= display_line_origin &&
+                scanline_ < display_line_origin + active_height() && dma_sprite() &&
+                !chip_ram_.empty()) {
+                if (!sprite_render_pointers_captured_) {
+                    capture_sprite_render_pointers();
+                }
+                const std::uint32_t sprite =
+                    (color_clock_ - sprite_dma_first_slot) / sprite_dma_slots_per_channel;
+                render_dma_sprite_line(sprite, sprite_render_pointer_[sprite], scanline_);
+            }
             if (cycle_cb_) {
                 cycle_cb_();
             }
@@ -403,7 +426,8 @@ namespace mnemos::chips::video {
 
         const bool hires = hires_enabled();
         const std::uint32_t clocks_per_word = hires ? 4U : 8U;
-        const std::uint32_t terminal_words = hires ? 2U : 1U;
+        const std::uint32_t terminal_words =
+            hires ? (ecs_display_fetch_timing_ ? 2U : 3U) : 1U;
         const std::uint32_t normal_words_per_line =
             ((ddf_stop - ddf_start) / clocks_per_word) + terminal_words;
         const std::uint32_t fetch_end =
@@ -533,6 +557,7 @@ namespace mnemos::chips::video {
     void agnus::set_sprite_pointer(std::uint32_t sprite, std::uint32_t byte_address) noexcept {
         if (sprite < max_sprites) {
             sprite_[sprite].pointer = byte_address & chip_address_mask;
+            ++sprite_pointer_generation_[sprite];
         }
     }
 
@@ -553,6 +578,7 @@ namespace mnemos::chips::video {
             sprite_[sprite].pointer = (sprite_[sprite].pointer & 0x001F0000U) |
                                       (static_cast<std::uint32_t>(value) & 0x0000FFFEU);
         }
+        ++sprite_pointer_generation_[sprite];
     }
 
     void agnus::write_sprite_pos(std::uint32_t sprite, std::uint16_t value) noexcept {
@@ -580,6 +606,22 @@ namespace mnemos::chips::video {
         if (sprite < max_sprites) {
             sprite_[sprite].data_b = value;
         }
+    }
+
+    std::uint16_t agnus::sprite_pos(std::uint32_t sprite) const noexcept {
+        return sprite < max_sprites ? sprite_[sprite].pos : 0U;
+    }
+
+    std::uint16_t agnus::sprite_ctl(std::uint32_t sprite) const noexcept {
+        return sprite < max_sprites ? sprite_[sprite].ctl : 0U;
+    }
+
+    std::uint16_t agnus::sprite_data_a(std::uint32_t sprite) const noexcept {
+        return sprite < max_sprites ? sprite_[sprite].data_a : 0U;
+    }
+
+    std::uint16_t agnus::sprite_data_b(std::uint32_t sprite) const noexcept {
+        return sprite < max_sprites ? sprite_[sprite].data_b : 0U;
     }
 
     std::uint16_t agnus::read_clxdat() noexcept {
@@ -965,12 +1007,138 @@ namespace mnemos::chips::video {
         return (r << 16U) | (g << 8U) | b;
     }
 
+    frame_buffer_view agnus::debug_sample_layer_view(sample_layer_kind kind) const {
+        const std::uint32_t width = active_width();
+        const std::uint32_t height = active_height();
+        constexpr std::uint32_t stride = framebuffer_stride;
+        sample_layer_sheet_.assign(static_cast<std::size_t>(stride) * height, 0U);
+
+        const std::uint32_t planes = bitplane_count();
+        const bool ham = (bplcon0_ & 0x0800U) != 0U && planes >= 5U;
+        const bool dual_playfield = (bplcon0_ & 0x0400U) != 0U && !ham;
+        const bool ehb = !ham && !dual_playfield && planes == 6U;
+
+        const auto actual_playfield_rgb = [&](std::uint8_t sample) noexcept {
+            if (sample == 0U) {
+                return std::uint32_t{0U};
+            }
+            if (dual_playfield) {
+                std::uint32_t playfield1 = 0U;
+                std::uint32_t playfield2 = 0U;
+                for (std::uint32_t p = 0; p < planes; ++p) {
+                    const std::uint32_t plane_bit = (sample >> p) & 1U;
+                    if ((p & 1U) == 0U) {
+                        playfield1 |= plane_bit << (p >> 1U);
+                    } else {
+                        playfield2 |= plane_bit << (p >> 1U);
+                    }
+                }
+                const bool pf2_front = (bplcon2_ & 0x0040U) != 0U;
+                if (playfield2 != 0U && (playfield1 == 0U || pf2_front)) {
+                    return color_to_rgb(palette_word(8U + playfield2));
+                }
+                if (playfield1 != 0U) {
+                    return color_to_rgb(palette_word(playfield1));
+                }
+                return color_to_rgb(palette_word(8U + playfield2));
+            }
+
+            std::uint32_t rgb = color_to_rgb(palette_word(sample & 0x1FU));
+            if (ehb && (sample & 0x20U) != 0U) {
+                rgb = (rgb >> 1U) & 0x007F7F7FU;
+            }
+            return rgb;
+        };
+
+        const auto bitplane_false_color = [](std::uint8_t sample) noexcept {
+            if (sample == 0U) {
+                return std::uint32_t{0U};
+            }
+            const std::uint32_t r = (sample & 0x01U) != 0U ? 0xAAU : 0U;
+            const std::uint32_t g = (sample & 0x02U) != 0U ? 0xAAU : 0U;
+            const std::uint32_t b = (sample & 0x04U) != 0U ? 0xAAU : 0U;
+            const std::uint32_t hi = (sample & 0x38U) << 2U;
+            return ((r + hi) << 16U) | ((g + hi) << 8U) | (b + hi);
+        };
+
+        const auto sprite_rgb = [&](std::uint16_t sprites, std::uint8_t attach) noexcept {
+            for (std::uint32_t group = 0U; group < max_sprites / 2U; ++group) {
+                const std::uint32_t even_sprite = group * 2U;
+                const std::uint32_t odd_sprite = even_sprite + 1U;
+                const std::uint32_t even_value = sprite_value(sprites, even_sprite);
+                const std::uint32_t odd_value = sprite_value(sprites, odd_sprite);
+                const bool attached = (attach & (1U << group)) != 0U;
+
+                std::uint32_t color_index = 0U;
+                if (attached && (even_value != 0U || odd_value != 0U)) {
+                    color_index = 16U + (even_value | (odd_value << 2U));
+                } else if (even_value != 0U) {
+                    color_index = 16U + group * 4U + even_value;
+                } else if (odd_value != 0U) {
+                    color_index = 16U + group * 4U + odd_value;
+                } else {
+                    continue;
+                }
+                return color_to_rgb(palette_word(color_index));
+            }
+            return std::uint32_t{0U};
+        };
+
+        for (std::uint32_t y = 0U; y < height; ++y) {
+            for (std::uint32_t x = 0U; x < width; ++x) {
+                const std::size_t out = static_cast<std::size_t>(y) * stride + x;
+                switch (kind) {
+                case sample_layer_kind::bitplanes:
+                    sample_layer_sheet_[out] = bitplane_false_color(bitplane_sample_[out]);
+                    break;
+                case sample_layer_kind::playfields:
+                    sample_layer_sheet_[out] = actual_playfield_rgb(bitplane_sample_[out]);
+                    break;
+                case sample_layer_kind::sprites:
+                    sample_layer_sheet_[out] =
+                        sprite_rgb(sprite_sample_[out], sprite_attach_sample_[out]);
+                    break;
+                }
+            }
+        }
+
+        return {.pixels = sample_layer_sheet_.data(),
+                .width = width,
+                .height = height,
+                .stride = stride};
+    }
+
     void agnus::begin_frame_render() noexcept {
+        frame_width_ = visible_width_lores;
         std::fill(bitplane_sample_.begin(), bitplane_sample_.end(), std::uint8_t{0U});
         std::fill(playfield_sample_.begin(), playfield_sample_.end(), std::uint8_t{0U});
         std::fill(sprite_sample_.begin(), sprite_sample_.end(), std::uint16_t{0U});
+        std::fill(sprite_attach_sample_.begin(), sprite_attach_sample_.end(), std::uint8_t{0U});
+        sprite_render_pointers_captured_ = false;
         for (std::uint32_t& px : pixels_) {
             px = 0U;
+        }
+    }
+
+    void agnus::capture_sprite_render_pointers() noexcept {
+        for (std::uint32_t sprite = 0; sprite < max_sprites; ++sprite) {
+            sprite_render_pointer_[sprite] = sprite_[sprite].pointer;
+            sprite_render_pointer_generation_[sprite] = sprite_pointer_generation_[sprite];
+        }
+        sprite_render_pointers_captured_ = true;
+    }
+
+    void agnus::commit_dma_sprite_pointers() noexcept {
+        if (!dma_sprite() || chip_ram_.empty()) {
+            return;
+        }
+        if (!sprite_render_pointers_captured_) {
+            capture_sprite_render_pointers();
+        }
+        for (std::uint32_t i = max_sprites; i > 0U; --i) {
+            const std::uint32_t sprite = i - 1U;
+            render_dma_sprite(sprite, sprite_render_pointer_[sprite],
+                              sprite_render_pointer_generation_[sprite], false, true);
         }
     }
 
@@ -982,6 +1150,7 @@ namespace mnemos::chips::video {
 
         const std::uint32_t line = beam_line - display_line_origin;
         const std::uint32_t width = active_width();
+        frame_width_ = std::max(frame_width_, width);
         constexpr std::uint32_t stride = framebuffer_stride;
         const std::uint32_t backdrop = color_to_rgb(palette_word(0U));
         const std::size_t row = static_cast<std::size_t>(line) * stride;
@@ -1002,8 +1171,7 @@ namespace mnemos::chips::video {
         // Display window: DIWSTRT/DIWSTOP give the visible vertical band; the
         // horizontal start positions the first fetched word. The data-fetch
         // window (DDFSTRT/DDFSTOP) bounds the per-line word count: low-res
-        // fetches at 8-clock granularity, high-res at 4-clock granularity
-        // with the second terminal word included by the OCS relationship.
+        // fetches at 8-clock granularity, high-res at 4-clock granularity.
         const std::uint32_t diw_v_start = (diwstrt_ >> 8U) & 0xFFU;
         const std::uint32_t diw_v_stop_raw = (diwstop_ >> 8U) & 0xFFU;
         // DIWSTOP V bit 8 is the complement of bit 7 (so stops >= 0x100 are
@@ -1031,7 +1199,8 @@ namespace mnemos::chips::video {
         std::uint32_t words_per_line = 0U;
         if (ddf_stop >= ddf_start) {
             const std::uint32_t clocks_per_word = hires ? 4U : 8U;
-            const std::uint32_t terminal_words = hires ? 2U : 1U;
+            const std::uint32_t terminal_words =
+                hires ? (ecs_display_fetch_timing_ ? 2U : 3U) : 1U;
             words_per_line = ((ddf_stop - ddf_start) / clocks_per_word) + terminal_words;
         }
 
@@ -1191,15 +1360,15 @@ namespace mnemos::chips::video {
             }
             return color_to_rgb(palette_word(second ? 8U + value : value));
         };
-        std::fill(sprite_sample_.begin(), sprite_sample_.end(), std::uint16_t{0U});
-        for (std::uint32_t i = max_sprites; i > 0U; --i) {
-            const std::uint32_t sprite = i - 1U;
-            if (dma_sprite() && !chip_ram_.empty()) {
-                render_dma_sprite(sprite);
-            } else if (sprite_[sprite].armed) {
-                render_manual_sprite(sprite);
+        if (!dma_sprite() || chip_ram_.empty()) {
+            for (std::uint32_t i = max_sprites; i > 0U; --i) {
+                const std::uint32_t sprite = i - 1U;
+                if (sprite_[sprite].armed) {
+                    render_manual_sprite(sprite);
+                }
             }
         }
+        commit_dma_sprite_pointers();
 
         for (std::uint32_t y = 0; y < active_height(); ++y) {
             for (std::uint32_t x = 0; x < width; ++x) {
@@ -1240,7 +1409,8 @@ namespace mnemos::chips::video {
                     const std::uint32_t odd_sprite = even_sprite + 1U;
                     const std::uint32_t even_value = sprite_value(sprites, even_sprite);
                     const std::uint32_t odd_value = sprite_value(sprites, odd_sprite);
-                    const bool attached = (sprite_[odd_sprite].ctl & sprite_attach) != 0U;
+                    const bool attached =
+                        (sprite_attach_sample_[out] & (1U << group)) != 0U;
 
                     std::uint32_t color_index = 0U;
                     if (attached && (even_value != 0U || odd_value != 0U)) {
@@ -1267,8 +1437,98 @@ namespace mnemos::chips::video {
         }
     }
 
-    void agnus::render_dma_sprite(std::uint32_t sprite) noexcept {
-        std::uint32_t ptr = sprite_[sprite].pointer;
+    void agnus::render_dma_sprite_line(std::uint32_t sprite, std::uint32_t base_pointer,
+                                       std::uint32_t beam_line) noexcept {
+        if (sprite >= max_sprites || chip_ram_.empty()) {
+            return;
+        }
+
+        std::uint32_t ptr = base_pointer & chip_address_mask;
+        std::uint32_t previous_visible_stop = 0U;
+        std::uint32_t previous_control_fetch_line = 0U;
+        bool has_visible_block = false;
+        bool has_control_fetch_floor = false;
+
+        for (std::uint32_t block = 0U; block < max_sprite_dma_blocks; ++block) {
+            sprite_state control{};
+            control.pos = chip_word(ptr);
+            ptr = (ptr + 2U) & chip_address_mask;
+            control.ctl = chip_word(ptr);
+            ptr = (ptr + 2U) & chip_address_mask;
+            if (control.pos == 0U && control.ctl == 0U) {
+                return;
+            }
+
+            const std::uint32_t start = sprite_vstart(control.pos, control.ctl);
+            const std::uint32_t stop = sprite_vstop(control.ctl);
+            if (stop < start) {
+                return;
+            }
+            if (has_control_fetch_floor && start < previous_control_fetch_line) {
+                return;
+            }
+            if (beam_line < start) {
+                return;
+            }
+            if (stop == start) {
+                if (display_dma_steals_sprite_word(sprite, start, 0U) ||
+                    display_dma_steals_sprite_word(sprite, start, 1U)) {
+                    return;
+                }
+                previous_control_fetch_line = start;
+                has_control_fetch_floor = true;
+                continue;
+            }
+
+            const std::int32_t x = sprite_visible_x(control.pos, control.ctl);
+            if (has_visible_block && start <= previous_visible_stop) {
+                ptr = (ptr + (stop - start) * 4U) & chip_address_mask;
+                previous_visible_stop = std::max(previous_visible_stop, stop);
+                previous_control_fetch_line = std::max(previous_control_fetch_line, stop);
+                has_control_fetch_floor = true;
+                continue;
+            }
+
+            const std::uint32_t checked_stop = std::min(beam_line + 1U, stop);
+            for (std::uint32_t checked_line = start; checked_line < checked_stop; ++checked_line) {
+                if (display_dma_steals_sprite_word(sprite, checked_line, 0U) ||
+                    display_dma_steals_sprite_word(sprite, checked_line, 1U)) {
+                    return;
+                }
+            }
+
+            if (beam_line < stop) {
+                const std::uint32_t data_ptr =
+                    (ptr + (beam_line - start) * 4U) & chip_address_mask;
+                const std::uint16_t data_a = chip_word(data_ptr);
+                const std::uint16_t data_b = chip_word((data_ptr + 2U) & chip_address_mask);
+                if (beam_line >= display_line_origin) {
+                    const std::uint32_t visible_line = beam_line - display_line_origin;
+                    if (visible_line < active_height()) {
+                        const bool attached_pair = (control.ctl & sprite_attach) != 0U;
+                        render_sprite_line(sprite, x, visible_line, data_a, data_b,
+                                           attached_pair);
+                    }
+                }
+                return;
+            }
+
+            ptr = (ptr + (stop - start) * 4U) & chip_address_mask;
+            if (display_dma_steals_sprite_word(sprite, stop, 0U) ||
+                display_dma_steals_sprite_word(sprite, stop, 1U)) {
+                return;
+            }
+            previous_visible_stop = stop;
+            previous_control_fetch_line = stop;
+            has_visible_block = true;
+            has_control_fetch_floor = true;
+        }
+    }
+
+    void agnus::render_dma_sprite(std::uint32_t sprite, std::uint32_t base_pointer,
+                                  std::uint32_t pointer_generation, bool render_pixels,
+                                  bool commit_pointer) noexcept {
+        std::uint32_t ptr = base_pointer & chip_address_mask;
         std::uint32_t previous_visible_stop = 0U;
         std::uint32_t previous_control_fetch_line = 0U;
         bool has_visible_block = false;
@@ -1284,27 +1544,42 @@ namespace mnemos::chips::video {
             control.ctl = chip_word(ptr);
             ptr = (ptr + 2U) & chip_address_mask;
             if (control.pos == 0U && control.ctl == 0U) {
-                sprite_[sprite].pointer = ptr;
+                if (commit_pointer) {
+                    commit_sprite_dma_pointer(sprite, ptr, pointer_generation);
+                }
                 return;
+            }
+            if (commit_pointer) {
+                sprite_[sprite].pos = control.pos;
+                sprite_[sprite].ctl = control.ctl;
             }
 
             const std::uint32_t start = sprite_vstart(control.pos, control.ctl);
             const std::uint32_t stop = sprite_vstop(control.ctl);
             if (stop < start) {
-                sprite_[sprite].pointer = ptr;
+                if (commit_pointer) {
+                    commit_sprite_dma_pointer(sprite, ptr, pointer_generation);
+                }
                 return;
             }
             if (has_control_fetch_floor && start < previous_control_fetch_line) {
-                sprite_[sprite].pointer = ptr;
+                if (commit_pointer) {
+                    commit_sprite_dma_pointer(sprite, ptr, pointer_generation);
+                }
                 return;
             }
             if (stop == start) {
                 if (display_dma_steals_sprite_word(sprite, start, 0U)) {
-                    sprite_[sprite].pointer = ptr;
+                    if (commit_pointer) {
+                        commit_sprite_dma_pointer(sprite, ptr, pointer_generation);
+                    }
                     return;
                 }
                 if (display_dma_steals_sprite_word(sprite, start, 1U)) {
-                    sprite_[sprite].pointer = (ptr + 2U) & chip_address_mask;
+                    if (commit_pointer) {
+                        commit_sprite_dma_pointer(sprite, (ptr + 2U) & chip_address_mask,
+                                                  pointer_generation);
+                    }
                     return;
                 }
                 previous_control_fetch_line = start;
@@ -1322,32 +1597,42 @@ namespace mnemos::chips::video {
             }
             for (std::uint32_t beam_line = start; beam_line < stop; ++beam_line) {
                 if (display_dma_steals_sprite_word(sprite, beam_line, 0U)) {
-                    sprite_[sprite].pointer = ptr;
+                    if (commit_pointer) {
+                        commit_sprite_dma_pointer(sprite, ptr, pointer_generation);
+                    }
                     return;
                 }
-                const std::uint16_t data_a = chip_word(ptr);
+                const std::uint16_t data_a = render_pixels ? chip_word(ptr) : 0U;
                 ptr = (ptr + 2U) & chip_address_mask;
                 if (display_dma_steals_sprite_word(sprite, beam_line, 1U)) {
-                    sprite_[sprite].pointer = ptr;
+                    if (commit_pointer) {
+                        commit_sprite_dma_pointer(sprite, ptr, pointer_generation);
+                    }
                     return;
                 }
-                const std::uint16_t data_b = chip_word(ptr);
+                const std::uint16_t data_b = render_pixels ? chip_word(ptr) : 0U;
                 ptr = (ptr + 2U) & chip_address_mask;
-                if (beam_line < display_line_origin) {
+                if (!render_pixels || beam_line < display_line_origin) {
                     continue;
                 }
                 const std::uint32_t visible_line = beam_line - display_line_origin;
                 if (visible_line >= active_height()) {
                     continue;
                 }
-                render_sprite_line(sprite, x, visible_line, data_a, data_b);
+                const bool attached_pair = (control.ctl & sprite_attach) != 0U;
+                render_sprite_line(sprite, x, visible_line, data_a, data_b, attached_pair);
             }
             if (display_dma_steals_sprite_word(sprite, stop, 0U)) {
-                sprite_[sprite].pointer = ptr;
+                if (commit_pointer) {
+                    commit_sprite_dma_pointer(sprite, ptr, pointer_generation);
+                }
                 return;
             }
             if (display_dma_steals_sprite_word(sprite, stop, 1U)) {
-                sprite_[sprite].pointer = (ptr + 2U) & chip_address_mask;
+                if (commit_pointer) {
+                    commit_sprite_dma_pointer(sprite, (ptr + 2U) & chip_address_mask,
+                                              pointer_generation);
+                }
                 return;
             }
             previous_visible_stop = stop;
@@ -1355,7 +1640,9 @@ namespace mnemos::chips::video {
             has_visible_block = true;
             has_control_fetch_floor = true;
         }
-        sprite_[sprite].pointer = ptr;
+        if (commit_pointer) {
+            commit_sprite_dma_pointer(sprite, ptr, pointer_generation);
+        }
     }
 
     void agnus::render_manual_sprite(std::uint32_t sprite) noexcept {
@@ -1374,24 +1661,24 @@ namespace mnemos::chips::video {
             if (visible_line >= active_height()) {
                 continue;
             }
-            render_sprite_line(sprite, x, visible_line, s.data_a, s.data_b);
+            const bool attached_pair = (s.ctl & sprite_attach) != 0U;
+            render_sprite_line(sprite, x, visible_line, s.data_a, s.data_b, attached_pair);
         }
     }
 
     void agnus::render_sprite_line(std::uint32_t sprite, std::int32_t x, std::uint32_t visible_line,
-                                   std::uint16_t data_a, std::uint16_t data_b) noexcept {
+                                   std::uint16_t data_a, std::uint16_t data_b,
+                                   bool attached_pair) noexcept {
         const std::uint32_t width = active_width();
         constexpr std::uint32_t stride = framebuffer_stride;
         const std::int32_t pixel_scale = hires_enabled() ? 2 : 1;
+        const bool marks_attach = attached_pair && (sprite & 1U) != 0U;
+        const std::uint8_t attach_group =
+            static_cast<std::uint8_t>(1U << ((sprite / 2U) & 0x03U));
         for (std::uint32_t pixel = 0; pixel < sprite_width; ++pixel) {
             const std::uint32_t bit = 15U - pixel;
             const std::uint32_t index =
                 ((data_a >> bit) & 0x01U) | (((data_b >> bit) & 0x01U) << 1U);
-            if (index == 0U) {
-                continue;
-            }
-            const std::uint16_t shift = static_cast<std::uint16_t>(sprite * 2U);
-            const std::uint16_t mask = static_cast<std::uint16_t>(0x0003U << shift);
             const std::int32_t target_x = (x + static_cast<std::int32_t>(pixel)) * pixel_scale;
             for (std::int32_t subpixel = 0; subpixel < pixel_scale; ++subpixel) {
                 const std::int32_t scaled_x = target_x + subpixel;
@@ -1400,10 +1687,27 @@ namespace mnemos::chips::video {
                 }
                 const std::size_t out = static_cast<std::size_t>(visible_line) * stride +
                                         static_cast<std::size_t>(scaled_x);
+                if (marks_attach) {
+                    sprite_attach_sample_[out] =
+                        static_cast<std::uint8_t>(sprite_attach_sample_[out] | attach_group);
+                }
+                if (index == 0U) {
+                    continue;
+                }
+                const std::uint16_t shift = static_cast<std::uint16_t>(sprite * 2U);
+                const std::uint16_t mask = static_cast<std::uint16_t>(0x0003U << shift);
                 sprite_sample_[out] = static_cast<std::uint16_t>(
                     (sprite_sample_[out] & ~mask) | (static_cast<std::uint16_t>(index) << shift));
             }
         }
+    }
+
+    void agnus::commit_sprite_dma_pointer(std::uint32_t sprite, std::uint32_t byte_address,
+                                          std::uint32_t pointer_generation) noexcept {
+        if (sprite >= max_sprites || sprite_pointer_generation_[sprite] != pointer_generation) {
+            return;
+        }
+        sprite_[sprite].pointer = byte_address & chip_address_mask;
     }
 
     bool agnus::playfield_blocks_sprite(std::uint8_t playfields,
@@ -1479,7 +1783,7 @@ namespace mnemos::chips::video {
 
     frame_buffer_view agnus::framebuffer() const noexcept {
         return {.pixels = pixels_.data(),
-                .width = active_width(),
+                .width = frame_width_,
                 .height = active_height(),
                 .stride = framebuffer_stride};
     }
@@ -1491,9 +1795,11 @@ namespace mnemos::chips::video {
         writer.boolean(blitter_busy_);
         writer.boolean(blitter_zero_);
         writer.boolean(is_pal_);
+        writer.boolean(ecs_display_fetch_timing_);
         writer.u32(scanline_);
         writer.u32(color_clock_);
         writer.boolean(long_frame_);
+        writer.u32(frame_width_);
         writer.u64(frame_index_);
         for (std::uint32_t p : bitplane_pointer_) {
             writer.u32(p);
@@ -1530,9 +1836,14 @@ namespace mnemos::chips::video {
         blitter_busy_ = reader.boolean();
         blitter_zero_ = reader.boolean();
         is_pal_ = reader.boolean();
+        ecs_display_fetch_timing_ = reader.boolean();
         scanline_ = reader.u32();
         color_clock_ = reader.u32();
         long_frame_ = reader.boolean();
+        frame_width_ = reader.u32();
+        if (frame_width_ != visible_width_hires) {
+            frame_width_ = visible_width_lores;
+        }
         frame_index_ = reader.u64();
         for (std::uint32_t& p : bitplane_pointer_) {
             p = reader.u32() & chip_address_mask;
@@ -1566,6 +1877,10 @@ namespace mnemos::chips::video {
     }
 
     instrumentation::ichip_introspection& agnus::introspection() noexcept { return introspection_; }
+
+    frame_buffer_view agnus::introspection_surface::sample_layer::view() const {
+        return owner_->debug_sample_layer_view(kind_);
+    }
 
     frame_buffer_view agnus::introspection_surface::palette_layer::view() const {
         // Decode the 32 palette entries as a 16-per-row swatch grid, each

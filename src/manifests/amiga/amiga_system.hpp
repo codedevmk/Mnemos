@@ -179,6 +179,8 @@ namespace mnemos::manifests::amiga {
         amiga_keyboard_queue_state keyboard{};
 
         [[nodiscard]] bool kickstart_overlay_active() const noexcept { return overlay_active; }
+        [[nodiscard]] static bool
+        supported_floppy_image(std::span<const std::uint8_t> image) noexcept;
         [[nodiscard]] bool floppy_loaded() const noexcept { return floppy_loaded(0U); }
         [[nodiscard]] bool floppy_loaded(std::size_t drive) const noexcept;
         [[nodiscard]] std::size_t floppy_size() const noexcept { return floppy_size(0U); }

@@ -169,6 +169,21 @@ namespace {
         return "\"" + value + "\"";
     }
 
+    [[nodiscard]] bool tar_can_list_archive(const fs::path& archive_path) {
+        const auto archive_arg = command_arg(archive_path);
+        const fs::path listing_path = archive_path.parent_path() /
+                                      (archive_path.filename().string() + ".entries.txt");
+        const auto listing_arg = command_arg(listing_path);
+        if (!archive_arg || !listing_arg) {
+            return false;
+        }
+        const std::string command = "tar -tf " + *archive_arg + " > " + *listing_arg;
+        const bool listed = std::system(command.c_str()) == 0 && fs::is_regular_file(listing_path);
+        std::error_code ec;
+        fs::remove(listing_path, ec);
+        return listed;
+    }
+
     [[nodiscard]] bool write_7z_archive(
         const fs::path& archive_path,
         const std::vector<std::pair<std::string, std::vector<std::uint8_t>>>& entries) {
@@ -207,6 +222,16 @@ namespace {
         out.push_back(static_cast<std::uint8_t>((value >> 8U) & 0xFFU));
         out.push_back(static_cast<std::uint8_t>((value >> 16U) & 0xFFU));
         out.push_back(static_cast<std::uint8_t>((value >> 24U) & 0xFFU));
+    }
+
+    void append_u16_be(std::vector<std::uint8_t>& out, std::uint16_t value) {
+        out.push_back(static_cast<std::uint8_t>(value >> 8U));
+        out.push_back(static_cast<std::uint8_t>(value));
+    }
+
+    void append_u32_be(std::vector<std::uint8_t>& out, std::uint32_t value) {
+        append_u16_be(out, static_cast<std::uint16_t>(value >> 16U));
+        append_u16_be(out, static_cast<std::uint16_t>(value));
     }
 
     void append_ascii(std::vector<std::uint8_t>& out, std::string_view text) {
@@ -418,6 +443,50 @@ namespace {
         adf[0] = 0x44U;
         adf[1] = 0x89U;
         return adf;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> tiny_extended_adf() {
+        constexpr std::size_t track_count = amiga_system::floppy_track_count;
+        std::vector<std::uint8_t> image{};
+        image.insert(image.end(), {'U', 'A', 'E', '-', '1', 'A', 'D', 'F'});
+        append_u16_be(image, 0U);
+        append_u16_be(image, static_cast<std::uint16_t>(track_count));
+        for (std::size_t track = 0U; track < track_count; ++track) {
+            append_u16_be(image, 0U);
+            append_u16_be(image, 0U);
+            append_u32_be(image,
+                          static_cast<std::uint32_t>(amiga_system::floppy_sectors_per_track *
+                                                     amiga_system::floppy_sector_size));
+            append_u32_be(image,
+                          static_cast<std::uint32_t>(amiga_system::floppy_sectors_per_track *
+                                                     amiga_system::floppy_sector_size * 8U));
+        }
+        for (std::size_t track = 0U; track < track_count; ++track) {
+            for (std::size_t byte = 0U;
+                 byte < amiga_system::floppy_sectors_per_track * amiga_system::floppy_sector_size;
+                 ++byte) {
+                image.push_back(static_cast<std::uint8_t>((track + byte) & 0xFFU));
+            }
+        }
+        return image;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> tiny_ipf() {
+        std::vector<std::uint8_t> image(2048U, 0x00U);
+        image[0] = 'C';
+        image[1] = 'A';
+        image[2] = 'P';
+        image[3] = 'S';
+        return image;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> tiny_hdf() {
+        std::vector<std::uint8_t> image(4096U, 0x00U);
+        image[0] = 'R';
+        image[1] = 'D';
+        image[2] = 'S';
+        image[3] = 'K';
+        return image;
     }
 
     [[nodiscard]] std::vector<std::uint8_t> gzip_deflated(std::string_view original_name,
@@ -1938,6 +2007,33 @@ TEST_CASE("player launch treats a zip-wrapped Amiga ADF as disk media",
     fs::remove_all(dir);
 }
 
+TEST_CASE("player launch treats a zip-wrapped UAE-1ADF image as Amiga disk media",
+          "[apps][player][launch][amiga500]") {
+    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick13.rom";
+    const fs::path disk_path = dir / "extended.zip";
+    write_image(rom_path, tiny_kickstart());
+    const std::vector<std::uint8_t> disk_image = tiny_extended_adf();
+    write_image(disk_path, deflated_zip("Extended.adf", disk_image));
+    REQUIRE(set_env("MNEMOS_AMIGA500_KICKSTART", rom_path.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system(
+        {.rom_paths = {disk_path.string()}, .system_arg = std::string{"amiga500"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(outcome.system->media_count() == 1U);
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
+    REQUIRE(adapter != nullptr);
+    CHECK(adapter->system().floppy_loaded());
+    CHECK(adapter->system().floppy_size() == amiga_system::floppy_dd_size);
+    CHECK_FALSE(adapter->system().floppy_drives[0].change_latch);
+    CHECK(has_spec(*outcome.system, "Disk", "Extended"));
+
+    fs::remove_all(dir);
+}
+
 TEST_CASE("player launch treats a TAR-wrapped Amiga ADF as disk media",
           "[apps][player][launch][amiga500][tar]") {
     scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
@@ -2042,6 +2138,151 @@ TEST_CASE("player launch treats a 7z-wrapped Amiga ADF disk set as disk media",
     REQUIRE(adapter->insert_media(1U));
     REQUIRE(adapter->system().floppy_drives[0].image.size() > 2U);
     CHECK(adapter->system().floppy_drives[0].image[2U] == 0x3AU);
+
+    fs::remove_all(dir);
+}
+
+TEST_CASE("player launch recognizes direct Amiga IPF images as unsupported media",
+          "[apps][player][launch][amiga500][ipf]") {
+    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick13.rom";
+    const fs::path disk_path = dir / "preserved.ipf";
+    write_image(rom_path, tiny_kickstart());
+    write_image(disk_path, tiny_ipf());
+    REQUIRE(set_env("MNEMOS_AMIGA500_KICKSTART", rom_path.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system(
+        {.rom_paths = {disk_path.string()}, .system_arg = std::string{"amiga500"}});
+
+    CHECK(outcome.exit_code == 1);
+    CHECK(outcome.system == nullptr);
+
+    fs::remove_all(dir);
+}
+
+TEST_CASE("player launch recognizes direct Amiga HDF images as unsupported media",
+          "[apps][player][launch][amiga600][hdf]") {
+    scoped_env env({"MNEMOS_AMIGA600_KICKSTART", "MNEMOS_AMIGA600_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick20.rom";
+    const fs::path disk_path = dir / "system.hdf";
+    write_image(rom_path, tiny_kickstart());
+    write_image(disk_path, tiny_hdf());
+    REQUIRE(set_env("MNEMOS_AMIGA600_KICKSTART", rom_path.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system(
+        {.rom_paths = {disk_path.string()}, .system_arg = std::string{"amiga600"}});
+
+    CHECK(outcome.exit_code == 1);
+    CHECK(outcome.system == nullptr);
+
+    fs::remove_all(dir);
+}
+
+TEST_CASE("player launch rejects unsupported Amiga IPF images inside 7z archives",
+          "[apps][player][launch][amiga500][7z]") {
+    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick13.rom";
+    const fs::path disk_path = dir / "ipf-only.7z";
+    write_image(rom_path, tiny_kickstart());
+
+    if (!write_7z_archive(disk_path, {{"Example Game.ipf", tiny_ipf()}})) {
+        fs::remove_all(dir);
+        SKIP("tar/libarchive is unavailable or cannot create 7z archives");
+    }
+    REQUIRE(set_env("MNEMOS_AMIGA500_KICKSTART", rom_path.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system(
+        {.rom_paths = {disk_path.string()}, .system_arg = std::string{"amiga500"}});
+
+    CHECK(outcome.exit_code == 1);
+    CHECK(outcome.system == nullptr);
+
+    fs::remove_all(dir);
+}
+
+TEST_CASE("player launch treats tool-backed Amiga archive extensions as disk media",
+          "[apps][player][launch][amiga500][archive]") {
+    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick13.rom";
+    write_image(rom_path, tiny_kickstart());
+    REQUIRE(set_env("MNEMOS_AMIGA500_KICKSTART", rom_path.string()) == 0);
+
+    for (std::string_view extension : {".rar", ".lha", ".lzh"}) {
+        const fs::path disk_path = dir / ("tool-backed" + std::string{extension});
+        const std::vector<std::uint8_t> disk1 = tiny_adf(0x24U);
+        const std::vector<std::uint8_t> disk2 = tiny_adf(0x35U);
+        write_image(disk_path,
+                    make_tar({{"Tool Backed Game (Disk 2 of 2).adf", disk2},
+                              {"manual.txt", std::vector<std::uint8_t>(1024U, 0xAAU)},
+                              {"Tool Backed Game (Disk 1 of 2).adf", disk1}}));
+        if (!tar_can_list_archive(disk_path)) {
+            fs::remove_all(dir);
+            SKIP("tar/libarchive is unavailable or cannot inspect generated tool-backed archives");
+        }
+
+        auto outcome = mnemos::apps::player::launch_system(
+            {.rom_paths = {disk_path.string()}, .system_arg = std::string{"amiga500"}});
+
+        REQUIRE(outcome.exit_code == 0);
+        REQUIRE(outcome.system != nullptr);
+        CHECK(outcome.primary_media_path == disk_path.string());
+        CHECK(outcome.system->media_count() == 2U);
+        CHECK(has_spec(*outcome.system, "Disks", "2"));
+        auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
+        REQUIRE(adapter != nullptr);
+        REQUIRE(adapter->system().floppy_loaded());
+        REQUIRE(adapter->system().floppy_drives[0].image.size() > 2U);
+        CHECK(adapter->system().floppy_drives[0].image[2U] == 0x24U);
+        REQUIRE(adapter->insert_media(1U));
+        REQUIRE(adapter->system().floppy_drives[0].image.size() > 2U);
+        CHECK(adapter->system().floppy_drives[0].image[2U] == 0x35U);
+    }
+
+    fs::remove_all(dir);
+}
+
+TEST_CASE("player launch selects nested ZIP ADFs from tool-backed Amiga archives",
+          "[apps][player][launch][amiga500][archive][zip]") {
+    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick13.rom";
+    const fs::path disk_path = dir / "nested-zips.rar";
+    write_image(rom_path, tiny_kickstart());
+
+    const std::vector<std::uint8_t> disk1 = tiny_adf(0x44U);
+    const std::vector<std::uint8_t> disk2 = tiny_adf(0x55U);
+    write_image(disk_path,
+                make_tar({{"Nested Game (Disk 2 of 2).zip",
+                           deflated_zip("Nested Game (Disk 2 of 2).adf", disk2)},
+                          {"manual.txt", std::vector<std::uint8_t>(1024U, 0xAAU)},
+                          {"Nested Game (Disk 1 of 2).zip",
+                           deflated_zip("Nested Game (Disk 1 of 2).adf", disk1)}}));
+    if (!tar_can_list_archive(disk_path)) {
+        fs::remove_all(dir);
+        SKIP("tar/libarchive is unavailable or cannot inspect generated tool-backed archives");
+    }
+    REQUIRE(set_env("MNEMOS_AMIGA500_KICKSTART", rom_path.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system(
+        {.rom_paths = {disk_path.string()}, .system_arg = std::string{"amiga500"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(outcome.primary_media_path == disk_path.string());
+    CHECK(outcome.system->media_count() == 2U);
+    CHECK(has_spec(*outcome.system, "Disks", "2"));
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
+    REQUIRE(adapter != nullptr);
+    REQUIRE(adapter->system().floppy_loaded());
+    REQUIRE(adapter->system().floppy_drives[0].image.size() > 2U);
+    CHECK(adapter->system().floppy_drives[0].image[2U] == 0x44U);
+    REQUIRE(adapter->insert_media(1U));
+    REQUIRE(adapter->system().floppy_drives[0].image.size() > 2U);
+    CHECK(adapter->system().floppy_drives[0].image[2U] == 0x55U);
 
     fs::remove_all(dir);
 }
@@ -2358,6 +2599,37 @@ TEST_CASE("player launch treats a gzip-compressed Amiga ADF.GZ as disk media",
     CHECK(adapter->system().floppy_size() == amiga_system::floppy_dd_size);
     REQUIRE(adapter->system().floppy_drives[0].image.size() > 2U);
     CHECK(adapter->system().floppy_drives[0].image[2U] == 0x6DU);
+
+    fs::remove_all(dir);
+}
+
+TEST_CASE("player launch treats a zip-wrapped Amiga500+ ADF as disk media",
+          "[apps][player][launch][amiga500plus]") {
+    scoped_env env({"MNEMOS_AMIGA500PLUS_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick20.rom";
+    const fs::path disk_path = dir / "workbench.zip";
+    write_image(rom_path, tiny_kickstart());
+    const std::vector<std::uint8_t> disk_image = tiny_adf(0x74U);
+    write_image(disk_path, deflated_zip("Workbench.adf", disk_image));
+    REQUIRE(set_env("MNEMOS_AMIGA500PLUS_KICKSTART", rom_path.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system(
+        {.rom_paths = {disk_path.string()}, .system_arg = std::string{"amiga500plus"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(outcome.primary_media_path == disk_path.string());
+    CHECK(outcome.system->media_count() == 1U);
+    CHECK(has_spec(*outcome.system, "System", "Amiga 500+"));
+    CHECK(has_spec(*outcome.system, "Disk", "Workbench"));
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
+    REQUIRE(adapter != nullptr);
+    CHECK(adapter->system().floppy_loaded());
+    CHECK(adapter->system().floppy_size() == amiga_system::floppy_dd_size);
+    CHECK(adapter->system().chip_ram.size() == amiga_system::chip_ram_size_1m);
+    REQUIRE(adapter->system().floppy_drives[0].image.size() > 2U);
+    CHECK(adapter->system().floppy_drives[0].image[2U] == 0x74U);
 
     fs::remove_all(dir);
 }

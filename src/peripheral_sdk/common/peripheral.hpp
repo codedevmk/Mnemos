@@ -42,9 +42,12 @@ namespace mnemos::peripheral {
         // Lightgun / pointer fields (Zapper, Menacer, ...): the aimed screen pixel
         // in the system's native framebuffer coordinates and the trigger. Analog
         // devices reuse aim_x/aim_y as normalized 0..255 axis positions, with -1
-        // meaning disconnected/default maximum resistance.
+        // meaning disconnected/default maximum resistance. Mouse-like systems may
+        // consume mouse_delta_x/y directly when a frontend captures relative input.
         std::int16_t aim_x{-1};
         std::int16_t aim_y{-1};
+        std::int16_t mouse_delta_x{};
+        std::int16_t mouse_delta_y{};
         bool trigger{};
         std::array<bool, keyboard_usage_count> keyboard_usage{};
 

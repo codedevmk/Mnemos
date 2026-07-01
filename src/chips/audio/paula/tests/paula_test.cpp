@@ -101,6 +101,34 @@ TEST_CASE("paula register writes read back and volume clamps to 64", "[paula][au
     REQUIRE(chip.read_reg(9, paula::reg_len) == 0);
 }
 
+TEST_CASE("paula exposes register-write traces for audio export", "[paula][audio][trace]") {
+    paula chip;
+    std::vector<mnemos::instrumentation::reg_write_event> events;
+    auto* trace = chip.introspection().reg_writes();
+    REQUIRE(trace != nullptr);
+    trace->install([&](const mnemos::instrumentation::reg_write_event& event) {
+        events.push_back(event);
+    });
+
+    chip.write_reg(2, paula::reg_per, 0x1234);
+    chip.set_dma(true, 0x05U);
+    chip.set_audio_attachment(0x02U, 0x04U);
+    trace->install({});
+    chip.write_reg(2, paula::reg_vol, 0x0040);
+
+    REQUIRE(events.size() == 5U);
+    CHECK(events[0].port == 0x26U);
+    CHECK(events[0].value == 0x12U);
+    CHECK(events[1].port == 0x27U);
+    CHECK(events[1].value == 0x34U);
+    CHECK(events[2].port == 0x80U);
+    CHECK(events[2].value == 0x15U);
+    CHECK(events[3].port == 0x82U);
+    CHECK(events[3].value == 0x02U);
+    CHECK(events[4].port == 0x83U);
+    CHECK(events[4].value == 0x04U);
+}
+
 TEST_CASE("paula AUDxDAT manual write produces one word without DMA", "[paula][audio]") {
     paula chip;
     std::uint8_t callback_sources = 0U;

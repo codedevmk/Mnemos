@@ -65,6 +65,11 @@ namespace mnemos::frontend_sdk {
         // these to validate supplemental ROM-set fragments against the selected
         // manifest before merging them.
         std::vector<std::string> additional_media_paths;
+        // Optional media-kind tags corresponding to `additional_media` entries.
+        // Empty means "adapter default". System-specific launchers use stable
+        // string ids such as `amiga.floppy.adf` when byte buffers can carry
+        // different physical media classes.
+        std::vector<std::string> additional_media_kinds;
         // Whether the adapter should auto-start the loaded media (a disk/tape
         // computer types LOAD/RUN for you). Adapters without an autostart
         // concept ignore it. Defaults on; the frontend clears it to drop to a

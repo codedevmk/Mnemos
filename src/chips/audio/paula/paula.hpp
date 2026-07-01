@@ -10,6 +10,7 @@
 #include <functional>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace mnemos::chips::audio {
@@ -58,7 +59,10 @@ namespace mnemos::chips::audio {
 
         paula() {
             introspection_.with_registers([this] { return register_snapshot(); })
-                .with_audio(&audio_);
+                .with_audio(&audio_)
+                .with_reg_writes([this](instrumentation::reg_write_trace::callback cb) {
+                    reg_write_callback_ = std::move(cb);
+                });
             reset(reset_kind::power_on);
         }
 
@@ -197,6 +201,8 @@ namespace mnemos::chips::audio {
         void latch_sample(voice& ch, std::int8_t sample) noexcept;
         [[nodiscard]] bool channel_attached(int channel_index) const noexcept;
         void apply_modulation_word(int channel_index, std::uint16_t value) noexcept;
+        void note_write_word(int channel, std::uint8_t index, std::uint16_t value) const;
+        void note_write_byte(std::uint16_t port, std::uint8_t value) const;
         // Advance one channel by a sub-step; returns true while still active.
         bool advance_channel(int channel_index, voice& ch) noexcept;
 
@@ -222,6 +228,7 @@ namespace mnemos::chips::audio {
         std::array<register_descriptor, 6> register_view_{};
         audio_source_impl audio_{*this};
         instrumentation::introspection_builder introspection_;
+        instrumentation::reg_write_trace::callback reg_write_callback_{};
     };
 
 } // namespace mnemos::chips::audio

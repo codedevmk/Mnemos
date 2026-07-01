@@ -554,6 +554,133 @@ namespace mnemos::manifests::amiga {
                    static_cast<std::uint32_t>(data[offset + 3U]);
         }
 
+        [[nodiscard]] std::uint16_t read_be16(std::span<const std::uint8_t> data,
+                                              std::size_t offset) noexcept {
+            return static_cast<std::uint16_t>((static_cast<std::uint16_t>(data[offset + 0U])
+                                               << 8U) |
+                                              static_cast<std::uint16_t>(data[offset + 1U]));
+        }
+
+        constexpr std::array<std::uint8_t, 8> extended_adf_magic{
+            'U', 'A', 'E', '-', '1', 'A', 'D', 'F'};
+        constexpr std::size_t extended_adf_header_size = 12U;
+        constexpr std::size_t extended_adf_track_header_size = 12U;
+        constexpr std::uint16_t extended_adf_track_amigados = 0U;
+        constexpr std::uint16_t extended_adf_track_raw_mfm = 1U;
+        constexpr std::size_t extended_adf_max_tracks = 84U * 2U;
+
+        struct extended_adf_track_descriptor final {
+            std::uint16_t type{};
+            std::uint32_t byte_count{};
+            std::uint32_t bit_count{};
+            std::size_t data_offset{};
+        };
+
+        [[nodiscard]] bool is_extended_adf(std::span<const std::uint8_t> image) noexcept {
+            return image.size() >= extended_adf_header_size &&
+                   std::equal(extended_adf_magic.begin(), extended_adf_magic.end(),
+                              image.begin());
+        }
+
+        [[nodiscard]] std::uint16_t extended_adf_track_type(std::uint16_t raw_type) noexcept {
+            return static_cast<std::uint16_t>(raw_type & 0x00FFU);
+        }
+
+        [[nodiscard]] bool scan_extended_adf(
+            std::span<const std::uint8_t> image,
+            std::span<extended_adf_track_descriptor> descriptors) noexcept {
+            if (!is_extended_adf(image)) {
+                return false;
+            }
+            const std::size_t track_count = read_be16(image, 10U);
+            if (track_count == 0U || track_count > extended_adf_max_tracks ||
+                track_count > descriptors.size()) {
+                return false;
+            }
+
+            const std::size_t data_offset =
+                extended_adf_header_size + track_count * extended_adf_track_header_size;
+            if (data_offset > image.size()) {
+                return false;
+            }
+
+            std::size_t cursor = data_offset;
+            for (std::size_t track = 0U; track < track_count; ++track) {
+                const std::size_t header =
+                    extended_adf_header_size + track * extended_adf_track_header_size;
+                const std::uint16_t raw_type = read_be16(image, header + 2U);
+                const std::uint16_t type = extended_adf_track_type(raw_type);
+                const std::uint32_t byte_count = read_be32(image, header + 4U);
+                const std::uint32_t bit_count = read_be32(image, header + 8U);
+                if (type != extended_adf_track_amigados &&
+                    type != extended_adf_track_raw_mfm) {
+                    return false;
+                }
+                if (cursor + byte_count > image.size()) {
+                    return false;
+                }
+                if (byte_count == 0U && bit_count != 0U) {
+                    return false;
+                }
+                if (byte_count != 0U &&
+                    (bit_count == 0U ||
+                     static_cast<std::uint64_t>(bit_count) >
+                         static_cast<std::uint64_t>(byte_count) * 8U)) {
+                    return false;
+                }
+                if (type == extended_adf_track_amigados &&
+                    byte_count != amiga_system::floppy_sectors_per_track *
+                                      amiga_system::floppy_sector_size) {
+                    return false;
+                }
+                if (type == extended_adf_track_raw_mfm && (byte_count & 1U) != 0U) {
+                    return false;
+                }
+                if (track >= amiga_system::floppy_track_count && byte_count != 0U) {
+                    return false;
+                }
+
+                descriptors[track] = extended_adf_track_descriptor{
+                    .type = type,
+                    .byte_count = byte_count,
+                    .bit_count = bit_count,
+                    .data_offset = cursor};
+                cursor += byte_count;
+            }
+            return cursor == image.size();
+        }
+
+        [[nodiscard]] bool mount_extended_adf(amiga_floppy_drive_state& drive,
+                                              std::span<const std::uint8_t> image) {
+            std::array<extended_adf_track_descriptor, extended_adf_max_tracks> descriptors{};
+            if (!scan_extended_adf(image, std::span<extended_adf_track_descriptor>(descriptors))) {
+                return false;
+            }
+
+            const std::size_t track_count = read_be16(image, 10U);
+            std::vector<std::uint8_t> logical_image(amiga_system::floppy_dd_size, 0U);
+            std::array<std::vector<std::uint8_t>, amiga_system::floppy_track_count> raw_tracks{};
+            for (std::size_t track = 0U; track < track_count; ++track) {
+                const auto& descriptor = descriptors[track];
+                if (descriptor.byte_count == 0U || track >= amiga_system::floppy_track_count) {
+                    continue;
+                }
+                const auto payload =
+                    image.subspan(descriptor.data_offset, descriptor.byte_count);
+                if (descriptor.type == extended_adf_track_amigados) {
+                    const std::size_t dst = track * amiga_system::floppy_sectors_per_track *
+                                            amiga_system::floppy_sector_size;
+                    std::copy(payload.begin(), payload.end(), logical_image.begin() + dst);
+                    continue;
+                }
+                raw_tracks[track].assign(payload.begin(), payload.end());
+            }
+
+            drive.image = std::move(logical_image);
+            drive.raw_track_cache = std::move(raw_tracks);
+            return true;
+        }
+
         [[nodiscard]] std::array<std::uint32_t, 2> mfm_odd_even(std::uint32_t raw) noexcept {
             constexpr std::uint32_t mask = 0x55555555U;
             return {((raw >> 1U) & mask), (raw & mask)};
@@ -1160,6 +1287,23 @@ namespace mnemos::manifests::amiga {
                                                          chip_dma_address_high_mask)
                             : static_cast<std::uint16_t>(agnus.sprite_pointer(sprite) & 0xFFFEU);
             }
+            if (reg >= reg_spr_base &&
+                reg < reg_spr_base + chips::video::agnus::max_sprites * 8U) {
+                const std::uint32_t sprite = (reg - reg_spr_base) / 8U;
+                const auto offset = static_cast<std::uint16_t>((reg - reg_spr_base) & 0x06U);
+                switch (offset) {
+                case 0x00U:
+                    return agnus.sprite_pos(sprite);
+                case 0x02U:
+                    return agnus.sprite_ctl(sprite);
+                case 0x04U:
+                    return agnus.sprite_data_a(sprite);
+                case 0x06U:
+                    return agnus.sprite_data_b(sprite);
+                default:
+                    return 0U;
+                }
+            }
             if (reg >= reg_aud_base && reg < reg_aud_base + reg_aud_stride * 4U) {
                 const int channel = static_cast<int>((reg - reg_aud_base) / reg_aud_stride);
                 const auto offset =
@@ -1326,6 +1470,14 @@ namespace mnemos::manifests::amiga {
         return drive < floppy_drives.size() && !floppy_drives[drive].image.empty();
     }
 
+    bool amiga_system::supported_floppy_image(std::span<const std::uint8_t> image) noexcept {
+        if (image.size() == floppy_dd_size) {
+            return true;
+        }
+        std::array<extended_adf_track_descriptor, extended_adf_max_tracks> descriptors{};
+        return scan_extended_adf(image, std::span<extended_adf_track_descriptor>(descriptors));
+    }
+
     std::size_t amiga_system::floppy_size(std::size_t drive) const noexcept {
         return drive < floppy_drives.size() ? floppy_drives[drive].image.size() : 0U;
     }
@@ -1339,13 +1491,18 @@ namespace mnemos::manifests::amiga {
     }
 
     bool amiga_system::mount_floppy(std::size_t drive, std::span<const std::uint8_t> adf_image) {
-        if (drive >= floppy_drives.size() || adf_image.size() != floppy_dd_size) {
+        if (drive >= floppy_drives.size() || !supported_floppy_image(adf_image)) {
             return false;
         }
         auto& df = floppy_drives[drive];
         df.connected = true;
-        df.image.assign(adf_image.begin(), adf_image.end());
         amiga_clear_floppy_track_cache(df);
+        if (adf_image.size() == floppy_dd_size) {
+            df.image.assign(adf_image.begin(), adf_image.end());
+        } else if (!mount_extended_adf(df, adf_image)) {
+            df.image.clear();
+            return false;
+        }
         df.cylinder_pos = 0U;
         amiga_reset_floppy_stream_phase(df);
         df.track_stream_track_index = 0U;
@@ -2870,6 +3027,7 @@ namespace mnemos::manifests::amiga {
             pal ? chips::video::agnus::scanlines_pal : chips::video::agnus::scanlines_ntsc;
         const std::uint32_t hsync_hz = scanlines_per_frame * frame_hz;
         s->agnus.set_pal(pal);
+        s->agnus.set_ecs_display_fetch_timing(model.chipset == amiga_chipset::ecs_1m);
         s->agnus.set_copper_address_mask(s->copper_address_mask);
         s->agnus.attach_chip_ram(s->chip_ram);
         s->agnus.attach_palette(s->palette_bytes);
@@ -3024,6 +3182,7 @@ namespace mnemos::manifests::amiga {
         s->agnus.set_cycle_callback([s] {
             s->tick_blitter_cycle();
             s->tick_floppy_data_cycle();
+            s->paula.tick(1U);
         });
         s->agnus.set_vblank_callback([s](std::uint32_t) {
             ++s->frame_index;

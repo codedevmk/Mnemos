@@ -47,6 +47,28 @@ namespace {
         return ext;
     }
 
+    [[nodiscard]] std::string lowercase_ascii(std::string_view value) {
+        std::string out;
+        out.reserve(value.size());
+        for (char ch : value) {
+            out.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+        }
+        return out;
+    }
+
+    enum class amiga_loaded_media_kind : std::uint8_t {
+        floppy_adf,
+        floppy_ipf,
+        hard_disk,
+    };
+
+    [[nodiscard]] bool amiga_path_requires_supported_media_entry(std::string_view path) {
+        const std::string lower = lowercase_ascii(path);
+        return lower.ends_with(".zip") || lower.ends_with(".7z") || lower.ends_with(".tar") ||
+               lower.ends_with(".tar.gz") || lower.ends_with(".tgz") ||
+               lower.ends_with(".rar") || lower.ends_with(".lha") || lower.ends_with(".lzh");
+    }
+
     [[nodiscard]] const char* getenv_nonempty(const char* name) noexcept {
         const char* value = MNEMOS_PLAYER_GETENV(name);
         return value != nullptr && value[0] != '\0' ? value : nullptr;
@@ -551,21 +573,60 @@ namespace {
                      amiga_kickstart_env_var(family), amiga_bios_env_var(family));
     }
 
+    [[nodiscard]] bool has_ipf_signature(std::span<const std::uint8_t> bytes) noexcept {
+        return bytes.size() >= 4U && bytes[0] == 'C' && bytes[1] == 'A' && bytes[2] == 'P' &&
+               bytes[3] == 'S';
+    }
+
+    [[nodiscard]] amiga_loaded_media_kind
+    classify_amiga_loaded_media(const mnemos::apps::player::adapters::loaded_rom& media) {
+        const std::string lower = lowercase_ascii(media.name);
+        if (lower.ends_with(".ipf") || has_ipf_signature(media.bytes)) {
+            return amiga_loaded_media_kind::floppy_ipf;
+        }
+        if (lower.ends_with(".hdf") || lower.ends_with(".hdz")) {
+            return amiga_loaded_media_kind::hard_disk;
+        }
+        return amiga_loaded_media_kind::floppy_adf;
+    }
+
+    void print_unsupported_amiga_media(
+        const mnemos::apps::player::adapters::loaded_rom& media,
+        const std::string& source_path,
+        amiga_loaded_media_kind kind) {
+        const char* name = media.name.empty() ? source_path.c_str() : media.name.c_str();
+        switch (kind) {
+        case amiga_loaded_media_kind::floppy_ipf:
+            std::fprintf(stderr,
+                         "[mnemos_player] unsupported Amiga IPF floppy image '%s' from %s: "
+                         "IPF/CAPS flux decoding is not implemented yet\n",
+                         name, source_path.c_str());
+            return;
+        case amiga_loaded_media_kind::hard_disk:
+            std::fprintf(stderr,
+                         "[mnemos_player] unsupported Amiga hard-drive image '%s' from %s: "
+                         "HDF/HDZ hard-drive controller support is not implemented yet\n",
+                         name, source_path.c_str());
+            return;
+        case amiga_loaded_media_kind::floppy_adf:
+            break;
+        }
+    }
+
     [[nodiscard]] bool
     validate_amiga_adf_images(std::span<const mnemos::apps::player::adapters::loaded_rom> disks,
                               const std::string& source_path) {
-        constexpr std::size_t expected_size =
-            mnemos::manifests::amiga::amiga_system::floppy_dd_size;
         for (const auto& disk : disks) {
-            if (disk.bytes.size() == expected_size) {
+            if (mnemos::manifests::amiga::amiga_system::supported_floppy_image(disk.bytes)) {
                 continue;
             }
             const char* name = disk.name.empty() ? source_path.c_str() : disk.name.c_str();
             std::fprintf(stderr,
                          "[mnemos_player] unsupported Amiga ADF image '%s' from %s: %zu bytes "
-                         "(expected %zu-byte standard DD ADF; extended/raw/IPF track images are "
-                         "not supported yet)\n",
-                         name, source_path.c_str(), disk.bytes.size(), expected_size);
+                         "(expected %zu-byte standard DD ADF or supported UAE-1ADF extended "
+                         "ADF)\n",
+                         name, source_path.c_str(), disk.bytes.size(),
+                         mnemos::manifests::amiga::amiga_system::floppy_dd_size);
             return false;
         }
         return !disks.empty();
@@ -707,6 +768,7 @@ namespace mnemos::apps::player {
 
         std::vector<std::vector<std::uint8_t>> additional_media;
         std::vector<std::string> additional_media_paths;
+        std::vector<std::string> additional_media_kinds;
         for (std::size_t i = 1; i < options.rom_paths.size(); ++i) {
             if (amiga_family) {
                 continue;
@@ -998,7 +1060,8 @@ namespace mnemos::apps::player {
         if (amiga_family) {
             keyboard_layout_override =
                 amiga_keyboard_layout_override(options.keyboard_layout_override);
-            constexpr std::string_view amiga_disk_extensions[] = {".adf", ".adz", ".gz"};
+            constexpr std::string_view amiga_media_extensions[] = {".adf", ".adz", ".gz",
+                                                                   ".ipf", ".hdf", ".hdz"};
             std::vector<adapters::loaded_rom> amiga_disks;
             bool primary_path_is_amiga_disk_media = false;
             for (std::size_t media_index = 0U; media_index < options.rom_paths.size();
@@ -1011,19 +1074,37 @@ namespace mnemos::apps::player {
                     outcome.exit_code = 1;
                     return outcome;
                 }
-                auto disks = load_rom_entries_by_extension(path, amiga_disk_extensions);
-                if (!disks) {
+                auto media_entries = load_rom_entries_by_extension(path, amiga_media_extensions);
+                if (!media_entries) {
+                    if (amiga_path_requires_supported_media_entry(path)) {
+                        std::fprintf(stderr,
+                                     "[mnemos_player] Amiga archive has no supported ADF, ADZ, "
+                                     "IPF, or HDF media entries: %s\n",
+                                     path.c_str());
+                        outcome.exit_code = 1;
+                        return outcome;
+                    }
                     continue;
                 }
                 if (media_index == 0U) {
                     primary_path_is_amiga_disk_media = true;
                 }
-                if (!validate_amiga_adf_images(*disks, path)) {
+                std::vector<adapters::loaded_rom> adf_disks;
+                for (auto& media : *media_entries) {
+                    const amiga_loaded_media_kind media_kind = classify_amiga_loaded_media(media);
+                    if (media_kind != amiga_loaded_media_kind::floppy_adf) {
+                        print_unsupported_amiga_media(media, path, media_kind);
+                        outcome.exit_code = 1;
+                        return outcome;
+                    }
+                    adf_disks.push_back(std::move(media));
+                }
+                if (!validate_amiga_adf_images(adf_disks, path)) {
                     outcome.exit_code = 1;
                     return outcome;
                 }
-                amiga_disks.insert(amiga_disks.end(), std::make_move_iterator(disks->begin()),
-                                   std::make_move_iterator(disks->end()));
+                amiga_disks.insert(amiga_disks.end(), std::make_move_iterator(adf_disks.begin()),
+                                   std::make_move_iterator(adf_disks.end()));
             }
             if (!amiga_disks.empty()) {
                 auto kickstart_path = amiga_kickstart_path(family);
@@ -1056,6 +1137,8 @@ namespace mnemos::apps::player {
                 additional_media.insert(additional_media.begin(),
                                         std::make_move_iterator(primary_disks.begin()),
                                         std::make_move_iterator(primary_disks.end()));
+                additional_media_kinds.insert(additional_media_kinds.begin(), amiga_disks.size(),
+                                              "amiga.floppy.adf");
             }
         }
 
@@ -1196,6 +1279,7 @@ namespace mnemos::apps::player {
              .display_name = std::move(display_name),
              .additional_media = std::move(additional_media),
              .additional_media_paths = std::move(additional_media_paths),
+             .additional_media_kinds = std::move(additional_media_kinds),
              .autostart = options.autostart,
              .dip_override = options.dip_override,
              .mapper_override = options.mapper_override.value_or(std::string{}),

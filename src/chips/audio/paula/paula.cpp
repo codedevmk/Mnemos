@@ -82,6 +82,7 @@ namespace mnemos::chips::audio {
         if (!channel_valid(channel)) {
             return;
         }
+        note_write_word(channel, index, value);
         voice& ch = channels_[static_cast<std::size_t>(channel)];
         switch (index) {
         case reg_lch:
@@ -119,6 +120,9 @@ namespace mnemos::chips::audio {
     }
 
     void paula::set_dma(bool master_enable, std::uint8_t channel_enable_mask) noexcept {
+        note_write_byte(0x80U,
+                        static_cast<std::uint8_t>((master_enable ? 0x10U : 0x00U) |
+                                                  (channel_enable_mask & 0x0FU)));
         const bool master_was_on = dma_master_;
         dma_master_ = master_enable;
 
@@ -149,6 +153,8 @@ namespace mnemos::chips::audio {
 
     void paula::set_audio_attachment(std::uint8_t volume_mask,
                                      std::uint8_t period_mask) noexcept {
+        note_write_byte(0x82U, static_cast<std::uint8_t>(volume_mask & 0x0FU));
+        note_write_byte(0x83U, static_cast<std::uint8_t>(period_mask & 0x0FU));
         volume_attach_mask_ = static_cast<std::uint8_t>(volume_mask & 0x0FU);
         period_attach_mask_ = static_cast<std::uint8_t>(period_mask & 0x0FU);
         for (int i = 0; i < channel_count; ++i) {
@@ -228,6 +234,20 @@ namespace mnemos::chips::audio {
         } else if (period_attached) {
             target.period = value;
         }
+    }
+
+    void paula::note_write_byte(std::uint16_t port, std::uint8_t value) const {
+        if (reg_write_callback_) {
+            reg_write_callback_({.port = port, .value = value});
+        }
+    }
+
+    void paula::note_write_word(int channel, std::uint8_t index, std::uint16_t value) const {
+        const auto base = static_cast<std::uint16_t>(
+            (static_cast<std::uint16_t>(channel) << 4U) |
+            (static_cast<std::uint16_t>(index & 0x0FU) << 1U));
+        note_write_byte(base, static_cast<std::uint8_t>(value >> 8U));
+        note_write_byte(static_cast<std::uint16_t>(base + 1U), static_cast<std::uint8_t>(value));
     }
 
     bool paula::advance_channel(int channel_index, voice& ch) noexcept {

@@ -25,6 +25,10 @@ Currently wired:
 ## Keys
 
 - `ESC` quit, `F11` fullscreen toggle, `P` pause, `F12` framebuffer dump.
+- For systems with mouse input, click inside the emulation view or press
+  `Ctrl+M` to capture the host mouse, hide the host pointer, and feed relative
+  motion to the emulated mouse. Press `ESC` once to release capture; press it
+  again to quit.
 - Keyboard: arrows = dpad, `Z`/`X`/`C` = A/B/C, `A`/`S`/`D` = X/Y/Z,
   `Enter` or `1` = Start, `Backspace` or `5` = Select / arcade coin,
   `Shift` or `F2` = Mode / arcade service.
@@ -51,18 +55,46 @@ Currently wired:
   `MNEMOS_AMIGA_KICKSTART_DIR` containing model-appropriate names such as
   `Kickstart 1.3.rom` for A500 and `Kickstart 2.0.rom` for A500+/A600.
 - Amiga ADF media may be supplied directly, as `.adz` / `.adf.gz`, in direct
-  ZIP or TAR archives, as `.tar.gz` / `.tgz`, in tool-backed `.7z` archives
-  when the platform `tar`/libarchive command can inspect them, or in one of the
-  common outer ZIP wrappers that contain nested per-disk ZIPs.
+  ZIP or TAR archives, as `.tar.gz` / `.tgz`, in tool-backed `.7z`, `.rar`,
+  `.lha`, or `.lzh` archives when the platform `tar`/libarchive command can
+  inspect that format, or in one of the common outer ZIP wrappers that contain
+  nested per-disk ZIPs.
   When direct or nested archives expose a complete `(Disk N of M)` sequence, the
   player mounts it in disk order. Multiple `--rom`, `-r`, or `--disk` paths are
   aggregated in command-line order, so separate Boot/Extras archives or
-  per-disk game archives mount as one disk set. Only standard
-  901,120-byte DD ADF images are accepted by the current floppy path; extended
-  ADF, raw-track, and IPF images are rejected as unsupported media.
+  per-disk game archives mount as one disk set. The current floppy path accepts
+  standard 901,120-byte DD ADF images and supported `UAE-1ADF` extended ADF
+  images with normal AmigaDOS tracks or raw MFM tracks. IPF floppy images and
+  HDF/HDZ hard-drive images are recognized as Amiga media classes, but still
+  fail with explicit unsupported-media errors until the IPF decoder and
+  hard-drive controller paths are implemented. Extended ADF overtrack payloads
+  are also rejected as unsupported media.
   `scripts/amiga/run-corpus-smoke.ps1 -RomDir <path>` scans only direct ADF/ADZ
   files and supported archives that expose direct ADF/ADZ entries or supported
-  nested ZIP candidates.
+  nested ZIP candidates. Complete filename-marked disk sets such as
+  `(Disk 1 of 3)` / `(Disk 2 of 3)` / `(Disk 3 of 3)` are launched together.
+  The runner also infers complete contiguous sequences such as
+  `Game_disk1` / `Game_disk2` or `Game_1` / `Game_2` when every disk from 1
+  through the highest number is present with no duplicates, so directory
+  scans exercise the same multi-disk path as repeated `--rom`/`--disk`
+  launches. Use `-ListSets` to inspect the grouped launch plan without
+  running the emulator. Use `-MaxSets <n>` with `-StartAfter <path-or-name>` to
+  walk a large local corpus in deterministic slices. Add `-MinimumHeadlessFps
+  <fps>` to fail the smoke when a launch falls below the requested headless
+  throughput. Add `-RequireDiskProgress` with optional `-MinimumDiskCylinder`
+  to require the Amiga board register dump to show disk progress through a
+  nonzero disk DMA pointer, active DMA remainder, or observed head movement;
+  optionally require head movement beyond a requested cylinder. Add
+  `-RejectKickstartPrompt` when promoting compatibility rows so known insert-disk
+  prompt frames do not count as operational software. Add `-RequireRenderedAudio`
+  with optional `-AudioFrames`, `-AudioPress`,
+  `-MinimumAudioFramesWithSignal`, and `-MinimumAudioPeakAbs` to gate titles
+  that should produce Paula output after scripted input. Per-run timing and
+  optional rendered-audio metrics, screenshot hashes, and audio artifact hashes
+  are written to `build/scratch/amiga-corpus/summary.csv`. Use
+  `-ExpectedSummary <csv-or-json>` to compare current screenshot/audio hashes
+  against a prior or reference summary; add `-RequireExpectedRows` when every
+  current row must have a baseline.
 - Amiga 2000 defaults to the base OCS/512 KiB profile. Use
   `--amiga-model ecs-1m` or `MNEMOS_AMIGA2000_MODEL=ecs-1m` for an upgraded
   ECS / 1 MiB Kickstart 2.x-style configuration. Add Fast RAM with a combined

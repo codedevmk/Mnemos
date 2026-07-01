@@ -10,10 +10,10 @@
 namespace mnemos::apps::player::adapters {
 
     struct loaded_rom final {
-        std::vector<std::uint8_t> bytes; // the ROM image (extracted if the source was a .zip)
+        std::vector<std::uint8_t> bytes; // the ROM image, extracted if the source was archived.
         // Effective name for the displayed title: the chosen entry name for a
-        // .zip, else the path. Carries no routing weight -- the engine comes
-        // from --system.
+        // supported archive, else the path. Carries no routing weight -- the
+        // engine comes from --system.
         std::string name;
         // True when the source is a directory-backed ROM set rather than a
         // flat byte stream. Arcade adapters that understand multi-file sets
@@ -21,18 +21,19 @@ namespace mnemos::apps::player::adapters {
         bool directory_source{};
     };
 
-    // Load a ROM image from `path`, transparently extracting it when the file
-    // is a .zip (detected by signature). The largest STORED/DEFLATE entry is
-    // taken as the ROM -- ROM-set archives are typically a single entry, and a
-    // ROM always dwarfs any readme/junk alongside it. A non-archive file is
-    // returned as-is. nullopt if the file can't be read, the archive is
-    // malformed, or extraction fails.
+    // Load a ROM image from `path`, transparently extracting supported single
+    // image wrappers such as ZIP and gzip. The largest STORED/DEFLATE ZIP
+    // entry is taken as the ROM -- ROM-set archives are typically a single
+    // entry, and a ROM always dwarfs any readme/junk alongside it. A
+    // non-archive file is returned as-is. nullopt if the file can't be read,
+    // the archive is malformed, or extraction fails.
     [[nodiscard]] std::optional<loaded_rom> load_rom(const std::string& path);
 
     // Load all media entries whose final extension matches one of `extensions`.
-    // Non-archives return a single image when their path matches. ZIP archives
-    // return matching entries in central-directory order. Gzip-wrapped entries
-    // such as Amiga `.adz` images are transparently inflated.
+    // Non-archives return a single image when their path matches. Supported
+    // archives return matching entries in archive order, with complete
+    // multi-disk sequences ordered by disk marker. Gzip-wrapped entries such
+    // as Amiga `.adz` images are transparently inflated.
     [[nodiscard]] std::optional<std::vector<loaded_rom>>
     load_rom_entries_by_extension(const std::string& path,
                                   std::span<const std::string_view> extensions);

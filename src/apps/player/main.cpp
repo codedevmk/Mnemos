@@ -310,6 +310,79 @@ namespace {
         }
     }
 
+    [[nodiscard]] bool has_mouse_input_port(const mnemos::frontend_sdk::player_system* system) {
+        if (system == nullptr) {
+            return false;
+        }
+        for (const auto& p : system->session_capabilities().input_ports) {
+            if (p.format == mnemos::frontend_sdk::input_device_format::mouse) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    [[nodiscard]] int mouse_input_port(const mnemos::frontend_sdk::player_system* system) {
+        if (system == nullptr) {
+            return -1;
+        }
+        for (const auto& p : system->session_capabilities().input_ports) {
+            if (p.format == mnemos::frontend_sdk::input_device_format::mouse) {
+                return static_cast<int>(p.port_index);
+            }
+        }
+        return -1;
+    }
+
+    [[nodiscard]] bool point_inside_frame(SDL_Window* window,
+                                          const mnemos::frontend_sdk::player_system* system,
+                                          float x, float y) {
+        if (window == nullptr || system == nullptr) {
+            return false;
+        }
+        int ww = 0;
+        int wh = 0;
+        SDL_GetWindowSize(window, &ww, &wh);
+        const auto fb = system->current_frame();
+        if (fb.width == 0U || fb.height == 0U || ww <= 0 || wh <= 0) {
+            return false;
+        }
+        const auto rect =
+            integer_letterbox(ww, wh, static_cast<int>(fb.width), static_cast<int>(fb.height));
+        return x >= static_cast<float>(rect.x) && y >= static_cast<float>(rect.y) &&
+               x < static_cast<float>(rect.x + rect.w) &&
+               y < static_cast<float>(rect.y + rect.h);
+    }
+
+    [[nodiscard]] std::int16_t clamp_mouse_delta(int delta) noexcept {
+        delta = std::clamp(delta, static_cast<int>(std::numeric_limits<std::int16_t>::min()),
+                           static_cast<int>(std::numeric_limits<std::int16_t>::max()));
+        return static_cast<std::int16_t>(delta);
+    }
+
+    void set_mouse_capture(SDL_Window* window, bool& captured, bool enabled,
+                           double& pending_raw_dx, double& pending_raw_dy) {
+        if (window == nullptr || captured == enabled) {
+            return;
+        }
+        if (!SDL_SetWindowRelativeMouseMode(window, enabled)) {
+            std::fprintf(stderr, "[mnemos_player] mouse capture failed: %s\n", SDL_GetError());
+            std::fflush(stderr);
+            return;
+        }
+        captured = SDL_GetWindowRelativeMouseMode(window);
+        pending_raw_dx = 0.0;
+        pending_raw_dy = 0.0;
+        float discard_x = 0.0F;
+        float discard_y = 0.0F;
+        (void)SDL_GetRelativeMouseState(&discard_x, &discard_y);
+        if (!captured) {
+            SDL_ShowCursor();
+        }
+        std::fprintf(stderr, "[mnemos_player] mouse %s\n", captured ? "captured" : "released");
+        std::fflush(stderr);
+    }
+
     [[nodiscard]] const char* load_status_name(mnemos::runtime::load_status status) noexcept {
         switch (status) {
         case mnemos::runtime::load_status::ok:
@@ -812,6 +885,9 @@ int main(int argc, char* argv[]) {
     }
 
     bool running = true;
+    bool mouse_captured = false;
+    double pending_mouse_raw_dx = 0.0;
+    double pending_mouse_raw_dy = 0.0;
     while (running) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -821,7 +897,17 @@ int main(int argc, char* argv[]) {
                 break;
             case SDL_EVENT_KEY_DOWN:
                 if (event.key.key == SDLK_ESCAPE) {
-                    running = false;
+                    if (mouse_captured) {
+                        set_mouse_capture(window, mouse_captured, false, pending_mouse_raw_dx,
+                                          pending_mouse_raw_dy);
+                    } else {
+                        running = false;
+                    }
+                } else if (event.key.key == SDLK_M &&
+                           (event.key.mod & (SDL_KMOD_LCTRL | SDL_KMOD_RCTRL)) != 0U &&
+                           !light_gun && has_mouse_input_port(system.get())) {
+                    set_mouse_capture(window, mouse_captured, !mouse_captured,
+                                      pending_mouse_raw_dx, pending_mouse_raw_dy);
                 } else if (event.key.key == SDLK_F12) {
                     dump_requested = true;
                 } else if (event.key.key == SDLK_F5) {
@@ -847,6 +933,26 @@ int main(int argc, char* argv[]) {
                             std::fflush(stderr);
                         }
                     }
+                }
+                break;
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+                if (event.button.button == SDL_BUTTON_LEFT && !mouse_captured && !light_gun &&
+                    has_mouse_input_port(system.get()) &&
+                    point_inside_frame(window, system.get(), event.button.x, event.button.y)) {
+                    set_mouse_capture(window, mouse_captured, true, pending_mouse_raw_dx,
+                                      pending_mouse_raw_dy);
+                }
+                break;
+            case SDL_EVENT_MOUSE_MOTION:
+                if (mouse_captured) {
+                    pending_mouse_raw_dx += static_cast<double>(event.motion.xrel);
+                    pending_mouse_raw_dy += static_cast<double>(event.motion.yrel);
+                }
+                break;
+            case SDL_EVENT_WINDOW_FOCUS_LOST:
+                if (mouse_captured) {
+                    set_mouse_capture(window, mouse_captured, false, pending_mouse_raw_dx,
+                                      pending_mouse_raw_dy);
                 }
                 break;
             case SDL_EVENT_GAMEPAD_ADDED:
@@ -952,13 +1058,7 @@ int main(int argc, char* argv[]) {
         // Pointer-style mouse ports consume the OS pointer even when --light-gun
         // is not active; adapters advertise the concrete port they want driven.
         if (system) {
-            int mouse_port = -1;
-            for (const auto& p : system->session_capabilities().input_ports) {
-                if (p.format == mnemos::frontend_sdk::input_device_format::mouse) {
-                    mouse_port = static_cast<int>(p.port_index);
-                    break;
-                }
-            }
+            const int mouse_port = mouse_input_port(system.get());
             if (mouse_port >= 0) {
                 float mx = 0.0F;
                 float my = 0.0F;
@@ -974,13 +1074,38 @@ int main(int argc, char* argv[]) {
                 if (fb.width != 0U && fb.height != 0U && ww > 0 && wh > 0) {
                     const auto rect = integer_letterbox(ww, wh, static_cast<int>(fb.width),
                                                         static_cast<int>(fb.height));
-                    const int rx = static_cast<int>(mx) - rect.x;
-                    const int ry = static_cast<int>(my) - rect.y;
-                    if (rx >= 0 && ry >= 0 && rx < rect.w && ry < rect.h) {
-                        pointer.aim_x =
-                            static_cast<std::int16_t>(rx * static_cast<int>(fb.width) / rect.w);
-                        pointer.aim_y =
-                            static_cast<std::int16_t>(ry * static_cast<int>(fb.height) / rect.h);
+                    if (mouse_captured) {
+                        if (rect.w > 0 && rect.h > 0) {
+                            const double scaled_x = pending_mouse_raw_dx *
+                                                    static_cast<double>(fb.width) /
+                                                    static_cast<double>(rect.w);
+                            const double scaled_y = pending_mouse_raw_dy *
+                                                    static_cast<double>(fb.height) /
+                                                    static_cast<double>(rect.h);
+                            const int delta_x = static_cast<int>(scaled_x);
+                            const int delta_y = static_cast<int>(scaled_y);
+                            if (delta_x != 0) {
+                                pending_mouse_raw_dx -=
+                                    static_cast<double>(delta_x) *
+                                    static_cast<double>(rect.w) / static_cast<double>(fb.width);
+                            }
+                            if (delta_y != 0) {
+                                pending_mouse_raw_dy -=
+                                    static_cast<double>(delta_y) *
+                                    static_cast<double>(rect.h) / static_cast<double>(fb.height);
+                            }
+                            pointer.mouse_delta_x = clamp_mouse_delta(delta_x);
+                            pointer.mouse_delta_y = clamp_mouse_delta(delta_y);
+                        }
+                    } else {
+                        const int rx = static_cast<int>(mx) - rect.x;
+                        const int ry = static_cast<int>(my) - rect.y;
+                        if (rx >= 0 && ry >= 0 && rx < rect.w && ry < rect.h) {
+                            pointer.aim_x = static_cast<std::int16_t>(
+                                rx * static_cast<int>(fb.width) / rect.w);
+                            pointer.aim_y = static_cast<std::int16_t>(
+                                ry * static_cast<int>(fb.height) / rect.h);
+                        }
                     }
                 }
                 system->apply_input(mouse_port, pointer);
@@ -1069,6 +1194,10 @@ int main(int argc, char* argv[]) {
                 now_ticks > next_frame_at + static_cast<Uint64>(frame_ticks * 4)) {
                 next_frame_at = now_ticks + static_cast<Uint64>(frame_ticks);
             }
+        }
+        if (system && frames_due == 0 && !paused) {
+            SDL_Delay(1);
+            continue;
         }
         if (system) {
             for (int step = 0; step < frames_due; ++step) {
