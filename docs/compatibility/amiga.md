@@ -848,8 +848,8 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | California Games II (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Campaign II - 50 Years of Global Conflict (Europe) (En,Fr,De,Es,It) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Campaign - Tactical & Strategic War Simulation (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Cannon Fodder 1993 Virgin DE cr TRSI | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
-| Cannon Fodder (1993)(Virgin)(DE)[cr TRSI] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Cannon Fodder 1993 Virgin DE cr TRSI | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Cannon Fodder (1993)(Virgin)(DE)[cr TRSI] | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Cannon Fodder 2 1994 Virgin cr PDX | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | Cannon Fodder 2 (1994)(Virgin)[cr PDX] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Cannon Fodder 2 (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -930,7 +930,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Championship Run (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Chaos Engine 2, The (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Chaos Engine 2, The (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Chaos Engine, The (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Chaos Engine, The (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Chaos Engine, The (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Chaos in Andromeda - Eyes of the Eagle (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Chariots of Wrath (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1185,7 +1185,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | DM2 Skullkeep | TBD | Prompt only | TBD | TBD | TBD | Prompt only | Prompt only | TBD | TBD | TBD |
 | DNA Warrior (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dogfight - 80 Years of Aerial Warfare (Europe) (En,Fr,De,It) (v1.01) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Dogs of War (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Dogs of War (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Dojo Dan (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dominator (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dominium (Europe) (En,Fr,De) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1239,7 +1239,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Drivin' Force (Europe) (1504) (Alt) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Drivin' Force (Europe) (Compilation - Powerplay) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Drole d'Ecole (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| DuckTales - The Quest for Gold (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| DuckTales - The Quest for Gold (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | DuckTales - The Quest for Gold (Europe) (0299) (Alt) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dugger - Starring Herbie Stone (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dune (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1419,7 +1419,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Fire Force - CD32 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Fire Force (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Fire & Forget II - The Death Convoy (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Fire & Ice - The Daring Adventures of Cool Coyote (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Fire & Ice - The Daring Adventures of Cool Coyote (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Fireball + Balls + Space Bomber 3 (Germany) (Coverdisk - Amiga Fever - Issue xx) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Fireblaster (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Firehawk (Europe) (v2.0) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1578,7 +1578,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Goblins 3 (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Goblins 3 (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Godfather, The (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Gods (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Gods (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Gods (Europe) (Alt) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Gold of the Aztecs, The (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Gold Rush! (Europe) (v2.05) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2569,7 +2569,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Profi-Fussball - Der Trainer (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | ProFlight (Europe) (v1.51) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Project One (Europe) (Coverdisk - Amiga Fun) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Project-X (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Project-X (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Project-X (Europe) (v2.0) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Project X F17 Challenge - CD32 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Project-X - Special Edition '93 (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2688,7 +2688,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Rise of the Robots (Europe) (ECS) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Risk - The World Conquest Game (Europe) (v1.9) (Compilation - Board Genius) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Riskant! (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Risky Woods (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Risky Woods (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Road Blasters (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Road Blasters (Europe) (Budget - Kixx) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Road Rash (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -3162,7 +3162,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Swords of Twilight (LHA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Syndicate | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Syndicate (1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Syndicate (Europe) (En,Fr,It) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Syndicate (Europe) (En,Fr,It) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Syndicate (Europe) (En,Fr,It) (Compilation - Chaos Pack) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Syndicate (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Syndicate (LHA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -3656,6 +3656,8 @@ not committed.
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Alien Breed/Another World/Lemmings/Lotus Turbo Challenge 2/Pinball Dreams/Speedball 2/Superfrog root .7z slice>` failed with explicit IPF/CAPS messages; those rows are marked `Unsupported media (format pending)` on A500/A500+/A600. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Budokan/P.P. Hammer variants/Pang-AGA/PinballDreamsNTSC/Golden Axe AGA slice>` was rerun after fixing dotted-title artifact names. Manual screenshot review marked Budokan as visual-defect-only on all three, promoted only the A500 route for P.P. Hammer 1991 CSL, marked the h PRX variant as visual-defect-only, classified Pang-AGA as an A500 load error plus A500+/A600 white-screen defect, and left Golden Axe AGA unpromoted because it only reached a generic crack intro. PinballDreamsNTSC ZIP contains loose hard-drive install files rather than a supported image entry. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Indiana Jones and the Fate of Atlantis 11-disk set/Swords of Twilight 2-disk set/Black Crypt 3-disk set>` passed all 9 mechanical launches. Manual screenshot review promoted Black Crypt and Swords of Twilight to visual smoke on A500/A500+/A600, while Indiana Jones and the Fate of Atlantis stayed visual-defect-only on all three. |
+| 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <P.P. Hammer 1992 budget ZIP/Cannon Fodder TRSI 3-disk ZIP set>` passed all 6 launches. Manual screenshot review kept P.P. Hammer budget as visual smoke and promoted Cannon Fodder TRSI to visual smoke on A500/A500+/A600. |
+| 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Superfrog/Chaos Engine/Risky Woods/Gods/Syndicate/Fire & Ice/Lemmings/Dogs of War/Project-X/DuckTales root .7z set>` failed before emulation because every selected archive contained IPF entries; those rows are marked `Unsupported media (format pending)` for A500/A500+/A600 until IPF/CAPS flux decoding lands. |
 
 ## Update Rules
 
