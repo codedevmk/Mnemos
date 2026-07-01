@@ -709,7 +709,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Bismarck (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bismarck (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Black Cauldron, The (Europe) (v2.00) (HLS) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Black Crypt | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
+| Black Crypt | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Black Crypt (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Black Gold (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Black Gold (Germany) (v1.16 14.1.1992) (Compilation - World of Business) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1766,7 +1766,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Impossible Mission II (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | In 80 Days Around the World (Europe) (En,De) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Incredible Crash Dummies, The (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Indiana Jones and the Fate of Atlantis | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Indiana Jones and the Fate of Atlantis | TBD | Visual defect | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
 | Indiana Jones and the Fate of Atlantis - A Graphic Adventure (Europe) (v1.06 10-12-92) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Indiana Jones and the Fate of Atlantis - A Graphic Adventure (France) (v1.0 3-2-93) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Indiana Jones and the Fate of Atlantis - Ein Grafik Adventure (Germany) (v1.0 1992-10-28) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -3157,7 +3157,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Sword of Aragon (Europe) (v1.0) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Sword of Honour (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Sword of Sodan (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Swords of Twilight | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
+| Swords of Twilight | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Swords of Twilight (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Swords of Twilight (LHA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Syndicate | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -3654,6 +3654,7 @@ not committed.
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Arthur/Deep Core/Disk-O-Rogue/Golden Axe AGA/P.P. Hammer/PREY/Onescapee/Swords_of_Twilight_Disk1 ADF ZIP slice>` produced 15 successful mechanical launches and 9 unsupported archive-entry failures. Manual screenshot review promoted P.P. Hammer on A500/A500+/A600, Disk-O-Rogue on A500+/A600, and Swords of Twilight disk smoke on all three; Disk-O-Rogue A500 was marked as a visual defect. Deep Core, PREY, and Onescapee ZIPs contained CD image media rather than ADF/ADZ/IPF/HDF entries. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Alien Breed/Another World/Lemmings/Lotus Turbo Challenge 2/Pinball Dreams/Speedball 2/Superfrog root .7z slice>` failed with explicit IPF/CAPS messages; those rows are marked `Unsupported media (format pending)` on A500/A500+/A600. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Budokan/P.P. Hammer variants/Pang-AGA/PinballDreamsNTSC/Golden Axe AGA slice>` was rerun after fixing dotted-title artifact names. Manual screenshot review marked Budokan as visual-defect-only on all three, promoted only the A500 route for P.P. Hammer 1991 CSL, marked the h PRX variant as visual-defect-only, classified Pang-AGA as an A500 load error plus A500+/A600 white-screen defect, and left Golden Axe AGA unpromoted because it only reached a generic crack intro. PinballDreamsNTSC ZIP contains loose hard-drive install files rather than a supported image entry. |
+| 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Indiana Jones and the Fate of Atlantis 11-disk set/Swords of Twilight 2-disk set/Black Crypt 3-disk set>` passed all 9 mechanical launches. Manual screenshot review promoted Black Crypt and Swords of Twilight to visual smoke on A500/A500+/A600, while Indiana Jones and the Fate of Atlantis stayed visual-defect-only on all three. |
 
 ## Update Rules
 
