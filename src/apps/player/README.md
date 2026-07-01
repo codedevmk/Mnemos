@@ -44,6 +44,21 @@ Currently wired:
   `en-gb`, `es`, `it`, `sv`, `fi`, `dk`, and `nb-no`.
   `MNEMOS_AMIGA500_KEYBOARD_LAYOUT` remains the fallback when the CLI option is
   absent.
+- Amiga Kickstart ROMs can be supplied explicitly with
+  `MNEMOS_AMIGA500_KICKSTART`, `MNEMOS_AMIGA500PLUS_KICKSTART`,
+  `MNEMOS_AMIGA600_KICKSTART`, or `MNEMOS_AMIGA2000_KICKSTART`. The player also
+  accepts matching `*_BIOS` aliases, or a shared `MNEMOS_AMIGA_BIOS_DIR` /
+  `MNEMOS_AMIGA_KICKSTART_DIR` containing model-appropriate names such as
+  `Kickstart 1.3.rom` for A500 and `Kickstart 2.0.rom` for A500+/A600.
+- Amiga ADF media may be supplied directly, as `.adz` / `.adf.gz`, in direct
+  ZIP archives, or in one of the common outer ZIP wrappers that contain nested
+  per-disk ZIPs.
+  When direct or nested archives expose a complete `(Disk N of M)` sequence, the
+  player mounts it in disk order. Only standard
+  901,120-byte DD ADF images are accepted by the current floppy path; extended
+  ADF, raw-track, and IPF images are rejected as unsupported media.
+  `scripts/amiga/run-corpus-smoke.ps1 -RomDir <path>` scans only direct ADF/ADZ
+  files and ZIPs that expose direct ADF/ADZ entries or nested ZIP candidates.
 - Amiga 2000 defaults to the base OCS/512 KiB profile. Use
   `--amiga-model ecs-1m` or `MNEMOS_AMIGA2000_MODEL=ecs-1m` for an upgraded
   ECS / 1 MiB Kickstart 2.x-style configuration. Add Fast RAM with a combined

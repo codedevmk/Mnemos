@@ -9,15 +9,15 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <utility>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -64,6 +64,7 @@ namespace {
             previous_.reserve(names.size() + 10U);
             bool saw_msx = false;
             bool saw_msx2 = false;
+            bool saw_amiga = false;
             const auto capture = [this](const char* name) {
                 if (std::find(names_.begin(), names_.end(), name) != names_.end()) {
                     return;
@@ -76,9 +77,9 @@ namespace {
             for (const char* name : names) {
                 const std::string_view env_name{name};
                 saw_msx2 = saw_msx2 || env_name.rfind("MNEMOS_MSX2_", 0U) == 0U;
-                saw_msx = saw_msx ||
-                          (env_name.rfind("MNEMOS_MSX_", 0U) == 0U &&
-                           env_name.rfind("MNEMOS_MSX2_", 0U) != 0U);
+                saw_msx = saw_msx || (env_name.rfind("MNEMOS_MSX_", 0U) == 0U &&
+                                      env_name.rfind("MNEMOS_MSX2_", 0U) != 0U);
+                saw_amiga = saw_amiga || env_name.rfind("MNEMOS_AMIGA", 0U) == 0U;
                 capture(name);
             }
 
@@ -98,6 +99,22 @@ namespace {
                 capture("MNEMOS_MSX2_CART2_SLOT");
                 capture("MNEMOS_MSX2_RAM_SIZE");
                 capture("MNEMOS_MSX2_LOGO_ROM");
+            }
+            if (saw_amiga) {
+                capture("MNEMOS_AMIGA500_BIOS");
+                capture("MNEMOS_AMIGA500PLUS_BIOS");
+                capture("MNEMOS_AMIGA600_BIOS");
+                capture("MNEMOS_AMIGA2000_BIOS");
+                capture("MNEMOS_AMIGA500_KICKSTART_DIR");
+                capture("MNEMOS_AMIGA500PLUS_KICKSTART_DIR");
+                capture("MNEMOS_AMIGA600_KICKSTART_DIR");
+                capture("MNEMOS_AMIGA2000_KICKSTART_DIR");
+                capture("MNEMOS_AMIGA500_BIOS_DIR");
+                capture("MNEMOS_AMIGA500PLUS_BIOS_DIR");
+                capture("MNEMOS_AMIGA600_BIOS_DIR");
+                capture("MNEMOS_AMIGA2000_BIOS_DIR");
+                capture("MNEMOS_AMIGA_KICKSTART_DIR");
+                capture("MNEMOS_AMIGA_BIOS_DIR");
             }
         }
 
@@ -340,7 +357,6 @@ namespace {
         });
     }
 
-
     [[nodiscard]] std::vector<std::uint8_t> tiny_kickstart() {
         std::vector<std::uint8_t> rom(amiga_system::kickstart_window_size, 0x00U);
         const auto w16 = [&](std::size_t offset, std::uint16_t value) {
@@ -361,15 +377,37 @@ namespace {
         return rom;
     }
 
-    [[nodiscard]] std::vector<std::uint8_t> tiny_adf() {
-        std::vector<std::uint8_t> adf(amiga_system::floppy_dd_size, 0x00U);
+    [[nodiscard]] std::vector<std::uint8_t> tiny_adf(std::uint8_t fill = 0x00U) {
+        std::vector<std::uint8_t> adf(amiga_system::floppy_dd_size, fill);
         adf[0] = 0x44U;
         adf[1] = 0x89U;
         return adf;
     }
 
-    [[nodiscard]] std::vector<std::uint8_t>
-    deflated_zip(std::string_view entry_name, std::span<const std::uint8_t> data) {
+    [[nodiscard]] std::vector<std::uint8_t> gzip_deflated(std::string_view original_name,
+                                                          std::span<const std::uint8_t> data) {
+        const std::vector<std::uint8_t> payload = mnemos::compression::deflate_raw(data);
+        REQUIRE(data.size() <= 0xFFFFFFFFULL);
+
+        std::vector<std::uint8_t> gzip;
+        gzip.reserve(10U + original_name.size() + 1U + payload.size() + 8U);
+        gzip.push_back(0x1FU);
+        gzip.push_back(0x8BU);
+        gzip.push_back(0x08U); // DEFLATE.
+        gzip.push_back(0x08U); // FNAME.
+        append_u32_le(gzip, 0U);
+        gzip.push_back(0U);
+        gzip.push_back(255U);
+        append_ascii(gzip, original_name);
+        gzip.push_back(0U);
+        gzip.insert(gzip.end(), payload.begin(), payload.end());
+        append_u32_le(gzip, 0U); // CRC32 is not consumed by the launch loader.
+        append_u32_le(gzip, static_cast<std::uint32_t>(data.size()));
+        return gzip;
+    }
+
+    [[nodiscard]] std::vector<std::uint8_t> deflated_zip(std::string_view entry_name,
+                                                         std::span<const std::uint8_t> data) {
         const std::vector<std::uint8_t> payload = mnemos::compression::deflate_raw(data);
         REQUIRE(entry_name.size() <= 0xFFFFU);
         REQUIRE(payload.size() <= 0xFFFFFFFFULL);
@@ -429,8 +467,7 @@ namespace {
 
     [[nodiscard]] constexpr std::uint32_t i(std::uint8_t op, std::uint8_t rs, std::uint8_t rt,
                                             std::uint16_t imm) {
-        return (static_cast<std::uint32_t>(op) << 26U) |
-               (static_cast<std::uint32_t>(rs) << 21U) |
+        return (static_cast<std::uint32_t>(op) << 26U) | (static_cast<std::uint32_t>(rs) << 21U) |
                (static_cast<std::uint32_t>(rt) << 16U) | imm;
     }
 
@@ -463,7 +500,7 @@ namespace {
         put32(bios, i(0x09U, 0U, 1U, 0x1234U)); // ADDIU AT,R0,1234
         put32(bios, i(0x2BU, 0U, 1U, 0x0000U)); // SW AT,0(R0)
         put32(bios, i(0x04U, 0U, 0U, 0xFFFFU)); // BEQ R0,R0,$-4
-        put32(bios, 0U);                         // delay-slot NOP
+        put32(bios, 0U);                        // delay-slot NOP
         return bios;
     }
 
@@ -547,8 +584,8 @@ namespace {
     }
 
     [[nodiscard]] std::vector<std::uint8_t> make_package() {
-        return make_stored_zip({{"readme.txt", {'G', '-', 'N', 'E', 'T'}},
-                                {"card.chd", make_none_block_chd()}});
+        return make_stored_zip(
+            {{"readme.txt", {'G', '-', 'N', 'E', 'T'}}, {"card.chd", make_none_block_chd()}});
     }
 
     void write_bytes(const std::filesystem::path& path, const std::vector<std::uint8_t>& bytes) {
@@ -729,8 +766,8 @@ TEST_CASE("system launch applies MSX2 machine slot and RAM profile environment",
     auto outcome = mnemos::apps::player::launch_system(options);
     REQUIRE(outcome.exit_code == 0);
     REQUIRE(outcome.system != nullptr);
-    CHECK(has_spec(*outcome.system, "Slot Layout",
-                   "expanded=9 ram=3.1 sub=3.0 disk=2.0 cart2=2.3"));
+    CHECK(
+        has_spec(*outcome.system, "Slot Layout", "expanded=9 ram=3.1 sub=3.0 disk=2.0 cart2=2.3"));
     CHECK(has_spec(*outcome.system, "RAM Mapper", "256 KiB"));
 
     fs::remove_all(dir);
@@ -1500,7 +1537,6 @@ TEST_CASE("system launch mounts MSX2 primary DSK with disk interface ROM",
     fs::remove_all(dir);
 }
 
-
 TEST_CASE("launch_system requires a G-NET BIOS for Taito G-NET packages",
           "[player][launch][taito_gnet]") {
     const auto root = std::filesystem::temp_directory_path() / "mnemos_taito_gnet_launch_test";
@@ -1515,8 +1551,7 @@ TEST_CASE("launch_system requires a G-NET BIOS for Taito G-NET packages",
     CHECK(launch.system == nullptr);
 }
 
-TEST_CASE("launch_system boots Taito G-NET package with BIOS env",
-          "[player][launch][taito_gnet]") {
+TEST_CASE("launch_system boots Taito G-NET package with BIOS env", "[player][launch][taito_gnet]") {
     const auto root = std::filesystem::temp_directory_path() / "mnemos_taito_gnet_launch_test";
     REQUIRE((std::filesystem::create_directories(root) || std::filesystem::exists(root)));
     const auto bios_path = root / "coh3002t.353";
@@ -1547,8 +1582,7 @@ TEST_CASE("player launch boots Amiga500 from Kickstart env without disk media",
     REQUIRE(set_env("MNEMOS_AMIGA500_KICKSTART", rom_path.string()) == 0);
     REQUIRE(set_env("MNEMOS_AMIGA500_KEYBOARD_LAYOUT", "azerty") == 0);
 
-    auto outcome =
-        mnemos::apps::player::launch_system({.system_arg = std::string{"amiga500"}});
+    auto outcome = mnemos::apps::player::launch_system({.system_arg = std::string{"amiga500"}});
 
     REQUIRE(outcome.exit_code == 0);
     REQUIRE(outcome.system != nullptr);
@@ -1568,8 +1602,7 @@ TEST_CASE("player launch boots Amiga500+ from its Kickstart env without disk med
     write_image(rom_path, tiny_kickstart());
     REQUIRE(set_env("MNEMOS_AMIGA500PLUS_KICKSTART", rom_path.string()) == 0);
 
-    auto outcome =
-        mnemos::apps::player::launch_system({.system_arg = std::string{"amiga500plus"}});
+    auto outcome = mnemos::apps::player::launch_system({.system_arg = std::string{"amiga500plus"}});
 
     REQUIRE(outcome.exit_code == 0);
     REQUIRE(outcome.system != nullptr);
@@ -1607,6 +1640,79 @@ TEST_CASE("player launch boots Amiga600 from its Kickstart env without disk medi
     fs::remove_all(dir);
 }
 
+TEST_CASE("player launch discovers Amiga500+ Kickstart from shared BIOS directory",
+          "[apps][player][launch][amiga500plus][bios-dir]") {
+    scoped_env env({"MNEMOS_AMIGA500PLUS_KICKSTART", "MNEMOS_AMIGA_BIOS_DIR",
+                    "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path bios_dir = dir / "bios";
+    const fs::path rom_path = bios_dir / "Kickstart 2.0.rom";
+    write_image(rom_path, tiny_kickstart());
+    REQUIRE(set_env("MNEMOS_AMIGA_BIOS_DIR", bios_dir.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system({.system_arg = std::string{"amiga500+"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(outcome.primary_media_path.empty());
+    CHECK(has_spec(*outcome.system, "BIOS", "Kickstart 2.0"));
+    CHECK(has_spec(*outcome.system, "System", "Amiga 500+"));
+    CHECK(has_spec(*outcome.system, "Chip RAM", "1 MiB"));
+
+    fs::remove_all(dir);
+}
+
+TEST_CASE("player launch discovers Amiga600 Kickstart from shared BIOS directory for disk media",
+          "[apps][player][launch][amiga600][bios-dir]") {
+    scoped_env env(
+        {"MNEMOS_AMIGA600_KICKSTART", "MNEMOS_AMIGA_BIOS_DIR", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path bios_dir = dir / "bios";
+    const fs::path rom_path = bios_dir / "Kickstart 2.0.rom";
+    const fs::path disk_path = dir / "workbench.zip";
+    write_image(rom_path, tiny_kickstart());
+    write_image(disk_path, deflated_zip("Workbench.adf", tiny_adf()));
+    REQUIRE(set_env("MNEMOS_AMIGA_BIOS_DIR", bios_dir.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system(
+        {.rom_paths = {disk_path.string()}, .system_arg = std::string{"a600"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(outcome.primary_media_path == disk_path.string());
+    CHECK(outcome.system->media_count() == 1U);
+    CHECK(has_spec(*outcome.system, "System", "Amiga 600"));
+    CHECK(has_spec(*outcome.system, "Disk", "Workbench"));
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
+    REQUIRE(adapter != nullptr);
+    CHECK(adapter->system().floppy_loaded());
+    CHECK(adapter->system().chip_ram.size() == amiga_system::chip_ram_size_1m);
+
+    fs::remove_all(dir);
+}
+
+TEST_CASE("player launch prefers explicit Amiga Kickstart env over shared BIOS directory",
+          "[apps][player][launch][amiga500][bios-dir]") {
+    scoped_env env(
+        {"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA_BIOS_DIR", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path bios_dir = dir / "bios";
+    const fs::path directory_rom = bios_dir / "Kickstart 1.3.rom";
+    const fs::path explicit_rom = dir / "explicit.rom";
+    write_image(directory_rom, tiny_kickstart());
+    write_image(explicit_rom, tiny_kickstart());
+    REQUIRE(set_env("MNEMOS_AMIGA_BIOS_DIR", bios_dir.string()) == 0);
+    REQUIRE(set_env("MNEMOS_AMIGA500_KICKSTART", explicit_rom.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system({.system_arg = std::string{"amiga500"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(has_spec(*outcome.system, "BIOS", "explicit"));
+
+    fs::remove_all(dir);
+}
+
 TEST_CASE("player launch boots Amiga2000 from its Kickstart env without disk media",
           "[apps][player][launch][amiga2000]") {
     scoped_env env({"MNEMOS_AMIGA2000_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
@@ -1640,8 +1746,7 @@ TEST_CASE("player launch applies Amiga2000 ECS/1MiB model override",
     REQUIRE(set_env("MNEMOS_AMIGA2000_KICKSTART", rom_path.string()) == 0);
 
     auto outcome = mnemos::apps::player::launch_system(
-        {.system_arg = std::string{"amiga2000"},
-         .amiga_model_override = std::string{"ecs-1m"}});
+        {.system_arg = std::string{"amiga2000"}, .amiga_model_override = std::string{"ecs-1m"}});
 
     REQUIRE(outcome.exit_code == 0);
     REQUIRE(outcome.system != nullptr);
@@ -1728,6 +1833,202 @@ TEST_CASE("player launch treats a zip-wrapped Amiga ADF as disk media",
     fs::remove_all(dir);
 }
 
+TEST_CASE("player launch extracts all Amiga ADFs from a ZIP in archive order",
+          "[apps][player][launch][amiga500][zip]") {
+    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick13.rom";
+    const fs::path disk_path = dir / "workbench-multi.zip";
+    write_image(rom_path, tiny_kickstart());
+    const std::vector<std::uint8_t> disk1 = tiny_adf(0x31U);
+    const std::vector<std::uint8_t> disk2 = tiny_adf(0x42U);
+    const std::vector<std::uint8_t> manual(amiga_system::floppy_dd_size + 16U, 0x7AU);
+    write_image(
+        disk_path,
+        make_stored_zip({{"manual.txt", manual}, {"Disk1.adf", disk1}, {"Disk2.adf", disk2}}));
+    REQUIRE(set_env("MNEMOS_AMIGA500_KICKSTART", rom_path.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system(
+        {.rom_paths = {disk_path.string()}, .system_arg = std::string{"amiga500"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(outcome.primary_media_path == disk_path.string());
+    CHECK(outcome.system->media_count() == 2U);
+    CHECK(has_spec(*outcome.system, "Disk", "Disk1"));
+    CHECK(has_spec(*outcome.system, "Disks", "2"));
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
+    REQUIRE(adapter != nullptr);
+    REQUIRE(adapter->system().floppy_loaded());
+    REQUIRE(adapter->system().floppy_drives[0].image.size() > 2U);
+    CHECK(adapter->system().floppy_drives[0].image[2U] == 0x31U);
+    REQUIRE(adapter->insert_media(1U));
+    CHECK(adapter->current_media_index() == 1U);
+    REQUIRE(adapter->system().floppy_drives[0].image.size() > 2U);
+    CHECK(adapter->system().floppy_drives[0].image[2U] == 0x42U);
+
+    fs::remove_all(dir);
+}
+
+TEST_CASE("player launch rejects unsupported Amiga ADF sizes in ZIP archives",
+          "[apps][player][launch][amiga500][zip]") {
+    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick13.rom";
+    const fs::path disk_path = dir / "extended.zip";
+    write_image(rom_path, tiny_kickstart());
+    const std::vector<std::uint8_t> extended_adf(amiga_system::floppy_dd_size + 512U, 0x00U);
+    write_image(disk_path, deflated_zip("Extended.adf", extended_adf));
+    REQUIRE(set_env("MNEMOS_AMIGA500_KICKSTART", rom_path.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system(
+        {.rom_paths = {disk_path.string()}, .system_arg = std::string{"amiga500"}});
+
+    CHECK(outcome.exit_code == 1);
+    CHECK(outcome.system == nullptr);
+
+    fs::remove_all(dir);
+}
+
+TEST_CASE("player launch orders a complete direct Amiga ZIP disk set by disk marker",
+          "[apps][player][launch][amiga500][zip]") {
+    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick13.rom";
+    const fs::path disk_path = dir / "game-direct.zip";
+    write_image(rom_path, tiny_kickstart());
+
+    const std::vector<std::uint8_t> disk1 = tiny_adf(0x11U);
+    const std::vector<std::uint8_t> disk2 = tiny_adf(0x22U);
+    write_image(disk_path, make_stored_zip({
+                               {"Example Game (Disk 2 of 2).adf", disk2},
+                               {"manual.txt", std::vector<std::uint8_t>(1024U, 0xAAU)},
+                               {"Example Game (Disk 1 of 2).adf", disk1},
+                           }));
+    REQUIRE(set_env("MNEMOS_AMIGA500_KICKSTART", rom_path.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system(
+        {.rom_paths = {disk_path.string()}, .system_arg = std::string{"amiga500"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(outcome.system->media_count() == 2U);
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
+    REQUIRE(adapter != nullptr);
+    REQUIRE(adapter->system().floppy_loaded());
+    REQUIRE(adapter->system().floppy_drives[0].image.size() > 2U);
+    CHECK(adapter->system().floppy_drives[0].image[2U] == 0x11U);
+    REQUIRE(adapter->insert_media(1U));
+    REQUIRE(adapter->system().floppy_drives[0].image.size() > 2U);
+    CHECK(adapter->system().floppy_drives[0].image[2U] == 0x22U);
+
+    fs::remove_all(dir);
+}
+
+TEST_CASE("player launch selects a complete Amiga disk set from nested ZIP wrappers",
+          "[apps][player][launch][amiga500][zip]") {
+    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick13.rom";
+    const fs::path disk_path = dir / "game-wrapper.zip";
+    write_image(rom_path, tiny_kickstart());
+
+    const std::vector<std::uint8_t> orphan_disk2 = tiny_adf(0x7AU);
+    const std::vector<std::uint8_t> selected_disk1 = tiny_adf(0x11U);
+    const std::vector<std::uint8_t> selected_disk2 = tiny_adf(0x22U);
+    const std::vector<std::uint8_t> alternate_disk1 = tiny_adf(0x33U);
+    write_image(disk_path,
+                make_stored_zip({
+                    {"Example Game (Disk 2 of 2)[bad dump].zip",
+                     deflated_zip("Example Game (Disk 2 of 2)[bad dump].adf", orphan_disk2)},
+                    {"Example Game [cr Good](Disk 1 of 2).zip",
+                     deflated_zip("Example Game [cr Good](Disk 1 of 2).adf", selected_disk1)},
+                    {"manual.txt", std::vector<std::uint8_t>(1024U, 0xAAU)},
+                    {"Example Game [cr Good](Disk 2 of 2).zip",
+                     deflated_zip("Example Game [cr Good](Disk 2 of 2).adf", selected_disk2)},
+                    {"Example Game [cr Other](Disk 1 of 2).zip",
+                     deflated_zip("Example Game [cr Other](Disk 1 of 2).adf", alternate_disk1)},
+                }));
+    REQUIRE(set_env("MNEMOS_AMIGA500_KICKSTART", rom_path.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system(
+        {.rom_paths = {disk_path.string()}, .system_arg = std::string{"amiga500"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(outcome.primary_media_path == disk_path.string());
+    CHECK(outcome.system->media_count() == 2U);
+    CHECK(has_spec(*outcome.system, "Disks", "2"));
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
+    REQUIRE(adapter != nullptr);
+    REQUIRE(adapter->system().floppy_loaded());
+    REQUIRE(adapter->system().floppy_drives[0].image.size() > 2U);
+    CHECK(adapter->system().floppy_drives[0].image[2U] == 0x11U);
+    REQUIRE(adapter->insert_media(1U));
+    REQUIRE(adapter->system().floppy_drives[0].image.size() > 2U);
+    CHECK(adapter->system().floppy_drives[0].image[2U] == 0x22U);
+
+    fs::remove_all(dir);
+}
+
+TEST_CASE("player launch treats a gzip-compressed Amiga ADZ as disk media",
+          "[apps][player][launch][amiga500][adz]") {
+    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick13.rom";
+    const fs::path disk_path = dir / "workbench.adz";
+    write_image(rom_path, tiny_kickstart());
+    const std::vector<std::uint8_t> disk_image = tiny_adf(0x5CU);
+    write_image(disk_path, gzip_deflated("Workbench.adf", disk_image));
+    REQUIRE(set_env("MNEMOS_AMIGA500_KICKSTART", rom_path.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system(
+        {.rom_paths = {disk_path.string()}, .system_arg = std::string{"amiga500"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(outcome.primary_media_path == disk_path.string());
+    CHECK(outcome.system->media_count() == 1U);
+    CHECK(has_spec(*outcome.system, "Disk", "Workbench"));
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
+    REQUIRE(adapter != nullptr);
+    REQUIRE(adapter->system().floppy_loaded());
+    CHECK(adapter->system().floppy_size() == amiga_system::floppy_dd_size);
+    REQUIRE(adapter->system().floppy_drives[0].image.size() > 2U);
+    CHECK(adapter->system().floppy_drives[0].image[2U] == 0x5CU);
+
+    fs::remove_all(dir);
+}
+
+TEST_CASE("player launch treats a gzip-compressed Amiga ADF.GZ as disk media",
+          "[apps][player][launch][amiga500][adz]") {
+    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick13.rom";
+    const fs::path disk_path = dir / "workbench.adf.gz";
+    write_image(rom_path, tiny_kickstart());
+    const std::vector<std::uint8_t> disk_image = tiny_adf(0x6DU);
+    write_image(disk_path, gzip_deflated("Workbench.adf", disk_image));
+    REQUIRE(set_env("MNEMOS_AMIGA500_KICKSTART", rom_path.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system(
+        {.rom_paths = {disk_path.string()}, .system_arg = std::string{"amiga500"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(outcome.primary_media_path == disk_path.string());
+    CHECK(outcome.system->media_count() == 1U);
+    CHECK(has_spec(*outcome.system, "Disk", "Workbench"));
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
+    REQUIRE(adapter != nullptr);
+    REQUIRE(adapter->system().floppy_loaded());
+    CHECK(adapter->system().floppy_size() == amiga_system::floppy_dd_size);
+    REQUIRE(adapter->system().floppy_drives[0].image.size() > 2U);
+    CHECK(adapter->system().floppy_drives[0].image[2U] == 0x6DU);
+
+    fs::remove_all(dir);
+}
+
 TEST_CASE("player launch treats a zip-wrapped Amiga600 ADF as disk media",
           "[apps][player][launch][amiga600]") {
     scoped_env env({"MNEMOS_AMIGA600_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
@@ -1789,10 +2090,10 @@ TEST_CASE("player launch passes keyboard layout override to Amiga500 adapter",
     const fs::path rom_path = dir / "kick13.rom";
     write_image(rom_path, tiny_kickstart());
 
-    auto outcome = mnemos::apps::player::launch_system({.rom_paths = {rom_path.string()},
-                                                        .system_arg = std::string{"amiga500"},
-                                                        .keyboard_layout_override =
-                                                            std::string{"azerty"}});
+    auto outcome =
+        mnemos::apps::player::launch_system({.rom_paths = {rom_path.string()},
+                                             .system_arg = std::string{"amiga500"},
+                                             .keyboard_layout_override = std::string{"azerty"}});
 
     REQUIRE(outcome.exit_code == 0);
     REQUIRE(outcome.system != nullptr);

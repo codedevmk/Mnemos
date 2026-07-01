@@ -101,6 +101,30 @@ TEST_CASE("paula register writes read back and volume clamps to 64", "[paula][au
     REQUIRE(chip.read_reg(9, paula::reg_len) == 0);
 }
 
+TEST_CASE("paula AUDxDAT manual write produces one word without DMA", "[paula][audio]") {
+    paula chip;
+    std::uint8_t callback_sources = 0U;
+    chip.set_interrupt_callback([&](std::uint8_t sources) {
+        callback_sources = static_cast<std::uint8_t>(callback_sources | sources);
+    });
+    chip.write_reg(0, paula::reg_per, 0x0001);
+    chip.write_reg(0, paula::reg_vol, 0x0040);
+    chip.write_reg(0, paula::reg_dat, 0x10F0);
+
+    std::array<std::int16_t, 8> buf{};
+    chip.generate(buf);
+
+    CHECK(buf[0] == 1024);
+    CHECK(buf[1] == 0);
+    CHECK(buf[2] == -1024);
+    CHECK(buf[3] == 0);
+    CHECK(buf[4] == 0);
+    CHECK(buf[5] == 0);
+    CHECK((callback_sources & 0x01U) != 0U);
+    CHECK((chip.interrupts() & 0x01U) != 0U);
+    CHECK_FALSE(chip.channel_active(0));
+}
+
 TEST_CASE("paula DMA arm/disarm gates the state machine", "[paula][audio]") {
     paula chip;
     configure_channel0(chip);
@@ -119,6 +143,21 @@ TEST_CASE("paula DMA arm/disarm gates the state machine", "[paula][audio]") {
     chip.step();
     REQUIRE(chip.last_left() == 0);
     REQUIRE(chip.last_right() == 0);
+}
+
+TEST_CASE("paula buffer wrap emits an audio interrupt callback", "[paula][audio]") {
+    paula chip;
+    std::uint8_t callback_sources = 0U;
+    chip.set_interrupt_callback([&](std::uint8_t sources) {
+        callback_sources = static_cast<std::uint8_t>(callback_sources | sources);
+    });
+    configure_channel0(chip);
+
+    std::array<std::int16_t, 12> buf{};
+    chip.generate(buf);
+
+    CHECK((callback_sources & 0x01U) != 0U);
+    CHECK((chip.interrupts() & 0x01U) != 0U);
 }
 
 TEST_CASE("paula save_state/load_state round-trips bit-identically", "[paula][audio]") {

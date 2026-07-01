@@ -90,6 +90,12 @@
 #   MNEMOS_MSX2_RAM_SIZE      mapper RAM size in bytes/K/M           -> msx2 boot smoke
 #   MNEMOS_MSX2_ROM_DIR       dir with MSX2 cartridge images         -> msx2 boot smoke
 #   MNEMOS_MSX_CASE_MANIFEST  mixed MSX/MSX2 smoke cases             -> msx/msx2 boot smoke
+#   MNEMOS_AMIGA500_KICKSTART  Amiga 500 Kickstart ROM               -> amiga corpus smoke
+#   MNEMOS_AMIGA_BIOS_DIR      dir with Kickstart ROMs               -> amiga corpus smoke
+#   MNEMOS_AMIGA_KICKSTART_DIR dir with Kickstart ROMs               -> amiga corpus smoke
+#   MNEMOS_AMIGA_ROM           one ADF, ADZ, or ZIP-contained ADF     -> amiga corpus smoke
+#   MNEMOS_AMIGA_ADF_DIR       dir with ADF/ADZ/ZIP-contained ADFs    -> amiga corpus smoke
+#   MNEMOS_AMIGA_SET_DIR       path-list of Amiga media roots         -> amiga corpus smoke
 #
 # Optional golden-hash pins (assert the rendered framebuffer once locked in):
 #   MNEMOS_SMS_BOOT_SHA256, MNEMOS_C64_BOOT_SHA256, MNEMOS_GENESIS_BOOT_SHA256
@@ -231,6 +237,12 @@ $vars = @(
     @{ Name = "MNEMOS_MSX2_RAM_SIZE";    Test = "msx2 boot smoke" },
     @{ Name = "MNEMOS_MSX2_ROM_DIR";     Test = "msx2 boot smoke" },
     @{ Name = "MNEMOS_MSX_CASE_MANIFEST"; Test = "msx/msx2 boot smoke" },
+    @{ Name = "MNEMOS_AMIGA500_KICKSTART"; Test = "amiga corpus smoke" },
+    @{ Name = "MNEMOS_AMIGA_BIOS_DIR";    Test = "amiga corpus smoke" },
+    @{ Name = "MNEMOS_AMIGA_KICKSTART_DIR"; Test = "amiga corpus smoke" },
+    @{ Name = "MNEMOS_AMIGA_ROM";        Test = "amiga corpus smoke" },
+    @{ Name = "MNEMOS_AMIGA_ADF_DIR";    Test = "amiga corpus smoke" },
+    @{ Name = "MNEMOS_AMIGA_SET_DIR";    Test = "amiga corpus smoke" },
     @{ Name = "MNEMOS_TAITO_SET_DIR";    Test = "Taito broad corpus inventory" },
     @{ Name = "MNEMOS_TAITO_GNET_PACKAGE"; Test = "Taito G-NET CHD package decode/player smoke" },
     @{ Name = "MNEMOS_TAITO_GNET_BIOS"; Test = "Taito G-NET board/player smoke" },
@@ -266,6 +278,30 @@ if ($ctestExit -ne 0) {
 }
 
 $runnerExit = 0
+
+$amigaRunner = Join-Path $PSScriptRoot "amiga/run-corpus-smoke.ps1"
+$amigaKickstart = [Environment]::GetEnvironmentVariable("MNEMOS_AMIGA500_KICKSTART")
+$amigaBiosDir = [Environment]::GetEnvironmentVariable("MNEMOS_AMIGA_BIOS_DIR")
+$amigaKickstartDir = [Environment]::GetEnvironmentVariable("MNEMOS_AMIGA_KICKSTART_DIR")
+$amigaRom = [Environment]::GetEnvironmentVariable("MNEMOS_AMIGA_ROM")
+$amigaAdfDir = [Environment]::GetEnvironmentVariable("MNEMOS_AMIGA_ADF_DIR")
+$amigaSetDir = [Environment]::GetEnvironmentVariable("MNEMOS_AMIGA_SET_DIR")
+$hasAmigaMedia = (-not [string]::IsNullOrWhiteSpace($amigaRom) -or
+    -not [string]::IsNullOrWhiteSpace($amigaAdfDir) -or
+    -not [string]::IsNullOrWhiteSpace($amigaSetDir))
+$hasAmigaKickstart = (-not [string]::IsNullOrWhiteSpace($amigaKickstart) -or
+    -not [string]::IsNullOrWhiteSpace($amigaBiosDir) -or
+    -not [string]::IsNullOrWhiteSpace($amigaKickstartDir))
+if ((Test-Path $amigaRunner) -and
+    $hasAmigaKickstart -and
+    $hasAmigaMedia) {
+    Write-Host "`nRunning Amiga corpus smoke ..." -ForegroundColor Cyan
+    & $amigaRunner -BuildDir $BuildDir
+    $amigaExit = $LASTEXITCODE
+    if ($amigaExit -ne 0 -and $runnerExit -eq 0) {
+        $runnerExit = $amigaExit
+    }
+}
 
 $m72Runner = Join-Path $PSScriptRoot "irem_m72/run-corpus-smoke.ps1"
 if (Test-Path $m72Runner) {

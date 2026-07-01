@@ -287,6 +287,11 @@ namespace mnemos::apps::player::adapters::amiga {
                 .cache_hint = std::move(cache_hint)};
         }
 
+        [[nodiscard]] std::string unsupported_adf_size_detail(std::size_t byte_count) {
+            return "expected " + std::to_string(manifests::amiga::amiga_system::floppy_dd_size) +
+                   "-byte standard DD ADF; got " + std::to_string(byte_count) + " bytes";
+        }
+
         [[nodiscard]] const char* model_family_id(manifests::amiga::amiga_model model) noexcept {
             using model_t = manifests::amiga::amiga_model;
             switch (model) {
@@ -1212,9 +1217,16 @@ namespace mnemos::apps::player::adapters::amiga {
                     i < manifests::amiga::amiga_system::floppy_drive_count
                         ? provider_prefix + ".df" + std::to_string(i)
                         : provider_prefix + ".df0";
-                media.media.push_back(
+                auto disk =
                     make_media("disk." + std::to_string(i), label, disks[i].size(), provider_id,
-                               disks.size() == 1U ? "resident" : "resident_removable"));
+                               disks.size() == 1U ? "resident" : "resident_removable");
+                if (disks[i].size() != manifests::amiga::amiga_system::floppy_dd_size) {
+                    disk.revision_supported = false;
+                    disk.validation_issues.push_back(frontend_sdk::media_validation_issue{
+                        .code = "media.amiga.adf.unsupported_size",
+                        .detail = unsupported_adf_size_detail(disks[i].size())});
+                }
+                media.media.push_back(std::move(disk));
             }
             return media;
         }

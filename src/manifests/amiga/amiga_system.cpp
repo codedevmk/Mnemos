@@ -163,10 +163,10 @@ namespace mnemos::manifests::amiga {
             if (base_high) {
                 const bool encoded_nibble = (value & 0xF0U) == 0U;
                 const std::uint8_t high = zorro2_write_nibble(value);
-                const std::uint8_t low = sys.zorro2_base_low_nibble_valid
-                                             ? sys.zorro2_base_low_nibble
-                                             : static_cast<std::uint8_t>(
-                                                   encoded_nibble ? 0U : (value & 0x0FU));
+                const std::uint8_t low =
+                    sys.zorro2_base_low_nibble_valid
+                        ? sys.zorro2_base_low_nibble
+                        : static_cast<std::uint8_t>(encoded_nibble ? 0U : (value & 0x0FU));
                 board->assigned_base = static_cast<std::uint32_t>(
                     static_cast<std::uint32_t>((high << 4U) | low) << 16U);
                 board->configured = true;
@@ -187,6 +187,32 @@ namespace mnemos::manifests::amiga {
                 return 0x000FFFFFU;
             }
             return ocs_disk_dma_address_mask;
+        }
+
+        [[nodiscard]] std::uint16_t paula_sources_to_intreq(std::uint8_t sources) noexcept {
+            std::uint16_t out = 0U;
+            out = static_cast<std::uint16_t>(
+                out | ((sources & 0x01U) != 0U ? amiga_system::int_aud0 : 0U));
+            out = static_cast<std::uint16_t>(
+                out | ((sources & 0x02U) != 0U ? amiga_system::int_aud1 : 0U));
+            out = static_cast<std::uint16_t>(
+                out | ((sources & 0x04U) != 0U ? amiga_system::int_aud2 : 0U));
+            out = static_cast<std::uint16_t>(
+                out | ((sources & 0x08U) != 0U ? amiga_system::int_aud3 : 0U));
+            return out;
+        }
+
+        [[nodiscard]] std::uint8_t intreq_to_paula_sources(std::uint16_t mask) noexcept {
+            std::uint8_t out = 0U;
+            out = static_cast<std::uint8_t>(out |
+                                            ((mask & amiga_system::int_aud0) != 0U ? 0x01U : 0U));
+            out = static_cast<std::uint8_t>(out |
+                                            ((mask & amiga_system::int_aud1) != 0U ? 0x02U : 0U));
+            out = static_cast<std::uint8_t>(out |
+                                            ((mask & amiga_system::int_aud2) != 0U ? 0x04U : 0U));
+            out = static_cast<std::uint8_t>(out |
+                                            ((mask & amiga_system::int_aud3) != 0U ? 0x08U : 0U));
+            return out;
         }
 
         [[nodiscard]] std::uint16_t chip_ram_address_high_mask(std::size_t size) noexcept {
@@ -475,8 +501,8 @@ namespace mnemos::manifests::amiga {
 
         [[nodiscard]] std::uint32_t step_blitter_pointer(std::uint32_t pointer,
                                                          std::int32_t delta) noexcept {
-            return static_cast<std::uint32_t>(static_cast<std::int32_t>(pointer & chip_dma_address_mask) +
-                                              delta) &
+            return static_cast<std::uint32_t>(
+                       static_cast<std::int32_t>(pointer & chip_dma_address_mask) + delta) &
                    chip_dma_address_mask;
         }
 
@@ -1012,6 +1038,9 @@ namespace mnemos::manifests::amiga {
             update_irq_level();
             return;
         case reg_intreq:
+            if ((value & setclr_bit) == 0U) {
+                paula.clear_interrupts(intreq_to_paula_sources(value));
+            }
             intreq = apply_setclr(intreq, value, 0x7FFFU);
             update_irq_level();
             return;
@@ -1069,7 +1098,8 @@ namespace mnemos::manifests::amiga {
                                                          chip_dma_address_high_mask)
                             : static_cast<std::uint16_t>(bitplane_pointer[plane] & 0xFFFEU);
             }
-            if (reg >= reg_sprpt_base && reg < reg_sprpt_base + chips::video::agnus::max_sprites * 4U) {
+            if (reg >= reg_sprpt_base &&
+                reg < reg_sprpt_base + chips::video::agnus::max_sprites * 4U) {
                 const std::uint32_t sprite = (reg - reg_sprpt_base) / 4U;
                 const bool high = ((reg - reg_sprpt_base) & 0x02U) == 0U;
                 return high ? static_cast<std::uint16_t>((agnus.sprite_pointer(sprite) >> 16U) &
@@ -1307,7 +1337,7 @@ namespace mnemos::manifests::amiga {
     }
 
     void amiga_system::set_floppy_write_protected(std::size_t drive,
-                                                     bool write_protected) noexcept {
+                                                  bool write_protected) noexcept {
         if (drive < floppy_drives.size()) {
             floppy_drives[drive].write_protected = write_protected;
         }
@@ -1325,23 +1355,22 @@ namespace mnemos::manifests::amiga {
             return;
         }
         joystick_state[hardware_port] = amiga_sanitize_controller_mask(mask);
-        joydat[hardware_port] = static_cast<std::uint16_t>(
-            (joydat[hardware_port] & 0xFCFCU) |
-            amiga_encode_joystick(joystick_state[hardware_port]));
+        joydat[hardware_port] =
+            static_cast<std::uint16_t>((joydat[hardware_port] & 0xFCFCU) |
+                                       amiga_encode_joystick(joystick_state[hardware_port]));
     }
 
     void amiga_system::set_mouse(std::size_t hardware_port, std::int16_t delta_x,
-                                    std::int16_t delta_y, bool left_button, bool right_button,
-                                    bool middle_button) noexcept {
+                                 std::int16_t delta_y, bool left_button, bool right_button,
+                                 bool middle_button) noexcept {
         if (hardware_port >= joystick_state.size()) {
             return;
         }
 
         const auto x =
             amiga_wrap_mouse_counter(static_cast<std::uint8_t>(joydat[hardware_port]), delta_x);
-        const auto y =
-            amiga_wrap_mouse_counter(static_cast<std::uint8_t>(joydat[hardware_port] >> 8U),
-                                     delta_y);
+        const auto y = amiga_wrap_mouse_counter(
+            static_cast<std::uint8_t>(joydat[hardware_port] >> 8U), delta_y);
         joydat[hardware_port] =
             static_cast<std::uint16_t>((static_cast<std::uint16_t>(y) << 8U) | x);
 
@@ -1350,7 +1379,7 @@ namespace mnemos::manifests::amiga {
     }
 
     void amiga_system::set_pot_position(std::size_t hardware_port, std::uint8_t x,
-                                           std::uint8_t y) noexcept {
+                                        std::uint8_t y) noexcept {
         if (hardware_port >= pot_target.size()) {
             return;
         }
@@ -2007,8 +2036,7 @@ namespace mnemos::manifests::amiga {
             step_major();
         }
 
-        blitter_pointer[blit_a] = (blitter_pointer[blit_a] &
-                                   (chip_dma_address_high_mask << 16U)) |
+        blitter_pointer[blit_a] = (blitter_pointer[blit_a] & (chip_dma_address_high_mask << 16U)) |
                                   (static_cast<std::uint16_t>(error) & 0x0000FFFEU);
         blitter_pointer[blit_c] = cptr;
         blitter_pointer[blit_d] = dptr;
@@ -2266,14 +2294,12 @@ namespace mnemos::manifests::amiga {
         agnus.attach_palette(palette_bytes);
     }
 
-    void amiga_system::reset_board_from_cpu() noexcept {
-        reset_board(chips::reset_kind::hard);
-    }
+    void amiga_system::reset_board_from_cpu() noexcept { reset_board(chips::reset_kind::hard); }
 
     std::uint32_t
     amiga_system::cpu_bus_wait_cycles(std::uint32_t address, bool /*program*/, bool write,
-                                         std::uint32_t instruction_cycles_before_access,
-                                         std::uint32_t instruction_wait_cycles) const noexcept {
+                                      std::uint32_t instruction_cycles_before_access,
+                                      std::uint32_t instruction_wait_cycles) const noexcept {
         const bool chip_ram_window = (address & 0x00FFFFFFU) < chip_ram.size();
         if (!chip_ram_window) {
             return 0U;
@@ -2625,9 +2651,8 @@ namespace mnemos::manifests::amiga {
             board.configured = reader.boolean();
             board.shut_up = reader.boolean();
             if (board.configured && board.memory) {
-                const std::uint32_t expansion_end =
-                    amiga_system::zorro2_expansion_ram_base +
-                    amiga_system::zorro2_expansion_ram_size;
+                const std::uint32_t expansion_end = amiga_system::zorro2_expansion_ram_base +
+                                                    amiga_system::zorro2_expansion_ram_size;
                 const std::uint64_t board_end = static_cast<std::uint64_t>(board.assigned_base) +
                                                 static_cast<std::uint64_t>(board.memory_size);
                 if (board.assigned_base < amiga_system::zorro2_expansion_ram_base ||
@@ -2720,7 +2745,7 @@ namespace mnemos::manifests::amiga {
     }
 
     std::unique_ptr<amiga_system> assemble_amiga(std::vector<std::uint8_t> kickstart_rom,
-                                                       const amiga_config& config) {
+                                                 const amiga_config& config) {
         auto sys = std::make_unique<amiga_system>();
         amiga_system* s = sys.get();
         const auto& model = amiga_model_profile(config.model);
@@ -2732,23 +2757,22 @@ namespace mnemos::manifests::amiga {
         s->chip_ram.assign(active_chip_ram_size, 0U);
         s->fast_ram.assign(active_fast_ram_size, 0U);
         if (!s->fast_ram.empty()) {
-            s->zorro2_boards.push_back(zorro2_expansion_board{
-                .product = 0x01U,
-                .manufacturer = 2011U,
-                .serial = 0x4D4E0001U,
-                .memory_size = s->fast_ram.size(),
-                .assigned_base = 0U,
-                .memory = true,
-                .configured = false,
-                .shut_up = false});
+            s->zorro2_boards.push_back(zorro2_expansion_board{.product = 0x01U,
+                                                              .manufacturer = 2011U,
+                                                              .serial = 0x4D4E0001U,
+                                                              .memory_size = s->fast_ram.size(),
+                                                              .assigned_base = 0U,
+                                                              .memory = true,
+                                                              .configured = false,
+                                                              .shut_up = false});
         }
         s->paula.resize_chipram(active_chip_ram_size);
         normalize_kickstart(s->kickstart_rom, kickstart_rom);
 
         const bool pal = config.video_region == mnemos::video_region::pal;
         const std::uint32_t frame_hz = pal ? 50U : 60U;
-        const std::uint32_t scanlines_per_frame = pal ? chips::video::agnus::scanlines_pal
-                                                      : chips::video::agnus::scanlines_ntsc;
+        const std::uint32_t scanlines_per_frame =
+            pal ? chips::video::agnus::scanlines_pal : chips::video::agnus::scanlines_ntsc;
         const std::uint32_t hsync_hz = scanlines_per_frame * frame_hz;
         s->agnus.set_pal(pal);
         s->agnus.set_copper_address_mask(s->copper_address_mask);
@@ -2799,8 +2823,7 @@ namespace mnemos::manifests::amiga {
             0);
         if (!s->fast_ram.empty()) {
             s->bus.map_mmio(
-                amiga_system::zorro2_expansion_ram_base,
-                amiga_system::zorro2_expansion_ram_size,
+                amiga_system::zorro2_expansion_ram_base, amiga_system::zorro2_expansion_ram_size,
                 [s](std::uint32_t a) {
                     const auto* board = configured_zorro2_memory_board_at(*s, a);
                     if (board == nullptr) {
@@ -2820,8 +2843,7 @@ namespace mnemos::manifests::amiga {
                     return configured_zorro2_memory_board_at(*s, a) != nullptr;
                 });
             s->bus.map_mmio16(
-                amiga_system::zorro2_autoconfig_base,
-                amiga_system::zorro2_autoconfig_size,
+                amiga_system::zorro2_autoconfig_base, amiga_system::zorro2_autoconfig_size,
                 [s](std::uint32_t a) {
                     const auto* board = s->active_zorro2_autoconfig_board();
                     return board == nullptr ? static_cast<std::uint8_t>(0xFFU)
@@ -2834,8 +2856,8 @@ namespace mnemos::manifests::amiga {
                     if (board == nullptr) {
                         return static_cast<std::uint16_t>(0xFFFFU);
                     }
-                    const std::uint8_t value = zorro2_autoconfig_read(
-                        *board, amiga_system::zorro2_autoconfig_base, a);
+                    const std::uint8_t value =
+                        zorro2_autoconfig_read(*board, amiga_system::zorro2_autoconfig_base, a);
                     return static_cast<std::uint16_t>((static_cast<std::uint16_t>(value) << 8U) |
                                                       value);
                 },
@@ -2843,8 +2865,7 @@ namespace mnemos::manifests::amiga {
                     zorro2_autoconfig_write(*s, a, static_cast<std::uint8_t>(v >> 8U));
                     zorro2_autoconfig_write(*s, a + 1U, static_cast<std::uint8_t>(v));
                 },
-                0,
-                [s](std::uint32_t, bool) { return s->zorro2_autoconfig_pending(); });
+                0, [s](std::uint32_t, bool) { return s->zorro2_autoconfig_pending(); });
         }
         // Reset overlay: Kickstart answers reads at $000000 until CIA-A PA0 is
         // driven high. Writes always fall through to chip RAM.
@@ -2857,13 +2878,13 @@ namespace mnemos::manifests::amiga {
             [s](std::uint32_t a) { return s->read_custom_byte(a); },
             [s](std::uint32_t a, std::uint8_t v) { s->write_custom_byte(a, v); },
             [s](std::uint32_t a) {
-                const auto reg = static_cast<std::uint16_t>(
-                    (a - amiga_system::custom_base) & 0x01FEU);
+                const auto reg =
+                    static_cast<std::uint16_t>((a - amiga_system::custom_base) & 0x01FEU);
                 return s->read_custom_word(reg);
             },
             [s](std::uint32_t a, std::uint16_t v) {
-                const auto reg = static_cast<std::uint16_t>(
-                    (a - amiga_system::custom_base) & 0x01FEU);
+                const auto reg =
+                    static_cast<std::uint16_t>((a - amiga_system::custom_base) & 0x01FEU);
                 s->write_custom_word(reg, v);
             },
             0);
@@ -2913,15 +2934,17 @@ namespace mnemos::manifests::amiga {
             ++s->frame_index;
             s->request_interrupt(amiga_system::int_vertb);
         });
+        s->paula.set_interrupt_callback(
+            [s](std::uint8_t sources) { s->request_interrupt(paula_sources_to_intreq(sources)); });
         s->agnus.set_custom_write_callback(
             [s](std::uint16_t reg, std::uint16_t value) { s->write_custom_word(reg, value); });
 
         s->cpu.attach_bus(s->bus);
         s->cpu.set_bus_wait_callback([s](std::uint32_t address, bool program, bool write,
-                                          std::uint32_t instruction_cycles_before_access,
-                                          std::uint32_t instruction_wait_cycles) {
+                                         std::uint32_t instruction_cycles_before_access,
+                                         std::uint32_t instruction_wait_cycles) {
             return s->cpu_bus_wait_cycles(address, program, write, instruction_cycles_before_access,
-                                           instruction_wait_cycles);
+                                          instruction_wait_cycles);
         });
         s->cpu.set_reset_callback([s] { s->reset_board_from_cpu(); });
         s->reset_board(chips::reset_kind::power_on);

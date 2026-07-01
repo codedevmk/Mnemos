@@ -101,6 +101,13 @@ namespace mnemos::chips::audio {
         case reg_dat:
             // Manual-mode data write (used by software that does not drive DMA).
             ch.dat = value;
+            if (!dma_master_ || !ch.dma_enable) {
+                ch.current_word = value;
+                ch.words_remaining = 0U;
+                ch.live_pointer = 0U;
+                ch.period_counter = 0;
+                ch.state = channel_state::manual_ready;
+            }
             break;
         default:
             break;
@@ -162,8 +169,7 @@ namespace mnemos::chips::audio {
         const std::size_t a = mirrored_chipram_address(chipram_.size(), addr);
         // Big-endian word: high byte first, then low byte.
         const std::uint16_t hi = chipram_[a];
-        const std::uint16_t lo =
-            chipram_[mirrored_chipram_address(chipram_.size(), addr + 1U)];
+        const std::uint16_t lo = chipram_[mirrored_chipram_address(chipram_.size(), addr + 1U)];
         return static_cast<std::uint16_t>((hi << 8U) | lo);
     }
 
@@ -206,13 +212,38 @@ namespace mnemos::chips::audio {
                 // the matching AUDxINT request.
                 ch.live_pointer = ch.lc;
                 ch.words_remaining = ch.len;
-                audio_int_ |= audio_int_source[static_cast<std::size_t>(channel_index)];
+                const std::uint8_t source =
+                    audio_int_source[static_cast<std::size_t>(channel_index)];
+                audio_int_ |= source;
+                if (interrupt_callback_) {
+                    interrupt_callback_(source);
+                }
             }
             ch.current_word = fetch_word(ch.live_pointer);
             ch.live_pointer = (ch.live_pointer + 2U) & pointer_mask;
             latch_sample(ch, static_cast<std::int8_t>(ch.current_word >> 8U));
             ch.state = channel_state::play_high;
             return true;
+
+        case channel_state::manual_ready:
+            latch_sample(ch, static_cast<std::int8_t>(ch.current_word >> 8U));
+            ch.state = channel_state::manual_high;
+            return true;
+
+        case channel_state::manual_high:
+            latch_sample(ch, static_cast<std::int8_t>(ch.current_word & 0xFFU));
+            ch.state = channel_state::manual_low;
+            return true;
+
+        case channel_state::manual_low: {
+            const std::uint8_t source = audio_int_source[static_cast<std::size_t>(channel_index)];
+            audio_int_ |= source;
+            if (interrupt_callback_) {
+                interrupt_callback_(source);
+            }
+            ch.state = channel_state::idle;
+            return false;
+        }
         }
         return false;
     }
@@ -222,7 +253,8 @@ namespace mnemos::chips::audio {
             return 0;
         }
         const voice& ch = channels_[static_cast<std::size_t>(channel)];
-        if (ch.state == channel_state::idle || ch.state == channel_state::ready) {
+        if (ch.state == channel_state::idle || ch.state == channel_state::ready ||
+            ch.state == channel_state::manual_ready) {
             return 0;
         }
         return ch.last_sample;
@@ -235,7 +267,7 @@ namespace mnemos::chips::audio {
             if (ch.state == channel_state::idle) {
                 continue;
             }
-            if (ch.state == channel_state::ready) {
+            if (ch.state == channel_state::ready || ch.state == channel_state::manual_ready) {
                 // Zero-cost initial fetch to prime the state machine, then load
                 // the first sample's period (floor period 0 at 1 to avoid a stall).
                 if (!advance_channel(i, ch)) {
@@ -408,8 +440,8 @@ namespace mnemos::chips::audio {
         // the 4 channels reference rather than near-duplicates.
         for (int ci = 0; ci < paula::channel_count; ++ci) {
             const voice& ch = owner_->channels_[static_cast<std::size_t>(ci)];
-            const auto start = static_cast<std::uint32_t>(
-                mirrored_chipram_address(ram.size(), ch.lc));
+            const auto start =
+                static_cast<std::uint32_t>(mirrored_chipram_address(ram.size(), ch.lc));
             const std::uint16_t words = ch.len;
             if (words == 0U) {
                 continue;
@@ -425,8 +457,7 @@ namespace mnemos::chips::audio {
             std::size_t decoded = 0U;
             for (std::size_t b = 0; b < byte_count; ++b) {
                 const std::size_t a =
-                    mirrored_chipram_address(ram.size(),
-                                             static_cast<std::uint32_t>(start + b));
+                    mirrored_chipram_address(ram.size(), static_cast<std::uint32_t>(start + b));
                 const auto s = static_cast<std::int8_t>(ram[a]);
                 // Signed 8-bit -> s16 (x256: +-127 -> +-32512).
                 pcm_.push_back(static_cast<std::int16_t>(static_cast<std::int32_t>(s) * 256));

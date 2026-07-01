@@ -2,7 +2,9 @@
 
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace mnemos::apps::player::adapters {
@@ -26,6 +28,14 @@ namespace mnemos::apps::player::adapters {
     // returned as-is. nullopt if the file can't be read, the archive is
     // malformed, or extraction fails.
     [[nodiscard]] std::optional<loaded_rom> load_rom(const std::string& path);
+
+    // Load all media entries whose final extension matches one of `extensions`.
+    // Non-archives return a single image when their path matches. ZIP archives
+    // return matching entries in central-directory order. Gzip-wrapped entries
+    // such as Amiga `.adz` images are transparently inflated.
+    [[nodiscard]] std::optional<std::vector<loaded_rom>>
+    load_rom_entries_by_extension(const std::string& path,
+                                  std::span<const std::string_view> extensions);
 
     // Load the file verbatim -- no archive unwrapping. Arcade families take
     // the whole multi-dump set zip or set directory as their medium; their

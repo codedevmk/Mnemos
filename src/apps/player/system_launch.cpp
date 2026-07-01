@@ -2,6 +2,7 @@
 
 #include "adapter_link.hpp"
 #include "adapter_registry.hpp"
+#include "amiga_system.hpp"
 #include "genesis_region.hpp"
 #include "msx_cassette.hpp"
 #include "rom_loader.hpp"
@@ -14,6 +15,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <iterator>
 #include <optional>
 #include <span>
 #include <string>
@@ -57,12 +60,10 @@ namespace {
     }
 
     [[nodiscard]] std::string_view trim_ascii(std::string_view value) noexcept {
-        while (!value.empty() &&
-               std::isspace(static_cast<unsigned char>(value.front())) != 0) {
+        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front())) != 0) {
             value.remove_prefix(1U);
         }
-        while (!value.empty() &&
-               std::isspace(static_cast<unsigned char>(value.back())) != 0) {
+        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back())) != 0) {
             value.remove_suffix(1U);
         }
         return value;
@@ -128,9 +129,8 @@ namespace {
         std::size_t begin = 0U;
         while (begin <= value.size()) {
             const std::size_t end = value.find_first_of(",;", begin);
-            const std::string_view token =
-                value.substr(begin, end == std::string_view::npos ? std::string_view::npos
-                                                                  : end - begin);
+            const std::string_view token = value.substr(
+                begin, end == std::string_view::npos ? std::string_view::npos : end - begin);
             unsigned long long slot = 0U;
             if (!parse_unsigned(token, 3U, slot)) {
                 return std::nullopt;
@@ -432,8 +432,143 @@ namespace {
     }
 
     [[nodiscard]] const char*
-    amiga_kickstart_env(mnemos::apps::player::adapters::system_family family) noexcept {
-        return getenv_nonempty(amiga_kickstart_env_var(family));
+    amiga_bios_env_var(mnemos::apps::player::adapters::system_family family) noexcept {
+        using mnemos::apps::player::adapters::system_family;
+        switch (family) {
+        case system_family::amiga500_plus:
+            return "MNEMOS_AMIGA500PLUS_BIOS";
+        case system_family::amiga600:
+            return "MNEMOS_AMIGA600_BIOS";
+        case system_family::amiga2000:
+            return "MNEMOS_AMIGA2000_BIOS";
+        default:
+            return "MNEMOS_AMIGA500_BIOS";
+        }
+    }
+
+    [[nodiscard]] const char*
+    amiga_kickstart_dir_env_var(mnemos::apps::player::adapters::system_family family) noexcept {
+        using mnemos::apps::player::adapters::system_family;
+        switch (family) {
+        case system_family::amiga500_plus:
+            return "MNEMOS_AMIGA500PLUS_KICKSTART_DIR";
+        case system_family::amiga600:
+            return "MNEMOS_AMIGA600_KICKSTART_DIR";
+        case system_family::amiga2000:
+            return "MNEMOS_AMIGA2000_KICKSTART_DIR";
+        default:
+            return "MNEMOS_AMIGA500_KICKSTART_DIR";
+        }
+    }
+
+    [[nodiscard]] const char*
+    amiga_bios_dir_env_var(mnemos::apps::player::adapters::system_family family) noexcept {
+        using mnemos::apps::player::adapters::system_family;
+        switch (family) {
+        case system_family::amiga500_plus:
+            return "MNEMOS_AMIGA500PLUS_BIOS_DIR";
+        case system_family::amiga600:
+            return "MNEMOS_AMIGA600_BIOS_DIR";
+        case system_family::amiga2000:
+            return "MNEMOS_AMIGA2000_BIOS_DIR";
+        default:
+            return "MNEMOS_AMIGA500_BIOS_DIR";
+        }
+    }
+
+    [[nodiscard]] std::span<const std::string_view> amiga_kickstart_filename_candidates(
+        mnemos::apps::player::adapters::system_family family) noexcept {
+        using mnemos::apps::player::adapters::system_family;
+        static constexpr std::string_view a500[] = {
+            "Kickstart 1.3.rom", "Kickstart 1.2.rom", "kick13.rom",       "kick12.rom",
+            "kickstart13.rom",   "kickstart12.rom",   "kickstart1.3.rom", "kickstart1.2.rom"};
+        static constexpr std::string_view a500plus[] = {
+            "Kickstart 2.0.rom", "Kickstart 2.04.rom", "Kickstart 2.05.rom", "kick20.rom",
+            "kick204.rom",       "kick205.rom",        "kickstart20.rom",    "kickstart2.0.rom"};
+        static constexpr std::string_view a600[] = {
+            "Kickstart 2.0.rom", "Kickstart 2.05.rom", "Kickstart 3.1.rom",
+            "kick20.rom",        "kick205.rom",        "kick31.rom",
+            "kickstart20.rom",   "kickstart2.0.rom",   "kickstart31.rom"};
+        switch (family) {
+        case system_family::amiga500_plus:
+            return a500plus;
+        case system_family::amiga600:
+            return a600;
+        case system_family::amiga2000:
+            return a500;
+        default:
+            return a500;
+        }
+    }
+
+    [[nodiscard]] std::optional<std::string>
+    find_amiga_kickstart_in_dir(std::string_view dir,
+                                mnemos::apps::player::adapters::system_family family) {
+        if (dir.empty()) {
+            return std::nullopt;
+        }
+        const std::filesystem::path root{std::string{dir}};
+        for (std::string_view name : amiga_kickstart_filename_candidates(family)) {
+            const std::filesystem::path candidate = root / std::filesystem::path{std::string{name}};
+            std::error_code ec;
+            if (std::filesystem::is_regular_file(candidate, ec)) {
+                return candidate.string();
+            }
+        }
+        return std::nullopt;
+    }
+
+    [[nodiscard]] std::optional<std::string>
+    amiga_kickstart_path(mnemos::apps::player::adapters::system_family family) {
+        if (const char* kickstart_env = getenv_nonempty(amiga_kickstart_env_var(family));
+            kickstart_env != nullptr) {
+            return std::string{kickstart_env};
+        }
+        if (const char* bios_env = getenv_nonempty(amiga_bios_env_var(family));
+            bios_env != nullptr) {
+            return std::string{bios_env};
+        }
+
+        const char* dirs[] = {amiga_kickstart_dir_env_var(family), amiga_bios_dir_env_var(family),
+                              "MNEMOS_AMIGA_KICKSTART_DIR", "MNEMOS_AMIGA_BIOS_DIR"};
+        for (const char* env_name : dirs) {
+            if (const char* dir = getenv_nonempty(env_name); dir != nullptr) {
+                if (auto path = find_amiga_kickstart_in_dir(dir, family); path.has_value()) {
+                    return path;
+                }
+            }
+        }
+        return std::nullopt;
+    }
+
+    void print_missing_amiga_kickstart(mnemos::apps::player::adapters::system_family family,
+                                       std::string_view media_kind) {
+        std::fprintf(stderr,
+                     "[mnemos_player] %.*s %s needs %s (or %s) set to a Kickstart ROM, "
+                     "or MNEMOS_AMIGA_BIOS_DIR containing a model-appropriate Kickstart ROM\n",
+                     static_cast<int>(media_kind.size()), media_kind.data(),
+                     mnemos::apps::player::adapters::family_label(family),
+                     amiga_kickstart_env_var(family), amiga_bios_env_var(family));
+    }
+
+    [[nodiscard]] bool
+    validate_amiga_adf_images(std::span<const mnemos::apps::player::adapters::loaded_rom> disks,
+                              const std::string& source_path) {
+        constexpr std::size_t expected_size =
+            mnemos::manifests::amiga::amiga_system::floppy_dd_size;
+        for (const auto& disk : disks) {
+            if (disk.bytes.size() == expected_size) {
+                continue;
+            }
+            const char* name = disk.name.empty() ? source_path.c_str() : disk.name.c_str();
+            std::fprintf(stderr,
+                         "[mnemos_player] unsupported Amiga ADF image '%s' from %s: %zu bytes "
+                         "(expected %zu-byte standard DD ADF; extended/raw/IPF track images are "
+                         "not supported yet)\n",
+                         name, source_path.c_str(), disk.bytes.size(), expected_size);
+            return false;
+        }
+        return !disks.empty();
     }
 } // namespace
 
@@ -446,6 +581,7 @@ namespace mnemos::apps::player {
         using adapters::family_label;
         using adapters::family_names;
         using adapters::load_rom;
+        using adapters::load_rom_entries_by_extension;
         using adapters::load_rom_verbatim;
         using adapters::resolve_video_region;
         using adapters::system_family;
@@ -461,18 +597,16 @@ namespace mnemos::apps::player {
             }
 
             const system_family family = *family_opt;
-            const char* kickstart_env = amiga_kickstart_env(family);
-            if (kickstart_env == nullptr || kickstart_env[0] == '\0') {
-                std::fprintf(stderr, "[mnemos_player] %s BIOS-only launch needs "
-                                     "%s set to a Kickstart ROM\n",
-                             family_label(family), amiga_kickstart_env_var(family));
+            auto kickstart_path = amiga_kickstart_path(family);
+            if (!kickstart_path) {
+                print_missing_amiga_kickstart(family, "BIOS-only launch for");
                 outcome.exit_code = 1;
                 return outcome;
             }
-            auto kickstart = load_rom(kickstart_env);
+            auto kickstart = load_rom(*kickstart_path);
             if (!kickstart || kickstart->bytes.empty()) {
                 std::fprintf(stderr, "[mnemos_player] could not read Amiga Kickstart ROM: %s\n",
-                             kickstart_env);
+                             kickstart_path->c_str());
                 outcome.exit_code = 1;
                 return outcome;
             }
@@ -534,41 +668,36 @@ namespace mnemos::apps::player {
 
         const system_family family = *family_opt;
         const bool arcade_family =
-            family == system_family::irem_m10 ||
-            family == system_family::irem_m14 || family == system_family::irem_m15 ||
-            family == system_family::irem_m27 || family == system_family::irem_m47 ||
-            family == system_family::irem_m52 || family == system_family::irem_m57 ||
-            family == system_family::irem_m58 || family == system_family::irem_m62 ||
-            family == system_family::irem_m63 || family == system_family::irem_travrusa ||
-            family == system_family::irem_redalert ||
+            family == system_family::irem_m10 || family == system_family::irem_m14 ||
+            family == system_family::irem_m15 || family == system_family::irem_m27 ||
+            family == system_family::irem_m47 || family == system_family::irem_m52 ||
+            family == system_family::irem_m57 || family == system_family::irem_m58 ||
+            family == system_family::irem_m62 || family == system_family::irem_m63 ||
+            family == system_family::irem_travrusa || family == system_family::irem_redalert ||
             family == system_family::irem_m72 || family == system_family::irem_m75 ||
-            family == system_family::irem_m78 ||
-            family == system_family::irem_m81 || family == system_family::irem_m82 ||
-            family == system_family::irem_m84 || family == system_family::irem_m85 ||
-            family == system_family::irem_m90 || family == system_family::irem_m92 ||
-            family == system_family::irem_m102 || family == system_family::irem_m107 ||
-            family == system_family::irem_m119 ||
+            family == system_family::irem_m78 || family == system_family::irem_m81 ||
+            family == system_family::irem_m82 || family == system_family::irem_m84 ||
+            family == system_family::irem_m85 || family == system_family::irem_m90 ||
+            family == system_family::irem_m92 || family == system_family::irem_m102 ||
+            family == system_family::irem_m107 || family == system_family::irem_m119 ||
             family == system_family::taito_f2 || family == system_family::taito_gnet ||
-            family == system_family::capcom_cps1 ||
-            family == system_family::capcom_cps2;
+            family == system_family::capcom_cps1 || family == system_family::capcom_cps2;
         auto loaded = arcade_family ? load_rom_verbatim(options.rom_paths.front())
                                     : load_rom(options.rom_paths.front());
         const bool directory_backed_irem =
             loaded && loaded->directory_source &&
-            (family == system_family::irem_m10 ||
-             family == system_family::irem_m14 || family == system_family::irem_m15 ||
-             family == system_family::irem_m27 || family == system_family::irem_m47 ||
-             family == system_family::irem_m52 || family == system_family::irem_m57 ||
-             family == system_family::irem_m58 || family == system_family::irem_m62 ||
-             family == system_family::irem_m63 || family == system_family::irem_travrusa ||
-             family == system_family::irem_redalert ||
+            (family == system_family::irem_m10 || family == system_family::irem_m14 ||
+             family == system_family::irem_m15 || family == system_family::irem_m27 ||
+             family == system_family::irem_m47 || family == system_family::irem_m52 ||
+             family == system_family::irem_m57 || family == system_family::irem_m58 ||
+             family == system_family::irem_m62 || family == system_family::irem_m63 ||
+             family == system_family::irem_travrusa || family == system_family::irem_redalert ||
              family == system_family::irem_m72 || family == system_family::irem_m75 ||
-             family == system_family::irem_m78 ||
-             family == system_family::irem_m81 || family == system_family::irem_m82 ||
-             family == system_family::irem_m84 || family == system_family::irem_m85 ||
-             family == system_family::irem_m90 || family == system_family::irem_m92 ||
-             family == system_family::irem_m102 || family == system_family::irem_m107 ||
-             family == system_family::irem_m119);
+             family == system_family::irem_m78 || family == system_family::irem_m81 ||
+             family == system_family::irem_m82 || family == system_family::irem_m84 ||
+             family == system_family::irem_m85 || family == system_family::irem_m90 ||
+             family == system_family::irem_m92 || family == system_family::irem_m102 ||
+             family == system_family::irem_m107 || family == system_family::irem_m119);
         if (!loaded || (loaded->bytes.empty() && !directory_backed_irem)) {
             std::fprintf(stderr, "could not read ROM: %s\n", options.rom_paths.front().c_str());
             outcome.exit_code = 1;
@@ -579,20 +708,18 @@ namespace mnemos::apps::player {
         std::vector<std::string> additional_media_paths;
         for (std::size_t i = 1; i < options.rom_paths.size(); ++i) {
             const bool irem_family =
-                family == system_family::irem_m10 ||
-                family == system_family::irem_m14 || family == system_family::irem_m15 ||
-                family == system_family::irem_m27 || family == system_family::irem_m47 ||
-                family == system_family::irem_m52 || family == system_family::irem_m57 ||
-                family == system_family::irem_m58 || family == system_family::irem_m62 ||
-                family == system_family::irem_m63 || family == system_family::irem_travrusa ||
-                family == system_family::irem_redalert ||
+                family == system_family::irem_m10 || family == system_family::irem_m14 ||
+                family == system_family::irem_m15 || family == system_family::irem_m27 ||
+                family == system_family::irem_m47 || family == system_family::irem_m52 ||
+                family == system_family::irem_m57 || family == system_family::irem_m58 ||
+                family == system_family::irem_m62 || family == system_family::irem_m63 ||
+                family == system_family::irem_travrusa || family == system_family::irem_redalert ||
                 family == system_family::irem_m72 || family == system_family::irem_m75 ||
-                family == system_family::irem_m78 ||
-                family == system_family::irem_m81 || family == system_family::irem_m82 ||
-                family == system_family::irem_m84 || family == system_family::irem_m85 ||
-                family == system_family::irem_m90 || family == system_family::irem_m92 ||
-                family == system_family::irem_m102 || family == system_family::irem_m107 ||
-                family == system_family::irem_m119;
+                family == system_family::irem_m78 || family == system_family::irem_m81 ||
+                family == system_family::irem_m82 || family == system_family::irem_m84 ||
+                family == system_family::irem_m85 || family == system_family::irem_m90 ||
+                family == system_family::irem_m92 || family == system_family::irem_m102 ||
+                family == system_family::irem_m107 || family == system_family::irem_m119;
             auto extra = irem_family ? load_rom_verbatim(options.rom_paths[i])
                                      : load_rom(options.rom_paths[i]);
             const bool directory_backed_extra = extra && extra->directory_source && irem_family;
@@ -684,6 +811,7 @@ namespace mnemos::apps::player {
         force_link_all_adapters();
 
         std::vector<std::uint8_t> primary_rom = std::move(loaded->bytes);
+        std::string display_name = clean_rom_name(loaded->name);
         std::string disc_path;
         if (family == system_family::segacd) {
             const char* bios_env = MNEMOS_PLAYER_GETENV("MNEMOS_SEGACD_BIOS");
@@ -800,8 +928,9 @@ namespace mnemos::apps::player {
                 primary_rom = std::move(bios->bytes);
             } else if (primary_kind == msx_launch_media_kind::disk ||
                        primary_kind == msx_launch_media_kind::tape) {
-                std::fprintf(stderr, "[mnemos_player] an MSX %s needs MNEMOS_MSX_BIOS set to "
-                                     "a system BIOS ROM\n",
+                std::fprintf(stderr,
+                             "[mnemos_player] an MSX %s needs MNEMOS_MSX_BIOS set to "
+                             "a system BIOS ROM\n",
                              msx_media_label(primary_kind));
                 outcome.exit_code = 1;
                 return outcome;
@@ -865,24 +994,36 @@ namespace mnemos::apps::player {
         if (is_amiga_family(family)) {
             keyboard_layout_override =
                 amiga_keyboard_layout_override(options.keyboard_layout_override);
-            const std::string ext = lowercase_extension(loaded->name);
-            if (ext == ".adf") {
-                const char* kickstart_env = amiga_kickstart_env(family);
-                if (kickstart_env == nullptr || kickstart_env[0] == '\0') {
-                    std::fprintf(stderr, "[mnemos_player] a %s ADF needs "
-                                         "%s set to a Kickstart ROM\n",
-                                 family_label(family), amiga_kickstart_env_var(family));
+            constexpr std::string_view amiga_disk_extensions[] = {".adf", ".adz", ".gz"};
+            if (auto disks =
+                    load_rom_entries_by_extension(options.rom_paths.front(), amiga_disk_extensions);
+                disks.has_value()) {
+                if (!validate_amiga_adf_images(*disks, options.rom_paths.front())) {
                     outcome.exit_code = 1;
                     return outcome;
                 }
-                auto kickstart = load_rom(kickstart_env);
+                auto kickstart_path = amiga_kickstart_path(family);
+                if (!kickstart_path) {
+                    print_missing_amiga_kickstart(family, "a disk image for");
+                    outcome.exit_code = 1;
+                    return outcome;
+                }
+                auto kickstart = load_rom(*kickstart_path);
                 if (!kickstart || kickstart->bytes.empty()) {
                     std::fprintf(stderr, "[mnemos_player] could not read Amiga Kickstart ROM: %s\n",
-                                 kickstart_env);
+                                 kickstart_path->c_str());
                     outcome.exit_code = 1;
                     return outcome;
                 }
-                additional_media.insert(additional_media.begin(), std::move(primary_rom));
+                display_name = clean_rom_name(disks->front().name);
+                std::vector<std::vector<std::uint8_t>> primary_disks;
+                primary_disks.reserve(disks->size());
+                for (auto& disk : *disks) {
+                    primary_disks.push_back(std::move(disk.bytes));
+                }
+                additional_media.insert(additional_media.begin(),
+                                        std::make_move_iterator(primary_disks.begin()),
+                                        std::make_move_iterator(primary_disks.end()));
                 primary_rom = std::move(kickstart->bytes);
             }
         }
@@ -1021,7 +1162,7 @@ namespace mnemos::apps::player {
             family_id(family),
             {.rom = std::move(primary_rom),
              .video_region = video,
-             .display_name = clean_rom_name(loaded->name),
+             .display_name = std::move(display_name),
              .additional_media = std::move(additional_media),
              .additional_media_paths = std::move(additional_media_paths),
              .autostart = options.autostart,

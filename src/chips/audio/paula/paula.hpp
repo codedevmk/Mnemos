@@ -7,18 +7,20 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <string>
 #include <vector>
 
 namespace mnemos::chips::audio {
 
-    // Commodore Paula (MOS 8364) audio subsystem -- the four-channel DMA-driven
-    // 8-bit signed PCM sound engine of the Amiga custom chip set. Each channel
-    // fetches 16-bit words from chip RAM (two signed 8-bit samples per word, high
-    // byte first then low byte); per-channel registers latch the DMA start pointer
-    // (AUDxLC), word length (AUDxLEN), sample period in color clocks (AUDxPER), and
-    // volume (AUDxVOL, clamped 0..64). DMA is gated by a master enable plus a
+    // Commodore Paula (MOS 8364) audio subsystem -- the four-channel DMA/manual
+    // 8-bit signed PCM sound engine of the Amiga custom chip set. Each DMA
+    // channel fetches 16-bit words from chip RAM (two signed 8-bit samples per
+    // word, high byte first then low byte); CPU writes to AUDxDAT can also feed
+    // one word while DMA is off. Per-channel registers latch the DMA start pointer
+    // (AUDxLC), word length (AUDxLEN), sample period in color clocks (AUDxPER),
+    // and volume (AUDxVOL, clamped 0..64). DMA is gated by a master enable plus a
     // per-channel enable bit (DMACON). When a channel exhausts its LEN words it
     // reloads from LC/LEN and raises the matching AUDxINT. Channels pan to fixed
     // stereo outputs: left = ch0 + ch3, right = ch1 + ch2.
@@ -94,6 +96,9 @@ namespace mnemos::chips::audio {
         void clear_interrupts(std::uint8_t mask) noexcept {
             audio_int_ = static_cast<std::uint8_t>(audio_int_ & ~mask);
         }
+        void set_interrupt_callback(std::function<void(std::uint8_t)> callback) noexcept {
+            interrupt_callback_ = std::move(callback);
+        }
 
         // Generate one native stereo sample (advance one color-clock per channel)
         // and latch last_left()/last_right(). Mirrors rf5c68::step().
@@ -129,6 +134,9 @@ namespace mnemos::chips::audio {
             ready,     // DMA just enabled; awaiting first fetch
             play_high, // playing the high byte of the current word
             play_low,  // playing the low byte of the current word
+            manual_ready,
+            manual_high,
+            manual_low,
         };
 
         // Per-DMA-channel synth state. Named `voice` (not `channel`) so the type
@@ -190,6 +198,7 @@ namespace mnemos::chips::audio {
         int prescaler_{};
         bool audio_capture_{};
         std::vector<std::int16_t> sample_queue_{};
+        std::function<void(std::uint8_t)> interrupt_callback_{};
 
         std::array<register_descriptor, 6> register_view_{};
         audio_source_impl audio_{*this};
