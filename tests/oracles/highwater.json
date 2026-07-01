@@ -9,12 +9,12 @@
       "ctest": "mnemos_gg_visual_corpus_test",
       "high_water": "skipped"
     },
-    "GLD-M14-CORPUS": {
-      "ctest": "mnemos_apps_player_irem_m14_corpus_golden_test",
-      "high_water": "passed"
-    },
     "GLD-M107-CORPUS": {
       "ctest": "mnemos_apps_player_irem_m107_corpus_golden_test",
+      "high_water": "passed"
+    },
+    "GLD-M14-CORPUS": {
+      "ctest": "mnemos_apps_player_irem_m14_corpus_golden_test",
       "high_water": "passed"
     },
     "GLD-M15-CORPUS": {
@@ -61,6 +61,10 @@
       "ctest": "mnemos_apps_player_irem_m63_corpus_golden_test",
       "high_water": "passed"
     },
+    "GLD-M72-PARITY-HASH": {
+      "ctest": "mnemos_apps_player_irem_m72_parity_hash_golden_test",
+      "high_water": "skipped"
+    },
     "GLD-M72-PROTECTED": {
       "ctest": "mnemos_apps_player_irem_m72_protected_golden_test",
       "high_water": "passed"
@@ -72,10 +76,6 @@
     "GLD-M72-PROTECTED-MCU": {
       "ctest": "mnemos_apps_player_irem_m72_protected_mcu_golden_test",
       "high_water": "passed"
-    },
-    "GLD-M72-PARITY-HASH": {
-      "ctest": "mnemos_apps_player_irem_m72_parity_hash_golden_test",
-      "high_water": "skipped"
     },
     "GLD-M72-ROSTER": {
       "ctest": "mnemos_apps_player_irem_m72_roster_golden_test",
@@ -117,20 +117,20 @@
       "ctest": "mnemos_apps_player_irem_m92_corpus_golden_test",
       "high_water": "passed"
     },
-    "GLD-TRAVRUSA-CORPUS": {
-      "ctest": "mnemos_apps_player_irem_travrusa_corpus_golden_test",
-      "high_water": "passed"
-    },
-    "GLD-TRAVRUSA-PARITY-HASH": {
-      "ctest": "mnemos_apps_player_irem_travrusa_parity_hash_golden_test",
-      "high_water": "skipped"
-    },
     "GLD-SMS-BOOT": {
       "ctest": "mnemos_sms_boot_test",
       "high_water": "skipped"
     },
     "GLD-SMS-ZEXALL": {
       "ctest": "mnemos_sms_zexall_test",
+      "high_water": "skipped"
+    },
+    "GLD-TRAVRUSA-CORPUS": {
+      "ctest": "mnemos_apps_player_irem_travrusa_corpus_golden_test",
+      "high_water": "passed"
+    },
+    "GLD-TRAVRUSA-PARITY-HASH": {
+      "ctest": "mnemos_apps_player_irem_travrusa_parity_hash_golden_test",
       "high_water": "skipped"
     },
     "ORC-LEGACY-M6510-UNIT": {

@@ -2867,6 +2867,23 @@ namespace mnemos::manifests::amiga {
                 s->write_custom_word(reg, v);
             },
             0);
+        // OCS/ECS partial address decode: with no trapdoor/slow RAM fitted, the
+        // $C00000-$DBFFFF expansion region aliases the custom-chip registers (every
+        // $200 bytes). Kickstart 1.2's memory probe pokes the INTENA/INTENAR mirror
+        // here and relies on that alias to reject the region as non-RAM; without it
+        // (blanket $FF open bus) 1.2 mistakes the area for RAM, parks ExecBase and
+        // the supervisor stack at $DC0000, and dies on the first stacked RTS. Stops
+        // below the $DC0000 RTC slot. Lower priority so real expansion RAM would win.
+        s->bus.map_mmio16(
+            0x00C00000U, 0x001C0000U, [s](std::uint32_t a) { return s->read_custom_byte(a); },
+            [s](std::uint32_t a, std::uint8_t v) { s->write_custom_byte(a, v); },
+            [s](std::uint32_t a) {
+                return s->read_custom_word(static_cast<std::uint16_t>(a & 0x01FEU));
+            },
+            [s](std::uint32_t a, std::uint16_t v) {
+                s->write_custom_word(static_cast<std::uint16_t>(a & 0x01FEU), v);
+            },
+            -1);
         s->bus.map_mmio(
             amiga_system::cia_a_base, 0x1000U,
             [s](std::uint32_t a) {
