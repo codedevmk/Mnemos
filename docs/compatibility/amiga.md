@@ -1178,7 +1178,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Dizzy Panic (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dizzy - Prince of the Yolkfolk (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dizzy's Excellent Adventures (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| DM2 Skullkeep | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| DM2 Skullkeep | TBD | Prompt only | TBD | TBD | TBD | Prompt only | Prompt only | TBD | TBD | TBD |
 | DNA Warrior (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dogfight - 80 Years of Aerial Warfare (Europe) (En,Fr,De,It) (v1.01) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dogs of War (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1241,7 +1241,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Dune (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dune (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dune (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Dune II | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Dune II | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | Dune II - Battle for Arrakis (Europe) (En,Fr,De) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dune (Italy) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dungeon Master | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
@@ -1817,7 +1817,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Ishido - The Way of Stones (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Island of Lost Hope, The (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | ISS - Incredible Shrinking Sphere (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| It Came from the Desert | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| It Came from the Desert | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | It Came from the Desert (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Italia 1990 (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Italian Night 1999 (Italy) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2396,7 +2396,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | P.P. Hammer and His Pneumatic Weapon (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | P.P. Hammer and His Pneumatic Weapon (Europe) (Budget - Global Software) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | P.P. Hammer and His Pneumatic Weapon (PPHammer.lha) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| P47 Thunderbolt (1990)(Firebird)[cr MAD] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| P47 Thunderbolt (1990)(Firebird)[cr MAD] | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | P47 Thunderbolt (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | P47 Thunderbolt (Europe) (Compilation - Air-Sea Supremacy) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pac-Land (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2475,7 +2475,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Pioneer Plague (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pipe Mania (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Piracy on the High Seas (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Pirates | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Pirates | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | Pirates! (Europe) (v832.02) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pirates! (Europe) (v832.04) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pit-Fighter (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2651,7 +2651,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Reederei (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Reel | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Reel_1.adf | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Reel_2.adf | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Reel_2.adf | TBD | Prompt only | TBD | TBD | TBD | Prompt only | Prompt only | TBD | TBD | TBD |
 | Reise zum Mittelpunkt der Erde (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Renaissance (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Renegade (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -3644,6 +3644,8 @@ not committed.
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1200 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500plus,amiga600 -Rom <10 explicit ADF ZIP paths>` disk-smoke-proved the same A590/Action Replay/Amiga BASIC/Alien Syndrome/Arkanoid/Arthur slice on both A500+ and A600. |
 | 2026-07-01 | `mnemos_player --system amiga500plus/amiga600 --rom "D:\emu\amiga\adf\Workbench 2.05 (37.71) - Boot (Commodore) (1992).zip" --frames 4500 --screenshot build/scratch/workbench205-*.png` reached a 640x256 Workbench 2.0 desktop on both models with matching pixel statistics, after the 1500-frame disk-smoke run proved boot/disk progress. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500` and the same command with `-System amiga500plus,amiga600` disk-smoke-proved Black Crypt, Cannon Fodder TRSI, Cannon Fodder 2 PDX, Desert Strike, Disk-O-Rogue, Pang-500-NTSC.adf, Pinball Dreams, and R-Type across A500/A500+/A600. |
+| 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500` and the same command with `-System amiga500plus,amiga600` over the DM2/DUNEII/It Came from the Desert/Pirates/PowerMonger/Prince of Persia/P47/Rainbow-Islands/Reel slice disk-smoke-proved Dune II, It Came from the Desert, Pirates, and P47 Thunderbolt on A500/A500+/A600. Visual follow-up kept DM2 Skullkeep and Reel_2.adf as prompt-only media, and left PowerMonger, Rainbow Islands, Reel_1.adf, and Prince of Persia unpromoted due black frames, memory/error dialog, or corrupted output. |
+| 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom "D:\emu\amiga\adf\Prince of Persia.zip"` passed mechanical disk-smoke gates but rendered persistent banded white-on-black corruption, so no compatibility cell was promoted. |
 
 ## Update Rules
 
