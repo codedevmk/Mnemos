@@ -426,8 +426,7 @@ namespace mnemos::chips::video {
 
         const bool hires = hires_enabled();
         const std::uint32_t clocks_per_word = hires ? 4U : 8U;
-        const std::uint32_t terminal_words =
-            hires ? (ecs_display_fetch_timing_ ? 2U : 3U) : 1U;
+        const std::uint32_t terminal_words = hires ? 2U : 1U;
         const std::uint32_t normal_words_per_line =
             ((ddf_stop - ddf_start) / clocks_per_word) + terminal_words;
         const std::uint32_t fetch_end =
@@ -1199,8 +1198,7 @@ namespace mnemos::chips::video {
         std::uint32_t words_per_line = 0U;
         if (ddf_stop >= ddf_start) {
             const std::uint32_t clocks_per_word = hires ? 4U : 8U;
-            const std::uint32_t terminal_words =
-                hires ? (ecs_display_fetch_timing_ ? 2U : 3U) : 1U;
+            const std::uint32_t terminal_words = hires ? 2U : 1U;
             words_per_line = ((ddf_stop - ddf_start) / clocks_per_word) + terminal_words;
         }
 

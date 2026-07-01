@@ -68,7 +68,7 @@ namespace {
         chip.set_diwstrt(0x2C81U);
         chip.set_diwstop(0xF4C1U);
         chip.set_ddfstrt(0x003CU); // standard high-resolution fetch start
-        chip.set_ddfstop(0x00D0U); // Workbench-compatible high-resolution 40-word line
+        chip.set_ddfstop(0x00D4U); // standard high-resolution 40-word line
     }
 
     [[nodiscard]] constexpr std::uint16_t sprite_pos(std::uint32_t visible_y,
@@ -409,7 +409,7 @@ TEST_CASE("agnus BPLCON0 HIRES fetches and exposes 640-pixel bitplane rows", "[a
     CHECK(frame.pixels[agnus::visible_width_hires - 1U] == 0x00FF0000U);
 }
 
-TEST_CASE("agnus high-resolution DDF 3c-d0 advances by forty words per line", "[agnus]") {
+TEST_CASE("agnus high-resolution DDF 3c-d4 advances by forty words per line", "[agnus]") {
     agnus chip;
     std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
     const auto palette = make_palette(1U, 0x0F00U);
