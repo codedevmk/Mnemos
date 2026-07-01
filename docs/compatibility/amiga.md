@@ -705,7 +705,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Bismarck (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bismarck (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Black Cauldron, The (Europe) (v2.00) (HLS) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Black Crypt | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Black Crypt | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | Black Crypt (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Black Gold (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Black Gold (Germany) (v1.16 14.1.1992) (Compilation - World of Business) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -844,9 +844,9 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | California Games II (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Campaign II - 50 Years of Global Conflict (Europe) (En,Fr,De,Es,It) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Campaign - Tactical & Strategic War Simulation (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Cannon Fodder 1993 Virgin DE cr TRSI | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Cannon Fodder 1993 Virgin DE cr TRSI | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | Cannon Fodder (1993)(Virgin)(DE)[cr TRSI] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Cannon Fodder 2 1994 Virgin cr PDX | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Cannon Fodder 2 1994 Virgin cr PDX | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | Cannon Fodder 2 (1994)(Virgin)[cr PDX] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Cannon Fodder 2 (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Cannon Fodder 2 (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1149,7 +1149,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Dennis (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dennis (Europe) (AGA) (Amiga 1200 Bundle - Desktop Dynamite) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Denver Presente - Je Decouvre les Couleurs (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Desert Strike | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Desert Strike | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | Desert Strike-3 (1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Desert Strike - Return to the Gulf (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Destroyer (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1170,7 +1170,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Disc (Europe) (Budget - Action Sixteen) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Disc (Europe) (Compilation - Podium) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Discovery - In the Steps of Columbus (Europe) (En,Fr,De,Es,It) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Disk-O-Rogue | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Disk-O-Rogue | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | Disposable Hero (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Distant Armies - A Playing History of Chess (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dizzy Collection - 5 Game Pack (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2406,7 +2406,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Paladin II (Europe) (En,Fr,De) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pandora (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pang-500-NTSC | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Pang-500-NTSC.adf | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Pang-500-NTSC.adf | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | Pang-AGA | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pang (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Panza Kick Boxing (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2455,7 +2455,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Pick'n Pile (Europe) (Compilation - Le 2eme Sens) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pictionary (Europe) (v3.1a) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pierre le Chef Is... Out to Lunch (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Pinball Dreams | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Pinball Dreams | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | Pinball Dreams (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pinball Dreams NTSC | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pinball Fantasies (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2610,7 +2610,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | R.B.I. Two Baseball (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | R.B.I. Two Baseball (Europe) (Budget - The Hit Squad) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | R-C Aerochopper (USA) (v1.1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| R-Type | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| R-Type | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | R-Type (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | R-Type II (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Raffles (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -3643,6 +3643,7 @@ not committed.
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1200 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500 -Rom <10 explicit ADF ZIP paths>` disk-smoke-proved A590 HD Setup, both Amiga BASIC variants, Arkanoid [NTSC], Arthur, Arthur [savegame], Alien Syndrome, Action Replay Datel, and Action Replay 4 BETA; Action Replay ALE reached the Kickstart 1.3 insert-disk prompt. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1200 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500plus,amiga600 -Rom <10 explicit ADF ZIP paths>` disk-smoke-proved the same A590/Action Replay/Amiga BASIC/Alien Syndrome/Arkanoid/Arthur slice on both A500+ and A600. |
 | 2026-07-01 | `mnemos_player --system amiga500plus/amiga600 --rom "D:\emu\amiga\adf\Workbench 2.05 (37.71) - Boot (Commodore) (1992).zip" --frames 4500 --screenshot build/scratch/workbench205-*.png` reached a 640x256 Workbench 2.0 desktop on both models with matching pixel statistics, after the 1500-frame disk-smoke run proved boot/disk progress. |
+| 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500` and the same command with `-System amiga500plus,amiga600` disk-smoke-proved Black Crypt, Cannon Fodder TRSI, Cannon Fodder 2 PDX, Desert Strike, Disk-O-Rogue, Pang-500-NTSC.adf, Pinball Dreams, and R-Type across A500/A500+/A600. |
 
 ## Update Rules
 
