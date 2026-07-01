@@ -250,8 +250,15 @@ function Add-MediaDir {
 }
 
 function Get-SafeName {
-    param([Parameter(Mandatory = $true)][string]$Path)
-    $stem = [System.IO.Path]::GetFileNameWithoutExtension($Path)
+    param([Parameter(Mandatory = $true)][Alias("Path")][string]$Value)
+    $stem = [System.IO.Path]::GetFileName($Value)
+    if ([string]::IsNullOrWhiteSpace($stem)) {
+        $stem = $Value
+    }
+    $stem = [System.Text.RegularExpressions.Regex]::Replace(
+        $stem,
+        "(?i)(\.adf\.gz|\.tar\.gz|\.adf|\.adz|\.ipf|\.hdf|\.hdz|\.zip|\.tar|\.tgz|\.7z|\.rar|\.lha|\.lzh)$",
+        "")
     $safe = [System.Text.RegularExpressions.Regex]::Replace($stem, "[^A-Za-z0-9._-]+", "_")
     $safe = $safe.Trim("_")
     if ([string]::IsNullOrWhiteSpace($safe)) {

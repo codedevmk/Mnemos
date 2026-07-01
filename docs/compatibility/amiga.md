@@ -810,7 +810,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Buck Rogers Countdown to Doomsday | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Buck Rogers - Countdown to Doomsday - Science Fiction Role-Playing Computer Game, Vol.I (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Buck Rogers - Countdown to Doomsday - Science Fiction Role-Playing Computer Game, Vol.I (USA) (v1.0) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Budokan | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Budokan | TBD | Visual defect | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
 | Budokan - The Martial Spirit (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Buffalo Bill's Rodeo Games (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bug Bash (Europe) (Compilation - Bug Bash + Nucleus) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2394,8 +2394,8 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Oxford Softworks, The - Go Player (Europe) (En,Fr,De) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Oxxonian (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | P.O.W. (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| P.P. Hammer and His Pneumatic Weapon (1991)(Demonware)[cr CSL] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| P.P. Hammer and His Pneumatic Weapon (1991)(Demonware)[cr CSL][h PRX] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| P.P. Hammer and His Pneumatic Weapon (1991)(Demonware)[cr CSL] | TBD | Operational (visual smoke) | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
+| P.P. Hammer and His Pneumatic Weapon (1991)(Demonware)[cr CSL][h PRX] | TBD | Visual defect | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
 | P.P. Hammer and His Pneumatic Weapon (1992)(Global Software)[budget] | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | P.P. Hammer and His Pneumatic Weapon (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | P.P. Hammer and His Pneumatic Weapon (Europe) (Budget - Global Software) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2411,7 +2411,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Pandora (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pang-500-NTSC | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pang-500-NTSC.adf | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
-| Pang-AGA | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Pang-AGA | TBD | Requirement/error prompt | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
 | Pang (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Panza Kick Boxing (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Panza Kick Boxing (France) (Compilation - Podium) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2461,7 +2461,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Pierre le Chef Is... Out to Lunch (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pinball Dreams | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | Pinball Dreams (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Pinball Dreams NTSC | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Pinball Dreams NTSC | TBD | Unsupported archive entries | TBD | TBD | TBD | Unsupported archive entries | Unsupported archive entries | TBD | TBD | TBD |
 | Pinball Fantasies (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pinball Fantasies (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pinball Fantasies (USA) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -3653,6 +3653,7 @@ not committed.
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Arkanoid/Bubble Bobble/DungeonMaster/emeraldMine/Gauntlet II/Golden Axe/Pang/R-Type ADF ZIP slice>` passed 24 mechanical launches. Manual screenshot review promoted Bubble Bobble, Emerald Mine, and R-Type only on the visually plausible A500 route; kept Dungeon Master A500 as a 1 MiB requirement/error prompt; and marked Bubble Bobble, Emerald Mine, and R-Type on A500+/A600 as visual defects. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Arthur/Deep Core/Disk-O-Rogue/Golden Axe AGA/P.P. Hammer/PREY/Onescapee/Swords_of_Twilight_Disk1 ADF ZIP slice>` produced 15 successful mechanical launches and 9 unsupported archive-entry failures. Manual screenshot review promoted P.P. Hammer on A500/A500+/A600, Disk-O-Rogue on A500+/A600, and Swords of Twilight disk smoke on all three; Disk-O-Rogue A500 was marked as a visual defect. Deep Core, PREY, and Onescapee ZIPs contained CD image media rather than ADF/ADZ/IPF/HDF entries. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Alien Breed/Another World/Lemmings/Lotus Turbo Challenge 2/Pinball Dreams/Speedball 2/Superfrog root .7z slice>` failed with explicit IPF/CAPS messages; those rows are marked `Unsupported media (format pending)` on A500/A500+/A600. |
+| 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Budokan/P.P. Hammer variants/Pang-AGA/PinballDreamsNTSC/Golden Axe AGA slice>` was rerun after fixing dotted-title artifact names. Manual screenshot review marked Budokan as visual-defect-only on all three, promoted only the A500 route for P.P. Hammer 1991 CSL, marked the h PRX variant as visual-defect-only, classified Pang-AGA as an A500 load error plus A500+/A600 white-screen defect, and left Golden Axe AGA unpromoted because it only reached a generic crack intro. PinballDreamsNTSC ZIP contains loose hard-drive install files rather than a supported image entry. |
 
 ## Update Rules
 
