@@ -140,6 +140,110 @@ namespace {
                                           sys.chip_ram[address + 1U]);
     }
 
+    [[nodiscard]] std::uint32_t read_track_long(const std::vector<std::uint8_t>& data,
+                                                std::size_t offset) noexcept {
+        return (static_cast<std::uint32_t>(data[offset + 0U]) << 24U) |
+               (static_cast<std::uint32_t>(data[offset + 1U]) << 16U) |
+               (static_cast<std::uint32_t>(data[offset + 2U]) << 8U) |
+               static_cast<std::uint32_t>(data[offset + 3U]);
+    }
+
+    [[nodiscard]] std::uint32_t decode_mfm_odd_even(std::uint32_t odd,
+                                                    std::uint32_t even) noexcept {
+        constexpr std::uint32_t mask = 0x55555555U;
+        return ((odd & mask) << 1U) | (even & mask);
+    }
+
+    [[nodiscard]] std::array<std::uint32_t, 2> encode_mfm_odd_even(
+        std::uint32_t raw) noexcept {
+        constexpr std::uint32_t mask = 0x55555555U;
+        return {((raw >> 1U) & mask), (raw & mask)};
+    }
+
+    [[nodiscard]] std::uint16_t read_track_word(const std::vector<std::uint8_t>& data,
+                                                std::size_t offset) noexcept {
+        return static_cast<std::uint16_t>((data[offset + 0U] << 8U) | data[offset + 1U]);
+    }
+
+    template <std::size_t N>
+    [[nodiscard]] std::uint32_t mfm_checksum(const std::array<std::uint32_t, N>& words) noexcept {
+        std::uint32_t checksum = 0U;
+        for (std::uint32_t word : words) {
+            checksum ^= word;
+        }
+        return checksum & 0x55555555U;
+    }
+
+    [[nodiscard]] bool decode_dma_amigados_sector(
+        const std::vector<std::uint8_t>& bytes, std::size_t offset, std::uint8_t expected_track,
+        std::uint8_t& sector,
+        std::array<std::uint8_t, amiga_system::floppy_sector_size>& sector_data) noexcept {
+        constexpr std::uint16_t sync = 0x4489U;
+        constexpr std::size_t header_raw_longs = 5U;
+        constexpr std::size_t header_encoded_longs = header_raw_longs * 2U;
+        constexpr std::size_t checksum_bytes = 8U;
+        constexpr std::size_t data_raw_longs = amiga_system::floppy_sector_size / 4U;
+        constexpr std::size_t data_encoded_longs = data_raw_longs * 2U;
+        constexpr std::size_t sector_bytes_after_first_sync =
+            2U + header_encoded_longs * 4U + checksum_bytes * 2U + data_encoded_longs * 4U;
+
+        if (offset + sector_bytes_after_first_sync > bytes.size() ||
+            read_track_word(bytes, offset) != sync) {
+            return false;
+        }
+
+        std::size_t cursor = offset + 2U;
+        std::array<std::uint32_t, header_encoded_longs> header_encoded{};
+        for (std::uint32_t& word : header_encoded) {
+            word = read_track_long(bytes, cursor);
+            cursor += 4U;
+        }
+
+        const std::uint32_t stored_header_checksum = decode_mfm_odd_even(
+            read_track_long(bytes, cursor), read_track_long(bytes, cursor + 4U));
+        cursor += checksum_bytes;
+        if (stored_header_checksum != mfm_checksum(header_encoded)) {
+            return false;
+        }
+
+        const std::uint32_t stored_data_checksum = decode_mfm_odd_even(
+            read_track_long(bytes, cursor), read_track_long(bytes, cursor + 4U));
+        cursor += checksum_bytes;
+
+        const std::uint32_t info = decode_mfm_odd_even(header_encoded[0], header_encoded[1]);
+        if ((info & 0xFF000000U) != 0xFF000000U ||
+            static_cast<std::uint8_t>(info >> 16U) != expected_track) {
+            return false;
+        }
+        sector = static_cast<std::uint8_t>(info >> 8U);
+        const auto sectors_remaining = static_cast<std::uint8_t>(info);
+        if (sector >= amiga_system::floppy_sectors_per_track ||
+            sectors_remaining !=
+                static_cast<std::uint8_t>(amiga_system::floppy_sectors_per_track - sector)) {
+            return false;
+        }
+
+        std::array<std::uint32_t, data_encoded_longs> data_encoded{};
+        for (std::uint32_t& word : data_encoded) {
+            word = read_track_long(bytes, cursor);
+            cursor += 4U;
+        }
+        if (stored_data_checksum != mfm_checksum(data_encoded)) {
+            return false;
+        }
+
+        for (std::size_t i = 0U; i < data_raw_longs; ++i) {
+            const std::uint32_t raw =
+                decode_mfm_odd_even(data_encoded[i], data_encoded[i + data_raw_longs]);
+            const std::size_t dst = i * 4U;
+            sector_data[dst + 0U] = static_cast<std::uint8_t>(raw >> 24U);
+            sector_data[dst + 1U] = static_cast<std::uint8_t>(raw >> 16U);
+            sector_data[dst + 2U] = static_cast<std::uint8_t>(raw >> 8U);
+            sector_data[dst + 3U] = static_cast<std::uint8_t>(raw);
+        }
+        return true;
+    }
+
     void program_one_plane_display(amiga_system& sys) {
         sys.write_custom_word(0x180U, 0x000FU); // COLOR00 = blue backdrop
         sys.write_custom_word(0x182U, 0x0F00U); // COLOR01 = red foreground
@@ -1089,6 +1193,45 @@ TEST_CASE("amiga500 AUDxDAT manual audio write reaches Paula and INTREQ",
     CHECK((sys->paula.interrupts() & 0x01U) == 0U);
 }
 
+TEST_CASE("amiga500 ADKCON audio attachment routes channel modulation into Paula",
+          "[manifests][amiga500][audio][modulation]") {
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+
+    sys->bus.write8(0x000100U, 0x00U);
+    sys->bus.write8(0x000101U, 0x10U); // AUD0 supplies volume 16 to AUD1.
+    sys->bus.write8(0x000200U, 0x10U);
+    sys->bus.write8(0x000201U, 0x10U); // AUD1 audible data.
+
+    sys->write_custom_word(0x09EU, static_cast<std::uint16_t>(amiga_system::setclr_bit | 0x0001U));
+    CHECK((sys->read_custom_word(0x010U) & 0x0001U) != 0U);
+    CHECK((sys->paula.volume_attachment_mask() & 0x01U) != 0U);
+
+    sys->write_custom_word(0x0A0U, 0x0000U); // AUD0LCH
+    sys->write_custom_word(0x0A2U, 0x0100U); // AUD0LCL
+    sys->write_custom_word(0x0A4U, 0x0001U); // AUD0LEN
+    sys->write_custom_word(0x0A6U, 0x0001U); // AUD0PER
+    sys->write_custom_word(0x0A8U, 0x0040U); // AUD0VOL
+    sys->write_custom_word(0x0B0U, 0x0000U); // AUD1LCH
+    sys->write_custom_word(0x0B2U, 0x0200U); // AUD1LCL
+    sys->write_custom_word(0x0B4U, 0x0001U); // AUD1LEN
+    sys->write_custom_word(0x0B6U, 0x0001U); // AUD1PER
+    sys->write_custom_word(0x0B8U, 0x0040U); // AUD1VOL
+    sys->write_custom_word(
+        0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit | agnus::dmacon_dmaen |
+                                           agnus::dmacon_aud0en | agnus::dmacon_aud1en));
+
+    std::array<std::int16_t, 4> samples{};
+    sys->paula.generate(samples);
+
+    CHECK(samples[0] == 0);
+    CHECK(samples[1] == 256);
+    CHECK(sys->paula.read_reg(1, mnemos::chips::audio::paula::reg_vol) == 0x0010U);
+
+    sys->write_custom_word(0x09EU, 0x0001U);
+    CHECK((sys->paula.volume_attachment_mask() & 0x01U) == 0U);
+}
+
 TEST_CASE("amiga500 disk DMA streams a mounted ADF track into chip RAM",
           "[manifests][amiga500][disk]") {
     auto sys = assemble_amiga(tiny_kickstart());
@@ -1112,18 +1255,59 @@ TEST_CASE("amiga500 disk DMA streams a mounted ADF track into chip RAM",
     CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) == 0U);
 
     run_scanlines(*sys, 2U);
-    CHECK(sys->chip_ram[0x0200U] == 0x44U);
-    CHECK(sys->chip_ram[0x0201U] == 0x89U);
-    CHECK(sys->chip_ram[0x0202U] == 0x44U);
+    CHECK(sys->chip_ram[0x0200U] == 0xAAU);
+    CHECK(sys->chip_ram[0x0201U] == 0xAAU);
+    CHECK(sys->chip_ram[0x0202U] == 0xAAU);
     CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) == 0U);
     CHECK((sys->read_custom_word(0x01AU) & 0x8000U) != 0U);
 
     run_scanlines(*sys, sys->floppy_index_lines_per_revolution());
-    CHECK(sys->chip_ram[0x0200U] == 0x44U);
-    CHECK(sys->chip_ram[0x0201U] == 0x89U);
-    CHECK(sys->chip_ram[0x0202U] == 0x44U);
-    CHECK(sys->chip_ram[0x0203U] == 0x89U);
+    CHECK(sys->chip_ram[0x0200U] == 0xAAU);
+    CHECK(sys->chip_ram[0x0201U] == 0xAAU);
+    CHECK(sys->chip_ram[0x0202U] == 0xAAU);
+    CHECK(sys->chip_ram[0x0203U] == 0xAAU);
+    CHECK(sys->chip_ram[0x0204U] == 0x44U);
+    CHECK(sys->chip_ram[0x0205U] == 0x89U);
+    CHECK(sys->chip_ram[0x0206U] == 0x44U);
+    CHECK(sys->chip_ram[0x0207U] == 0x89U);
     CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
+}
+
+TEST_CASE("amiga500 mounted ADF sectors use AmigaDOS odd-even block layout",
+          "[manifests][amiga500][disk]") {
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+    REQUIRE(sys->mount_floppy(tiny_adf()));
+
+    constexpr std::size_t gap_bytes = 4U;
+    constexpr std::size_t sync_bytes = 4U;
+    constexpr std::size_t header_raw_longs = 5U;
+    constexpr std::size_t header_encoded_longs = header_raw_longs * 2U;
+    constexpr std::size_t checksum_bytes = 8U;
+    constexpr std::size_t data_raw_longs = amiga_system::floppy_sector_size / 4U;
+    constexpr std::size_t data_encoded_longs = data_raw_longs * 2U;
+    constexpr std::size_t data_offset =
+        gap_bytes + sync_bytes + header_encoded_longs * 4U + checksum_bytes * 2U;
+    constexpr std::size_t sector_bytes = data_offset + data_encoded_longs * 4U;
+    constexpr std::size_t sector_slot_bytes = 0x440U;
+    static_assert(sector_bytes == sector_slot_bytes);
+
+    const auto& track = sys->floppy_drives[0].track_stream;
+    REQUIRE(track.size() >= sector_bytes);
+    CHECK(read_track_long(track, 0U) == 0xAAAAAAAAU);
+    CHECK(read_track_long(track, gap_bytes) == 0x44894489U);
+    CHECK(read_track_long(track, sector_slot_bytes) == 0xAAAAAAAAU);
+    CHECK(read_track_long(track, sector_slot_bytes + gap_bytes) == 0x44894489U);
+
+    const std::uint32_t info = decode_mfm_odd_even(
+        read_track_long(track, gap_bytes + sync_bytes),
+        read_track_long(track, gap_bytes + sync_bytes + 4U));
+    CHECK(info == 0xFF00000BU);
+
+    const std::uint32_t first_data_long = decode_mfm_odd_even(
+        read_track_long(track, data_offset),
+        read_track_long(track, data_offset + data_raw_longs * 4U));
+    CHECK(first_data_long == 0x00010203U);
 }
 
 TEST_CASE("amiga500 Copper cannot arm disk DMA pointer or length registers",
@@ -1276,6 +1460,72 @@ TEST_CASE("amiga500 ADKCON WORDSYNC gates disk read DMA until DSKSYNC",
     CHECK(sys->chip_ram[0x0602U] == 0xCCU);
     CHECK(sys->chip_ram[0x0603U] == 0xDDU);
     CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
+}
+
+TEST_CASE("amiga500 WORDSYNC disk DMA preserves decodable AmigaDOS sectors",
+          "[manifests][amiga500][disk]") {
+    auto adf = tiny_adf();
+    for (std::uint8_t sector = 0U; sector < amiga_system::floppy_sectors_per_track; ++sector) {
+        const std::size_t base = static_cast<std::size_t>(sector) * amiga_system::floppy_sector_size;
+        for (std::size_t i = 0U; i < amiga_system::floppy_sector_size; ++i) {
+            adf[base + i] = static_cast<std::uint8_t>((sector * 19U + i) & 0xFFU);
+        }
+    }
+
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+    REQUIRE(sys->mount_floppy(adf));
+    select_df0(*sys);
+
+    constexpr std::uint32_t dma_base = 0x2000U;
+    constexpr std::uint16_t words_to_read = 0x1CBEU;
+    constexpr std::uint16_t dsklen = static_cast<std::uint16_t>(0x8000U | words_to_read);
+    constexpr std::size_t bytes_to_read = static_cast<std::size_t>(words_to_read) * 2U;
+
+    sys->write_custom_word(0x020U, static_cast<std::uint16_t>(dma_base >> 16U));
+    sys->write_custom_word(0x022U, static_cast<std::uint16_t>(dma_base));
+    sys->write_custom_word(0x07EU, 0x4489U);
+    sys->write_custom_word(0x09EU, static_cast<std::uint16_t>(amiga_system::setclr_bit | 0x0400U));
+    sys->write_custom_word(0x096U,
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                      agnus::dmacon_dmaen | agnus::dmacon_dsken));
+    sys->write_custom_word(0x024U, dsklen);
+    sys->write_custom_word(0x024U, dsklen);
+    REQUIRE(sys->disk_wordsync_waiting);
+
+    run_scanlines(*sys, sys->floppy_index_lines_per_revolution() * 2U);
+    REQUIRE_FALSE(sys->disk_wordsync_waiting);
+    REQUIRE((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
+
+    std::vector<std::uint8_t> dma(bytes_to_read);
+    std::copy(sys->chip_ram.begin() + dma_base, sys->chip_ram.begin() + dma_base + bytes_to_read,
+              dma.begin());
+
+    std::array<bool, amiga_system::floppy_sectors_per_track> decoded{};
+    std::size_t decoded_count = 0U;
+    std::array<std::uint8_t, amiga_system::floppy_sector_size> sector_data{};
+    for (std::size_t offset = 0U; offset + 2U < dma.size(); ++offset) {
+        if (read_track_word(dma, offset) != 0x4489U) {
+            continue;
+        }
+
+        std::uint8_t sector = 0U;
+        if (!decode_dma_amigados_sector(dma, offset, 0U, sector, sector_data)) {
+            continue;
+        }
+        if (decoded[sector]) {
+            continue;
+        }
+
+        const std::size_t adf_base =
+            static_cast<std::size_t>(sector) * amiga_system::floppy_sector_size;
+        CHECK(std::equal(sector_data.begin(), sector_data.end(), adf.begin() + adf_base));
+        decoded[sector] = true;
+        ++decoded_count;
+    }
+
+    CHECK(decoded_count == amiga_system::floppy_sectors_per_track);
+    CHECK(std::all_of(decoded.begin(), decoded.end(), [](bool found) { return found; }));
 }
 
 TEST_CASE("amiga500 disk write DMA patches and saves the raw track stream",
@@ -1902,10 +2152,9 @@ TEST_CASE("amiga500 disk write DMA decodes AmigaDOS sectors back into the ADF im
     REQUIRE(reference != nullptr);
     REQUIRE(reference->mount_floppy(patched));
 
-    constexpr std::size_t raw_sector_bytes =
-        4U + 10U * 4U + 2U * 8U + amiga_system::floppy_sector_size * 2U;
-    REQUIRE(reference->floppy_drives[0].track_stream.size() >= raw_sector_bytes);
-    std::copy_n(reference->floppy_drives[0].track_stream.begin(), raw_sector_bytes,
+    constexpr std::size_t raw_sector_slot_bytes = 0x440U;
+    REQUIRE(reference->floppy_drives[0].track_stream.size() >= raw_sector_slot_bytes);
+    std::copy_n(reference->floppy_drives[0].track_stream.begin(), raw_sector_slot_bytes,
                 sys->chip_ram.begin() + 0x0800U);
 
     reset_floppy_stream_phase(sys->floppy_drives[0]);
@@ -1915,7 +2164,7 @@ TEST_CASE("amiga500 disk write DMA decodes AmigaDOS sectors back into the ADF im
                            static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_dsken));
 
-    constexpr std::uint16_t words = static_cast<std::uint16_t>(raw_sector_bytes / 2U);
+    constexpr std::uint16_t words = static_cast<std::uint16_t>(raw_sector_slot_bytes / 2U);
     const std::uint16_t write_dsklen = static_cast<std::uint16_t>(0xC000U | words);
     sys->write_custom_word(0x024U, write_dsklen);
     sys->write_custom_word(0x024U, write_dsklen);
@@ -1960,7 +2209,7 @@ TEST_CASE("amiga500 paced disk DMA survives system save state", "[manifests][ami
     sys->write_custom_word(0x024U, dsklen);
     sys->write_custom_word(0x024U, dsklen);
     run_scanlines(*sys, 1U);
-    CHECK(sys->chip_ram[0x0300U] == 0x44U);
+    CHECK(sys->chip_ram[0x0300U] == 0xAAU);
 
     std::vector<std::uint8_t> blob;
     mnemos::chips::state_writer writer(blob);
@@ -1975,10 +2224,14 @@ TEST_CASE("amiga500 paced disk DMA survives system save state", "[manifests][ami
     REQUIRE(reader.ok());
     run_scanlines(*sys, sys->floppy_index_lines_per_revolution());
 
-    CHECK(sys->chip_ram[0x0300U] == 0x44U);
-    CHECK(sys->chip_ram[0x0301U] == 0x89U);
-    CHECK(sys->chip_ram[0x0302U] == 0x44U);
-    CHECK(sys->chip_ram[0x0303U] == 0x89U);
+    CHECK(sys->chip_ram[0x0300U] == 0xAAU);
+    CHECK(sys->chip_ram[0x0301U] == 0xAAU);
+    CHECK(sys->chip_ram[0x0302U] == 0xAAU);
+    CHECK(sys->chip_ram[0x0303U] == 0xAAU);
+    CHECK(sys->chip_ram[0x0304U] == 0x44U);
+    CHECK(sys->chip_ram[0x0305U] == 0x89U);
+    CHECK(sys->chip_ram[0x0306U] == 0x44U);
+    CHECK(sys->chip_ram[0x0307U] == 0x89U);
     CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
 }
 
@@ -2169,6 +2422,42 @@ TEST_CASE("amiga500 CIAA disk change latch clears after a selected step",
     select_df0(*sys);
     CHECK((sys->cia_a.read(0x00U) & 0x04U) == 0U);
     CHECK((sys->cia_a.read(0x00U) & 0x10U) != 0U);
+}
+
+TEST_CASE("amiga500 Kickstart-style DF0 probe releases disk change after step",
+          "[manifests][amiga500][disk]") {
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+    REQUIRE(sys->mount_floppy(tiny_adf()));
+
+    sys->cia_b.write(0x03U, 0xFFU);
+    sys->cia_b.write(0x01U, 0xF7U); // DF0 selected, motor off, STEP high.
+    CHECK((sys->cia_a.read(0x00U) & 0x04U) == 0U);
+
+    sys->cia_b.write(0x01U, 0xF4U); // Falling outward STEP at track 0 clears /CHNG.
+    sys->cia_b.write(0x01U, 0xF5U);
+    sys->cia_b.write(0x01U, 0xFFU);
+    sys->cia_b.write(0x01U, 0xF5U);
+
+    CHECK((sys->cia_a.read(0x00U) & 0x04U) != 0U);
+    CHECK(sys->floppy_cylinder() == 0U);
+}
+
+TEST_CASE("amiga500 simultaneous DF0 select and step releases disk change",
+          "[manifests][amiga500][disk]") {
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+    REQUIRE(sys->mount_floppy(tiny_adf()));
+
+    sys->cia_b.write(0x03U, 0xFFU);
+    sys->cia_b.write(0x01U, 0xF7U);
+    CHECK((sys->cia_a.read(0x00U) & 0x04U) == 0U);
+
+    sys->cia_b.write(0x01U, 0xFFU);
+    sys->cia_b.write(0x01U, 0xF6U); // Select DF0 and assert inward /STEP in one write.
+    sys->cia_b.write(0x01U, 0xF7U);
+    CHECK((sys->cia_a.read(0x00U) & 0x04U) != 0U);
+    CHECK(sys->floppy_cylinder() == 1U);
 }
 
 TEST_CASE("amiga500 selected disk rotation pulses CIAB FLAG at index",
@@ -3067,6 +3356,69 @@ TEST_CASE("amiga500 blitter applies first-word masks and minterms",
     CHECK(read_chip_word(*sys, 0x0120U) == 0x55AAU);
     CHECK(sys->paula.chipram()[0x0120U] == 0x55U);
     CHECK(sys->paula.chipram()[0x0121U] == 0xAAU);
+}
+
+TEST_CASE("amiga500 blitter decodes Kickstart split-half MFM sectors",
+          "[manifests][amiga500][blitter][disk]") {
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+
+    constexpr std::uint32_t source = 0x0400U;
+    constexpr std::uint32_t destination = 0x1000U;
+    constexpr std::size_t bytes = amiga_system::floppy_sector_size;
+    constexpr std::size_t raw_longs = bytes / 4U;
+
+    std::array<std::uint8_t, bytes> expected{};
+    expected[0] = 'D';
+    expected[1] = 'O';
+    expected[2] = 'S';
+    expected[3] = 0x00U;
+    for (std::size_t i = 4U; i < expected.size(); ++i) {
+        expected[i] = static_cast<std::uint8_t>((i * 37U + 11U) & 0xFFU);
+    }
+
+    for (std::size_t i = 0U; i < raw_longs; ++i) {
+        const std::size_t src = i * 4U;
+        const auto src_address = static_cast<std::uint32_t>(src);
+        const std::uint32_t raw = (static_cast<std::uint32_t>(expected[src + 0U]) << 24U) |
+                                  (static_cast<std::uint32_t>(expected[src + 1U]) << 16U) |
+                                  (static_cast<std::uint32_t>(expected[src + 2U]) << 8U) |
+                                  static_cast<std::uint32_t>(expected[src + 3U]);
+        const auto encoded = encode_mfm_odd_even(raw);
+        write_chip_word(*sys, source + src_address + 0U,
+                        static_cast<std::uint16_t>(encoded[0] >> 16U));
+        write_chip_word(*sys, source + src_address + 2U,
+                        static_cast<std::uint16_t>(encoded[0]));
+        write_chip_word(*sys, source + static_cast<std::uint32_t>(bytes) + src_address + 0U,
+                        static_cast<std::uint16_t>(encoded[1] >> 16U));
+        write_chip_word(*sys, source + static_cast<std::uint32_t>(bytes) + src_address + 2U,
+                        static_cast<std::uint16_t>(encoded[1]));
+    }
+
+    sys->write_custom_word(0x044U, 0xFFFFU);
+    sys->write_custom_word(0x046U, 0xFFFFU);
+    sys->write_custom_word(0x060U, 0x0000U);
+    sys->write_custom_word(0x062U, 0x0000U);
+    sys->write_custom_word(0x064U, 0x0000U);
+    sys->write_custom_word(0x066U, 0x0000U);
+    sys->write_custom_word(0x070U, 0x5555U);
+    sys->write_custom_word(0x050U, 0x0000U);
+    sys->write_custom_word(0x052U, static_cast<std::uint16_t>(source + bytes - 1U));
+    sys->write_custom_word(0x04CU, 0x0000U);
+    sys->write_custom_word(0x04EU, static_cast<std::uint16_t>(source + bytes * 2U - 1U));
+    sys->write_custom_word(0x054U, 0x0000U);
+    sys->write_custom_word(0x056U, static_cast<std::uint16_t>(destination + bytes - 1U));
+    sys->write_custom_word(0x040U, 0x1DD8U);
+    sys->write_custom_word(0x042U, 0x0002U);
+    sys->write_custom_word(0x096U,
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                      agnus::dmacon_dmaen | agnus::dmacon_blten));
+
+    sys->write_custom_word(0x058U, 0x0808U);
+    run_blitter_to_idle(*sys);
+
+    CHECK(std::equal(expected.begin(), expected.end(), sys->chip_ram.begin() + destination));
+    CHECK(std::equal(expected.begin(), expected.end(), sys->paula.chipram().begin() + destination));
 }
 
 TEST_CASE("amiga500 blitter performs inclusive area fill from the right edge",

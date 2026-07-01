@@ -20,10 +20,13 @@ namespace mnemos::chips::audio {
     // word, high byte first then low byte); CPU writes to AUDxDAT can also feed
     // one word while DMA is off. Per-channel registers latch the DMA start pointer
     // (AUDxLC), word length (AUDxLEN), sample period in color clocks (AUDxPER),
-    // and volume (AUDxVOL, clamped 0..64). DMA is gated by a master enable plus a
-    // per-channel enable bit (DMACON). When a channel exhausts its LEN words it
-    // reloads from LC/LEN and raises the matching AUDxINT. Channels pan to fixed
-    // stereo outputs: left = ch0 + ch3, right = ch1 + ch2.
+    // and volume (AUDxVOL, clamped 0..64). ADKCON can attach channel N as a
+    // volume and/or period modulator for channel N+1; attached channels still run
+    // their DMA stream and interrupts, but their DAC output is disabled. DMA is
+    // gated by a master enable plus a per-channel enable bit (DMACON). When a
+    // channel exhausts its LEN words it reloads from LC/LEN and raises the
+    // matching AUDxINT. Channels pan to fixed stereo outputs: left = ch0 + ch3,
+    // right = ch1 + ch2.
     //
     // The Emu reference fetches words through a host callback into chip RAM. To
     // keep this core standalone and unit-testable (the rf5c68 / okim6295 idiom),
@@ -78,6 +81,17 @@ namespace mnemos::chips::audio {
         // to IDLE, preserving the latched registers for a clean restart.
         void set_dma(bool master_enable, std::uint8_t channel_enable_mask) noexcept;
         [[nodiscard]] bool channel_active(int channel) const noexcept;
+
+        // ADKCON audio attachment masks. Bit N attaches channel N to N+1 for
+        // volume and/or period modulation; bit 3 has no target and only silences
+        // channel 3 when set.
+        void set_audio_attachment(std::uint8_t volume_mask, std::uint8_t period_mask) noexcept;
+        [[nodiscard]] std::uint8_t volume_attachment_mask() const noexcept {
+            return volume_attach_mask_;
+        }
+        [[nodiscard]] std::uint8_t period_attachment_mask() const noexcept {
+            return period_attach_mask_;
+        }
 
         // Host-set chip-RAM the audio DMA fetches words from (the rf5c68 waveram
         // analogue). Words are big-endian byte pairs at word-aligned addresses.
@@ -160,6 +174,7 @@ namespace mnemos::chips::audio {
             std::uint16_t current_word{};  // word currently being sampled
             std::int32_t period_counter{}; // color-clocks left in the current sample
             std::int16_t last_sample{};    // signed 8-bit * volume output latch
+            bool modulation_volume_next{true};
         };
 
         // Surfaces each channel's chip-RAM region as a PCM sample_view (the audio
@@ -180,11 +195,15 @@ namespace mnemos::chips::audio {
 
         [[nodiscard]] std::uint16_t fetch_word(std::uint32_t addr) const noexcept;
         void latch_sample(voice& ch, std::int8_t sample) noexcept;
+        [[nodiscard]] bool channel_attached(int channel_index) const noexcept;
+        void apply_modulation_word(int channel_index, std::uint16_t value) noexcept;
         // Advance one channel by a sub-step; returns true while still active.
         bool advance_channel(int channel_index, voice& ch) noexcept;
 
         std::array<voice, channel_count> channels_{};
         bool dma_master_{};
+        std::uint8_t volume_attach_mask_{};
+        std::uint8_t period_attach_mask_{};
         std::uint8_t audio_int_{};
         // Heap-backed: 512 KB as an in-object array would overflow the default
         // stack when two chips are live at once (e.g. a save/load round-trip).

@@ -6,8 +6,13 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <limits>
+#include <random>
+#include <sstream>
 #include <system_error>
 
 namespace mnemos::apps::player::adapters {
@@ -15,6 +20,7 @@ namespace mnemos::apps::player::adapters {
     namespace {
         constexpr std::uint64_t max_gzip_entry_size = 256ULL * 1024U * 1024U;
         constexpr std::uint64_t max_gzip_expansion = 1032U;
+        constexpr std::size_t tar_block_size = 512U;
 
         [[nodiscard]] bool is_zip_signature(std::span<const std::uint8_t> bytes) noexcept {
             return bytes.size() >= 4U && bytes[0] == 'P' && bytes[1] == 'K' && bytes[2] == 0x03U &&
@@ -24,6 +30,244 @@ namespace mnemos::apps::player::adapters {
         [[nodiscard]] bool is_gzip_signature(std::span<const std::uint8_t> bytes) noexcept {
             return bytes.size() >= 10U && bytes[0] == 0x1FU && bytes[1] == 0x8BU &&
                    bytes[2] == 0x08U;
+        }
+
+        [[nodiscard]] std::optional<std::string> shell_quote_arg(std::string_view arg) {
+            if (arg.find('\0') != std::string_view::npos) {
+                return std::nullopt;
+            }
+#if defined(_WIN32)
+            if (arg.find('"') != std::string_view::npos || arg.find('%') != std::string_view::npos) {
+                return std::nullopt;
+            }
+            std::string quoted{"\""};
+            quoted.append(arg);
+            quoted.push_back('"');
+            return quoted;
+#else
+            std::string quoted{"'"};
+            for (char ch : arg) {
+                if (ch == '\'') {
+                    quoted.append("'\\''");
+                } else {
+                    quoted.push_back(ch);
+                }
+            }
+            quoted.push_back('\'');
+            return quoted;
+#endif
+        }
+
+        [[nodiscard]] const char* shell_stderr_null() noexcept {
+#if defined(_WIN32)
+            return "2>NUL";
+#else
+            return "2>/dev/null";
+#endif
+        }
+
+        [[nodiscard]] bool run_shell_command(const std::string& command) {
+            return std::system(command.c_str()) == 0;
+        }
+
+        struct temp_tree final {
+            std::filesystem::path path;
+
+            temp_tree() = default;
+            explicit temp_tree(std::filesystem::path p) noexcept : path(std::move(p)) {}
+            temp_tree(const temp_tree&) = delete;
+            temp_tree& operator=(const temp_tree&) = delete;
+            temp_tree(temp_tree&& other) noexcept : path(std::move(other.path)) {
+                other.path.clear();
+            }
+            temp_tree& operator=(temp_tree&& other) noexcept {
+                if (this != &other) {
+                    cleanup();
+                    path = std::move(other.path);
+                    other.path.clear();
+                }
+                return *this;
+            }
+            ~temp_tree() { cleanup(); }
+
+          private:
+            void cleanup() noexcept {
+                if (path.empty()) {
+                    return;
+                }
+                std::error_code ec;
+                std::filesystem::remove_all(path, ec);
+                path.clear();
+            }
+        };
+
+        [[nodiscard]] std::optional<temp_tree> make_temp_tree() {
+            std::error_code ec;
+            const auto base = std::filesystem::temp_directory_path(ec);
+            if (ec) {
+                return std::nullopt;
+            }
+
+            std::random_device rd;
+            const auto stamp = static_cast<unsigned long long>(
+                std::chrono::steady_clock::now().time_since_epoch().count());
+            for (std::uint32_t attempt = 0U; attempt < 16U; ++attempt) {
+                std::ostringstream name;
+                name << "mnemos_archive_" << stamp << "_" << rd() << "_" << attempt;
+                auto path = base / name.str();
+                if (std::filesystem::create_directory(path, ec)) {
+                    return temp_tree{std::move(path)};
+                }
+                if (ec && ec != std::errc::file_exists) {
+                    return std::nullopt;
+                }
+                ec.clear();
+            }
+            return std::nullopt;
+        }
+
+        [[nodiscard]] std::optional<std::vector<std::uint8_t>>
+        read_binary_file(const std::filesystem::path& path) {
+            std::ifstream in(path, std::ios::binary);
+            if (!in) {
+                return std::nullopt;
+            }
+            in.seekg(0, std::ios::end);
+            const auto end = in.tellg();
+            if (end < 0) {
+                return std::nullopt;
+            }
+            in.seekg(0, std::ios::beg);
+            std::vector<std::uint8_t> bytes(static_cast<std::size_t>(end));
+            if (!bytes.empty()) {
+                in.read(reinterpret_cast<char*>(bytes.data()),
+                        static_cast<std::streamsize>(bytes.size()));
+                if (!in) {
+                    return std::nullopt;
+                }
+            }
+            return bytes;
+        }
+
+        [[nodiscard]] std::vector<std::string> read_text_lines(const std::filesystem::path& path) {
+            std::ifstream in(path);
+            std::vector<std::string> lines;
+            std::string line;
+            while (std::getline(in, line)) {
+                if (!line.empty() && line.back() == '\r') {
+                    line.pop_back();
+                }
+                if (!line.empty()) {
+                    lines.push_back(std::move(line));
+                }
+            }
+            return lines;
+        }
+
+        [[nodiscard]] bool tar_block_is_zero(std::span<const std::uint8_t> bytes) noexcept {
+            return std::all_of(bytes.begin(), bytes.end(),
+                               [](std::uint8_t value) { return value == 0U; });
+        }
+
+        [[nodiscard]] std::optional<std::uint64_t>
+        parse_tar_octal(std::span<const std::uint8_t> field) noexcept {
+            if (field.empty() || (field.front() & 0x80U) != 0U) {
+                return std::nullopt;
+            }
+
+            std::uint64_t value = 0U;
+            bool saw_digit = false;
+            for (std::uint8_t byte : field) {
+                if (byte == 0U || byte == static_cast<std::uint8_t>(' ')) {
+                    if (saw_digit) {
+                        break;
+                    }
+                    continue;
+                }
+                if (byte < static_cast<std::uint8_t>('0') ||
+                    byte > static_cast<std::uint8_t>('7')) {
+                    return std::nullopt;
+                }
+                if (value > (std::numeric_limits<std::uint64_t>::max() >> 3U)) {
+                    return std::nullopt;
+                }
+                value = (value << 3U) + static_cast<std::uint64_t>(byte - '0');
+                saw_digit = true;
+            }
+
+            return value;
+        }
+
+        [[nodiscard]] bool tar_header_checksum_is_valid(
+            std::span<const std::uint8_t> header) noexcept {
+            if (header.size() != tar_block_size || tar_block_is_zero(header)) {
+                return false;
+            }
+            auto stored = parse_tar_octal(header.subspan(148U, 8U));
+            if (!stored) {
+                return false;
+            }
+
+            std::uint64_t checksum = 0U;
+            for (std::size_t i = 0U; i < tar_block_size; ++i) {
+                checksum += (i >= 148U && i < 156U) ? static_cast<std::uint8_t>(' ')
+                                                    : header[i];
+            }
+            return checksum == *stored;
+        }
+
+        [[nodiscard]] std::string tar_string(std::span<const std::uint8_t> header,
+                                             std::size_t offset,
+                                             std::size_t length) {
+            std::size_t end = offset;
+            const std::size_t limit = offset + length;
+            while (end < limit && header[end] != 0U) {
+                ++end;
+            }
+            return std::string(reinterpret_cast<const char*>(header.data() + offset),
+                               end - offset);
+        }
+
+        [[nodiscard]] std::string tar_entry_name(std::span<const std::uint8_t> header) {
+            std::string name = tar_string(header, 0U, 100U);
+            if (name.empty()) {
+                return name;
+            }
+
+            std::string prefix = tar_string(header, 345U, 155U);
+            if (prefix.empty()) {
+                return name;
+            }
+            prefix.push_back('/');
+            prefix.append(name);
+            return prefix;
+        }
+
+        [[nodiscard]] bool tar_entry_is_regular(std::span<const std::uint8_t> header) noexcept {
+            return header[156U] == 0U || header[156U] == static_cast<std::uint8_t>('0');
+        }
+
+        [[nodiscard]] bool is_tar_archive(std::span<const std::uint8_t> bytes) noexcept {
+            if (bytes.size() < tar_block_size) {
+                return false;
+            }
+            const std::span<const std::uint8_t> header = bytes.subspan(0U, tar_block_size);
+            if (!tar_header_checksum_is_valid(header)) {
+                return false;
+            }
+            auto entry_size = parse_tar_octal(header.subspan(124U, 12U));
+            if (!entry_size ||
+                *entry_size > static_cast<std::uint64_t>(
+                                  std::numeric_limits<std::size_t>::max()) ||
+                *entry_size > std::numeric_limits<std::uint64_t>::max() -
+                                  static_cast<std::uint64_t>(tar_block_size - 1U)) {
+                return false;
+            }
+            const auto padded =
+                ((*entry_size + static_cast<std::uint64_t>(tar_block_size - 1U)) /
+                 static_cast<std::uint64_t>(tar_block_size)) *
+                static_cast<std::uint64_t>(tar_block_size);
+            return padded <= static_cast<std::uint64_t>(bytes.size() - tar_block_size);
         }
 
         [[nodiscard]] std::uint16_t rd_le16(std::span<const std::uint8_t> bytes,
@@ -57,6 +301,10 @@ namespace mnemos::apps::player::adapters {
                 return {};
             }
             return lowercase_ascii(name.substr(dot));
+        }
+
+        [[nodiscard]] bool is_tool_backed_archive_path(std::string_view path) {
+            return lowercase_extension(path) == ".7z";
         }
 
         [[nodiscard]] bool extension_matches(std::string_view name,
@@ -434,6 +682,66 @@ namespace mnemos::apps::player::adapters {
         }
 
         [[nodiscard]] std::optional<std::vector<loaded_rom>>
+        load_tar_entries_by_extension(std::span<const std::uint8_t> bytes,
+                                      std::span<const std::string_view> extensions) {
+            std::vector<loaded_rom> media;
+            std::size_t offset = 0U;
+            while (offset + tar_block_size <= bytes.size()) {
+                const std::span<const std::uint8_t> header =
+                    bytes.subspan(offset, tar_block_size);
+                if (tar_block_is_zero(header)) {
+                    break;
+                }
+                if (!tar_header_checksum_is_valid(header)) {
+                    return std::nullopt;
+                }
+
+                auto entry_size = parse_tar_octal(header.subspan(124U, 12U));
+                if (!entry_size ||
+                    *entry_size > static_cast<std::uint64_t>(
+                                      std::numeric_limits<std::size_t>::max()) ||
+                    *entry_size > std::numeric_limits<std::uint64_t>::max() -
+                                      static_cast<std::uint64_t>(tar_block_size - 1U)) {
+                    return std::nullopt;
+                }
+
+                const auto size = static_cast<std::size_t>(*entry_size);
+                if (size > std::numeric_limits<std::size_t>::max() - (tar_block_size - 1U)) {
+                    return std::nullopt;
+                }
+                const std::size_t padded =
+                    ((size + tar_block_size - 1U) / tar_block_size) * tar_block_size;
+                const std::size_t data_offset = offset + tar_block_size;
+                if (data_offset > bytes.size() || padded > bytes.size() - data_offset) {
+                    return std::nullopt;
+                }
+
+                if (tar_entry_is_regular(header)) {
+                    const std::string name = tar_entry_name(header);
+                    if (extension_matches(name, extensions)) {
+                        std::vector<std::uint8_t> entry(bytes.begin() + data_offset,
+                                                        bytes.begin() + data_offset + size);
+                        auto loaded = decode_gzip_or_raw(std::move(entry), name);
+                        if (!loaded) {
+                            return std::nullopt;
+                        }
+                        media.push_back(std::move(*loaded));
+                    }
+                }
+
+                offset = data_offset + padded;
+            }
+
+            if (media.empty()) {
+                return std::nullopt;
+            }
+            if (auto complete = choose_complete_direct_disk_sequence(media); complete.has_value()) {
+                return complete;
+            }
+            return media;
+        }
+
+        [[nodiscard]] std::optional<std::vector<loaded_rom>>
         load_zip_entries_by_extension(const compression::zip_archive& archive,
                                       std::span<const std::string_view> extensions,
                                       unsigned depth) {
@@ -500,6 +808,84 @@ namespace mnemos::apps::player::adapters {
             }
             return choose_nested_zip_media(nested);
         }
+
+        [[nodiscard]] std::optional<std::vector<loaded_rom>>
+        load_tool_archive_entries_by_extension(const std::string& path,
+                                               std::span<const std::string_view> extensions) {
+            if (!is_tool_backed_archive_path(path)) {
+                return std::nullopt;
+            }
+
+            auto workspace = make_temp_tree();
+            if (!workspace) {
+                return std::nullopt;
+            }
+
+            const auto archive_arg = shell_quote_arg(path);
+            if (!archive_arg) {
+                return std::nullopt;
+            }
+
+            const std::filesystem::path listing_path = workspace->path / "entries.txt";
+            const auto listing_arg = shell_quote_arg(listing_path.string());
+            if (!listing_arg) {
+                return std::nullopt;
+            }
+
+            const std::string list_command =
+                "tar -tf " + *archive_arg + " > " + *listing_arg + " " + shell_stderr_null();
+            if (!run_shell_command(list_command)) {
+                return std::nullopt;
+            }
+
+            std::vector<std::string> entry_names;
+            for (std::string& entry : read_text_lines(listing_path)) {
+                if (entry.empty() || entry.back() == '/' ||
+                    !extension_matches(entry, extensions)) {
+                    continue;
+                }
+                entry_names.push_back(std::move(entry));
+            }
+            if (entry_names.empty()) {
+                return std::nullopt;
+            }
+
+            std::vector<loaded_rom> media;
+            media.reserve(entry_names.size());
+            for (std::size_t i = 0U; i < entry_names.size(); ++i) {
+                const auto entry_arg = shell_quote_arg(entry_names[i]);
+                if (!entry_arg) {
+                    return std::nullopt;
+                }
+                const std::filesystem::path output_path =
+                    workspace->path / ("entry-" + std::to_string(i) + ".bin");
+                const auto output_arg = shell_quote_arg(output_path.string());
+                if (!output_arg) {
+                    return std::nullopt;
+                }
+
+                const std::string extract_command = "tar -xOf " + *archive_arg + " -- " +
+                                                    *entry_arg + " > " + *output_arg + " " +
+                                                    shell_stderr_null();
+                if (!run_shell_command(extract_command)) {
+                    return std::nullopt;
+                }
+                auto bytes = read_binary_file(output_path);
+                if (!bytes) {
+                    return std::nullopt;
+                }
+                auto loaded = decode_gzip_or_raw(std::move(*bytes), entry_names[i]);
+                if (!loaded) {
+                    return std::nullopt;
+                }
+                media.push_back(std::move(*loaded));
+            }
+
+            if (auto complete = choose_complete_direct_disk_sequence(media); complete.has_value()) {
+                return complete;
+            }
+            return media;
+        }
     } // namespace
 
     std::optional<loaded_rom> load_rom(const std::string& path) {
@@ -551,11 +937,19 @@ namespace mnemos::apps::player::adapters {
             return std::nullopt;
         }
         if (!is_zip_signature(*bytes)) {
-            if (!extension_matches(path, extensions)) {
-                return std::nullopt;
+            if (auto tool_archive = load_tool_archive_entries_by_extension(path, extensions);
+                tool_archive.has_value()) {
+                return tool_archive;
             }
             auto loaded = decode_gzip_or_raw(std::move(*bytes), path);
             if (!loaded) {
+                return std::nullopt;
+            }
+            if (is_tar_archive(loaded->bytes)) {
+                return load_tar_entries_by_extension(loaded->bytes, extensions);
+            }
+            if (!extension_matches(path, extensions) &&
+                !extension_matches(loaded->name, extensions)) {
                 return std::nullopt;
             }
             std::vector<loaded_rom> out;

@@ -163,6 +163,25 @@ TEST_CASE("agnus VPOSR / VHPOSR report the live beam position", "[agnus]") {
     CHECK((chip.read_vposr() & 0x0001U) == 0U); // scanline < 256 => high bit clear
 }
 
+TEST_CASE("agnus VPOSR LOF only alternates in interlace mode", "[agnus]") {
+    agnus chip;
+
+    chip.tick(frame_ticks);
+    CHECK((chip.read_vposr() & 0x8000U) == 0U);
+    chip.tick(frame_ticks);
+    CHECK((chip.read_vposr() & 0x8000U) == 0U);
+
+    chip.set_bplcon0(0x0004U); // LACE.
+    chip.tick(frame_ticks);
+    CHECK((chip.read_vposr() & 0x8000U) != 0U);
+    chip.tick(frame_ticks);
+    CHECK((chip.read_vposr() & 0x8000U) == 0U);
+
+    chip.set_bplcon0(0x0000U);
+    chip.tick(frame_ticks);
+    CHECK((chip.read_vposr() & 0x8000U) == 0U);
+}
+
 TEST_CASE("agnus colour decode replicates the 4-bit nibble per channel", "[agnus]") {
     CHECK(agnus::color_to_rgb(0x0FFFU) == 0x00FFFFFFU); // full white
     CHECK(agnus::color_to_rgb(0x0000U) == 0x00000000U); // black

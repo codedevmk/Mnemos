@@ -667,6 +667,7 @@ namespace mnemos::apps::player {
         }
 
         const system_family family = *family_opt;
+        const bool amiga_family = is_amiga_family(family);
         const bool arcade_family =
             family == system_family::irem_m10 || family == system_family::irem_m14 ||
             family == system_family::irem_m15 || family == system_family::irem_m27 ||
@@ -707,6 +708,9 @@ namespace mnemos::apps::player {
         std::vector<std::vector<std::uint8_t>> additional_media;
         std::vector<std::string> additional_media_paths;
         for (std::size_t i = 1; i < options.rom_paths.size(); ++i) {
+            if (amiga_family) {
+                continue;
+            }
             const bool irem_family =
                 family == system_family::irem_m10 || family == system_family::irem_m14 ||
                 family == system_family::irem_m15 || family == system_family::irem_m27 ||
@@ -991,40 +995,67 @@ namespace mnemos::apps::player {
             }
         }
 
-        if (is_amiga_family(family)) {
+        if (amiga_family) {
             keyboard_layout_override =
                 amiga_keyboard_layout_override(options.keyboard_layout_override);
             constexpr std::string_view amiga_disk_extensions[] = {".adf", ".adz", ".gz"};
-            if (auto disks =
-                    load_rom_entries_by_extension(options.rom_paths.front(), amiga_disk_extensions);
-                disks.has_value()) {
-                if (!validate_amiga_adf_images(*disks, options.rom_paths.front())) {
+            std::vector<adapters::loaded_rom> amiga_disks;
+            bool primary_path_is_amiga_disk_media = false;
+            for (std::size_t media_index = 0U; media_index < options.rom_paths.size();
+                 ++media_index) {
+                const std::string& path = options.rom_paths[media_index];
+                std::error_code ec;
+                if (!std::filesystem::exists(std::filesystem::path{path}, ec)) {
+                    std::fprintf(stderr, "[mnemos_player] could not read Amiga media: %s\n",
+                                 path.c_str());
                     outcome.exit_code = 1;
                     return outcome;
                 }
+                auto disks = load_rom_entries_by_extension(path, amiga_disk_extensions);
+                if (!disks) {
+                    continue;
+                }
+                if (media_index == 0U) {
+                    primary_path_is_amiga_disk_media = true;
+                }
+                if (!validate_amiga_adf_images(*disks, path)) {
+                    outcome.exit_code = 1;
+                    return outcome;
+                }
+                amiga_disks.insert(amiga_disks.end(), std::make_move_iterator(disks->begin()),
+                                   std::make_move_iterator(disks->end()));
+            }
+            if (!amiga_disks.empty()) {
                 auto kickstart_path = amiga_kickstart_path(family);
-                if (!kickstart_path) {
+                if (kickstart_path) {
+                    auto kickstart = load_rom(*kickstart_path);
+                    if (!kickstart || kickstart->bytes.empty()) {
+                        std::fprintf(stderr,
+                                     "[mnemos_player] could not read Amiga Kickstart ROM: %s\n",
+                                     kickstart_path->c_str());
+                        outcome.exit_code = 1;
+                        return outcome;
+                    }
+                    primary_rom = std::move(kickstart->bytes);
+                } else if (primary_path_is_amiga_disk_media) {
                     print_missing_amiga_kickstart(family, "a disk image for");
                     outcome.exit_code = 1;
                     return outcome;
                 }
-                auto kickstart = load_rom(*kickstart_path);
-                if (!kickstart || kickstart->bytes.empty()) {
-                    std::fprintf(stderr, "[mnemos_player] could not read Amiga Kickstart ROM: %s\n",
-                                 kickstart_path->c_str());
-                    outcome.exit_code = 1;
-                    return outcome;
-                }
-                display_name = clean_rom_name(disks->front().name);
+                display_name = clean_rom_name(amiga_disks.front().name);
                 std::vector<std::vector<std::uint8_t>> primary_disks;
-                primary_disks.reserve(disks->size());
-                for (auto& disk : *disks) {
+                primary_disks.reserve(amiga_disks.size());
+                const bool trace_amiga_media = getenv_nonempty("MNEMOS_AMIGA_MEDIA_TRACE") != nullptr;
+                for (auto& disk : amiga_disks) {
+                    if (trace_amiga_media) {
+                        std::fprintf(stderr, "[mnemos_player] Amiga disk: %s (%zu bytes)\n",
+                                     disk.name.c_str(), disk.bytes.size());
+                    }
                     primary_disks.push_back(std::move(disk.bytes));
                 }
                 additional_media.insert(additional_media.begin(),
                                         std::make_move_iterator(primary_disks.begin()),
                                         std::make_move_iterator(primary_disks.end()));
-                primary_rom = std::move(kickstart->bytes);
             }
         }
 

@@ -765,6 +765,53 @@ namespace mnemos::apps::player::adapters::amiga {
             }
         }
 
+        [[nodiscard]] bool traced_blitter_register(std::uint32_t reg, bool write) noexcept {
+            if (!write) {
+                return false;
+            }
+            switch (reg & 0x00FFFFFEU) {
+            case 0x00DFF040U: // BLTCON0.
+            case 0x00DFF042U: // BLTCON1.
+            case 0x00DFF044U: // BLTAFWM.
+            case 0x00DFF046U: // BLTALWM.
+            case 0x00DFF048U: // BLTCPTH.
+            case 0x00DFF04AU: // BLTCPTL.
+            case 0x00DFF04CU: // BLTBPTH.
+            case 0x00DFF04EU: // BLTBPTL.
+            case 0x00DFF050U: // BLTAPTH.
+            case 0x00DFF052U: // BLTAPTL.
+            case 0x00DFF054U: // BLTDPTH.
+            case 0x00DFF056U: // BLTDPTL.
+            case 0x00DFF058U: // BLTSIZE.
+            case 0x00DFF060U: // BLTCMOD.
+            case 0x00DFF062U: // BLTBMOD.
+            case 0x00DFF064U: // BLTAMOD.
+            case 0x00DFF066U: // BLTDMOD.
+            case 0x00DFF070U: // BLTCDAT.
+            case 0x00DFF072U: // BLTBDAT.
+            case 0x00DFF074U: // BLTADAT.
+                return true;
+            default:
+                return false;
+            }
+        }
+
+        [[nodiscard]] bool normalized_custom_register(std::uint32_t address,
+                                                      std::uint32_t& reg) noexcept {
+            const std::uint32_t a = address & 0x00FFFFFFU;
+            if (a >= manifests::amiga::amiga_system::custom_base &&
+                a < manifests::amiga::amiga_system::custom_base + 0x2000U) {
+                reg = manifests::amiga::amiga_system::custom_base |
+                      ((a - manifests::amiga::amiga_system::custom_base) & 0x01FEU);
+                return true;
+            }
+            if (a >= 0x00C00000U && a < 0x00DC0000U) {
+                reg = manifests::amiga::amiga_system::custom_base | (a & 0x01FEU);
+                return true;
+            }
+            return false;
+        }
+
         [[nodiscard]] bool traced_amiga_register(std::uint32_t address, bool write) noexcept {
             const std::uint32_t a = address & 0x00FFFFFFU;
             if ((a & 0x00FFF000U) == manifests::amiga::amiga_system::cia_a_base ||
@@ -776,8 +823,14 @@ namespace mnemos::apps::player::adapters::amiga {
                     cia_reg == 0x00U;
                 return write || cia_timer_or_tod_read || cia_a_port_a_read;
             }
-            const std::uint32_t reg = a & 0x00FFFFFEU;
+            std::uint32_t reg = 0U;
+            if (!normalized_custom_register(a, reg)) {
+                return false;
+            }
             if (traced_disk_register(reg, write)) {
+                return true;
+            }
+            if (traced_blitter_register(reg, write)) {
                 return true;
             }
             if (reg == 0x00DFF080U || reg == 0x00DFF082U || reg == 0x00DFF084U ||
@@ -1400,7 +1453,8 @@ namespace mnemos::apps::player::adapters::amiga {
                 if (!trace_enabled || !traced_amiga_register(ev.address, ev.write)) {
                     return;
                 }
-                const std::uint32_t reg = ev.address & 0x00FFFFFEU;
+                std::uint32_t reg = 0U;
+                const bool custom_reg = normalized_custom_register(ev.address, reg);
                 const std::uint32_t page = ev.address & 0x00FFF000U;
                 const std::uint8_t cia_reg = traced_cia_register(ev.address);
                 if (!ev.write && page == manifests::amiga::amiga_system::cia_a_base &&
@@ -1437,7 +1491,7 @@ namespace mnemos::apps::player::adapters::amiga {
                                  sys_->floppy_direction_inward ? 1U : 0U, sys_->floppy_side());
                     return;
                 }
-                if (traced_disk_register(reg, ev.write)) {
+                if (custom_reg && traced_disk_register(reg, ev.write)) {
                     const auto regs = sys_->cpu.cpu_registers();
                     const bool drive_connected =
                         sys_->floppy_active_drive < sys_->floppy_drives.size() &&
@@ -1461,8 +1515,56 @@ namespace mnemos::apps::player::adapters::amiga {
                                  regs.d[0], regs.a[0], regs.a[1]);
                     return;
                 }
-                if (reg == 0x00DFF09AU || reg == 0x00DFF09CU || reg == 0x00DFF01CU ||
-                    reg == 0x00DFF01EU) {
+                if (custom_reg && traced_blitter_register(reg, ev.write)) {
+                    const auto regs = sys_->cpu.cpu_registers();
+                    std::fprintf(stderr,
+                                 "[amiga-blit] pc=%06X beam=%03u:%03u W %06X %02X "
+                                 "bltcon0=%04X bltcon1=%04X afwm=%04X alwm=%04X "
+                                 "a=%06X b=%06X c=%06X d=%06X "
+                                 "am=%04X bm=%04X cm=%04X dm=%04X "
+                                 "adat=%04X bdat=%04X cdat=%04X ddat=%04X "
+                                 "bltcyc=%llu dmacon=%04X dmaconr=%04X "
+                                 "intreq=%04X d0=%08X d1=%08X a0=%08X a1=%08X a6=%08X\n",
+                                 sys_->cpu.current_instruction_addr(), sys_->agnus.beam_line(),
+                                 sys_->agnus.beam_clock(), ev.address, ev.value, sys_->bltcon0,
+                                 sys_->bltcon1, sys_->bltafwm, sys_->bltalwm,
+                                 sys_->blitter_pointer[0], sys_->blitter_pointer[1],
+                                 sys_->blitter_pointer[2], sys_->blitter_pointer[3],
+                                 static_cast<std::uint16_t>(sys_->blitter_modulo[0]),
+                                 static_cast<std::uint16_t>(sys_->blitter_modulo[1]),
+                                 static_cast<std::uint16_t>(sys_->blitter_modulo[2]),
+                                 static_cast<std::uint16_t>(sys_->blitter_modulo[3]),
+                                 sys_->blitter_data[0], sys_->blitter_data[1],
+                                 sys_->blitter_data[2], sys_->blitter_data[3],
+                                 static_cast<unsigned long long>(sys_->blitter_cycles_remaining),
+                                 sys_->agnus.dmacon(), sys_->agnus.read_dmaconr(),
+                                 sys_->visible_intreq(), regs.d[0], regs.d[1], regs.a[0],
+                                 regs.a[1], regs.a[6]);
+                    return;
+                }
+                if (custom_reg && reg == 0x00DFF096U) {
+                    const auto regs = sys_->cpu.cpu_registers();
+                    const bool audio_dma = sys_->agnus.dma_audio(0) || sys_->agnus.dma_audio(1) ||
+                                           sys_->agnus.dma_audio(2) || sys_->agnus.dma_audio(3);
+                    std::fprintf(stderr,
+                                 "[amiga-dma] pc=%06X beam=%03u:%03u %c %06X %02X "
+                                 "dmacon=%04X dmaconr=%04X disk=%u copper=%u blitter=%u "
+                                 "bpl=%u sprite=%u audio=%u intena=%04X intreq=%04X "
+                                 "d0=%08X a0=%08X a1=%08X a6=%08X\n",
+                                 sys_->cpu.current_instruction_addr(), sys_->agnus.beam_line(),
+                                 sys_->agnus.beam_clock(), ev.write ? 'W' : 'R', ev.address,
+                                 ev.value, sys_->agnus.dmacon(), sys_->agnus.read_dmaconr(),
+                                 sys_->agnus.dma_disk() ? 1U : 0U,
+                                 sys_->agnus.dma_copper() ? 1U : 0U,
+                                 sys_->agnus.dma_blitter() ? 1U : 0U,
+                                 sys_->agnus.dma_bitplane() ? 1U : 0U,
+                                 sys_->agnus.dma_sprite() ? 1U : 0U, audio_dma ? 1U : 0U,
+                                 sys_->intena, sys_->visible_intreq(), regs.d[0], regs.a[0],
+                                 regs.a[1], regs.a[6]);
+                    return;
+                }
+                if (custom_reg && (reg == 0x00DFF09AU || reg == 0x00DFF09CU ||
+                                   reg == 0x00DFF01CU || reg == 0x00DFF01EU)) {
                     std::fprintf(stderr,
                                  "[amiga-cia] pc=%06X beam=%03u:%03u %c %06X %02X "
                                  "intena=%04X "
@@ -1473,7 +1575,7 @@ namespace mnemos::apps::player::adapters::amiga {
                                  board_irq_level(*sys_));
                     return;
                 }
-                if (reg >= 0x00DFF080U && reg <= 0x00DFF08AU) {
+                if (custom_reg && reg >= 0x00DFF080U && reg <= 0x00DFF08AU) {
                     const auto regs = sys_->cpu.cpu_registers();
                     std::fprintf(stderr,
                                  "[amiga-cia] pc=%06X beam=%03u:%03u %c %06X %02X "

@@ -65,17 +65,22 @@ and the `R#` cross-reference to the risk register where one exists.
 > a compatibility-complete Amiga: a real Kickstart+ADF boot smoke gate now exists
 > behind `MNEMOS_AMIGA500_KICKSTART`/`MNEMOS_AMIGA500_ADF`, and
 > `scripts/amiga/run-corpus-smoke.ps1` now records local direct ADF,
-> gzip-wrapped ADF (`.adz` / `.adf.gz`), and ZIP-contained ADF player proof
-> without committing copyrighted media; directory scans filter non-ADF archives
-> out of mixed local libraries. The
+> gzip-wrapped ADF (`.adz` / `.adf.gz`), ZIP-contained ADF,
+> TAR/TAR.GZ-contained ADF, and tool-backed `.7z` ADF player proof without
+> committing copyrighted media; directory scans filter non-ADF archives out of
+> mixed local libraries. The
 > player also resolves A500/A500+/A600 Kickstart ROMs from
 > `MNEMOS_AMIGA_BIOS_DIR` / `MNEMOS_AMIGA_KICKSTART_DIR`, with local A500,
 > A500+, and A600 ZIP-ADF smoke proof against `D:\emu\amiga\bios`. Outer ZIP
 > wrappers containing nested per-disk ZIPs now select the first complete
 > `(Disk N of M)` set and mount it in disk order; direct multi-ADF ZIPs use the
 > same disk-order selection when they expose a complete sequence, with local
-> Turrican II and Xenon II wrapper smoke proof. The launch path now rejects non-standard-size
-> ADFs as unsupported instead of silently falling back to a Kickstart-only boot;
+> Turrican II and Xenon II wrapper smoke proof, plus a `.7z` ADF fixture smoke
+> proof across A500/A500+/A600. Separate `--rom`/`--disk` media
+> paths are now aggregated and ADF-validated as one Amiga disk set for
+> multi-archive software such as Workbench Boot/Extras. The launch path now
+> rejects non-standard-size ADFs as unsupported instead of silently falling back
+> to a Kickstart-only boot;
 > extended/raw/IPF track-image support remains a compatibility gap. Floppy
 > write/decode and exact sub-byte bitcell timing are simplified, and major OCS/ECS features remain partial (exact blitter bus
 > timing, exact sprite DMA bus-slot/hires edge-priority behavior,
@@ -92,9 +97,11 @@ and the `R#` cross-reference to the risk register where one exists.
 > minterm evaluation, inclusive/exclusive area fill, line mode with octant
 > stepping, texture, and `SING`, BLTSIZE-triggered chip-RAM writes,
 > color-clock-bounded BBUSY retirement, delayed BLIT interrupt request, and
-> in-flight busy countdown save states. Paula buffer wraps and CPU-fed AUDxDAT
-> manual playback now route AUD0-AUD3 requests into Amiga INTREQ/level-4 CPU
-> interrupt gating, with INTREQ acknowledgement clearing Paula's source latch.
+> in-flight busy countdown save states. Paula buffer wraps, CPU-fed AUDxDAT
+> manual playback, and ADKCON volume/period attachment now route through the
+> Amiga audio path: AUD0-AUD3 requests reach INTREQ/level-4 CPU interrupt
+> gating, attached modulator channels suppress their DAC output, and INTREQ
+> acknowledgement clears Paula's source latch.
 > Controller-port follow-ups include `POTGO`-started, RC-calibrated raster-line
 > POT counters with the reset-window delay and per-axis stop thresholds for
 > `POT0DAT`/`POT1DAT`.

@@ -145,6 +145,94 @@ TEST_CASE("paula DMA arm/disarm gates the state machine", "[paula][audio]") {
     REQUIRE(chip.last_right() == 0);
 }
 
+TEST_CASE("paula ADKCON volume attachment modulates the next channel and silences source",
+          "[paula][audio][modulation]") {
+    paula chip;
+    auto ram = chip.chipram();
+    ram[0x0100] = 0x00;
+    ram[0x0101] = 0x10; // Channel 0 supplies volume 16 to channel 1.
+    ram[0x0200] = 0x10;
+    ram[0x0201] = 0x10; // Channel 1 audible data.
+
+    chip.write_reg(0, paula::reg_lcl, 0x0100);
+    chip.write_reg(0, paula::reg_len, 0x0001);
+    chip.write_reg(0, paula::reg_per, 0x0001);
+    chip.write_reg(0, paula::reg_vol, 0x0040);
+    chip.write_reg(1, paula::reg_lcl, 0x0200);
+    chip.write_reg(1, paula::reg_len, 0x0001);
+    chip.write_reg(1, paula::reg_per, 0x0001);
+    chip.write_reg(1, paula::reg_vol, 0x0040);
+    chip.set_audio_attachment(0x01U, 0x00U);
+    chip.set_dma(true, 0x03U);
+
+    std::array<std::int16_t, 4> buf{};
+    chip.generate(buf);
+
+    CHECK(chip.read_reg(1, paula::reg_vol) == 0x0010U);
+    CHECK(buf[0] == 0);   // Attached channel 0 no longer reaches the left DAC.
+    CHECK(buf[1] == 256); // Channel 1 sample +16 at volume 16.
+}
+
+TEST_CASE("paula ADKCON period attachment modulates the next channel sample timing",
+          "[paula][audio][modulation]") {
+    paula chip;
+    auto ram = chip.chipram();
+    ram[0x0100] = 0x00;
+    ram[0x0101] = 0x02; // Channel 0 supplies period 2 to channel 1.
+    ram[0x0200] = 0x10;
+    ram[0x0201] = 0x20; // Channel 1 high then low sample.
+
+    chip.write_reg(0, paula::reg_lcl, 0x0100);
+    chip.write_reg(0, paula::reg_len, 0x0001);
+    chip.write_reg(0, paula::reg_per, 0x0001);
+    chip.write_reg(0, paula::reg_vol, 0x0040);
+    chip.write_reg(1, paula::reg_lcl, 0x0200);
+    chip.write_reg(1, paula::reg_len, 0x0001);
+    chip.write_reg(1, paula::reg_per, 0x0001);
+    chip.write_reg(1, paula::reg_vol, 0x0040);
+    chip.set_audio_attachment(0x00U, 0x01U);
+    chip.set_dma(true, 0x03U);
+
+    std::array<std::int16_t, 8> buf{};
+    chip.generate(buf);
+
+    CHECK(chip.read_reg(1, paula::reg_per) == 0x0002U);
+    CHECK(buf[0] == 0);
+    CHECK(buf[1] == 1024);
+    CHECK(buf[3] == 1024);
+    CHECK(buf[5] == 2048);
+}
+
+TEST_CASE("paula ADKCON period and volume attachment alternate target updates",
+          "[paula][audio][modulation]") {
+    paula chip;
+    auto ram = chip.chipram();
+    ram[0x0100] = 0x00;
+    ram[0x0101] = 0x20; // First modulator word: volume 32.
+    ram[0x0102] = 0x00;
+    ram[0x0103] = 0x03; // Second modulator word: period 3.
+    ram[0x0200] = 0x10;
+    ram[0x0201] = 0x20;
+
+    chip.write_reg(0, paula::reg_lcl, 0x0100);
+    chip.write_reg(0, paula::reg_len, 0x0002);
+    chip.write_reg(0, paula::reg_per, 0x0001);
+    chip.write_reg(0, paula::reg_vol, 0x0040);
+    chip.write_reg(1, paula::reg_lcl, 0x0200);
+    chip.write_reg(1, paula::reg_len, 0x0001);
+    chip.write_reg(1, paula::reg_per, 0x0001);
+    chip.write_reg(1, paula::reg_vol, 0x0040);
+    chip.set_audio_attachment(0x01U, 0x01U);
+    chip.set_dma(true, 0x03U);
+
+    std::array<std::int16_t, 8> buf{};
+    chip.generate(buf);
+
+    CHECK(chip.read_reg(1, paula::reg_vol) == 0x0020U);
+    CHECK(chip.read_reg(1, paula::reg_per) == 0x0003U);
+    CHECK(buf[1] == 512);
+}
+
 TEST_CASE("paula buffer wrap emits an audio interrupt callback", "[paula][audio]") {
     paula chip;
     std::uint8_t callback_sources = 0U;

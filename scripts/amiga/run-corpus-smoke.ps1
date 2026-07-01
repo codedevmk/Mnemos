@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# Data-gated Amiga ADF/ADZ/ZIP player smoke runner.
+# Data-gated Amiga ADF/ADZ/archive player smoke runner.
 #
 # Kickstart ROMs and Amiga software are never committed. Point this at one or
 # more disk images with -Rom, or at local corpus directories with -RomDir,
@@ -75,7 +75,12 @@ function Test-AmigaDirectoryMediaCandidate {
     if ($Path.EndsWith(".adf.gz", [System.StringComparison]::OrdinalIgnoreCase)) {
         return $true
     }
-    if (-not $extension.Equals(".zip", [System.StringComparison]::OrdinalIgnoreCase)) {
+    $isZip = $extension.Equals(".zip", [System.StringComparison]::OrdinalIgnoreCase)
+    $isTarLike = $extension.Equals(".tar", [System.StringComparison]::OrdinalIgnoreCase) -or
+        $extension.Equals(".tgz", [System.StringComparison]::OrdinalIgnoreCase) -or
+        $Path.EndsWith(".tar.gz", [System.StringComparison]::OrdinalIgnoreCase)
+    $isSevenZip = $extension.Equals(".7z", [System.StringComparison]::OrdinalIgnoreCase)
+    if (-not $isZip -and -not $isTarLike -and -not $isSevenZip) {
         return $false
     }
 
@@ -84,7 +89,7 @@ function Test-AmigaDirectoryMediaCandidate {
         $ErrorActionPreference = "Continue"
         $entries = & tar -tf $Path 2>$null
         if ($LASTEXITCODE -ne 0) {
-            Write-Warning "Could not inspect ZIP archive while scanning Amiga media: $Path"
+            Write-Warning "Could not inspect archive while scanning Amiga media: $Path"
             return $false
         }
     } finally {
@@ -95,6 +100,10 @@ function Test-AmigaDirectoryMediaCandidate {
         $entryExtension = [System.IO.Path]::GetExtension($entry)
         if ($entryExtension.Equals(".adf", [System.StringComparison]::OrdinalIgnoreCase) -or
             $entryExtension.Equals(".adz", [System.StringComparison]::OrdinalIgnoreCase) -or
+            $entry.EndsWith(".adf.gz", [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $true
+        }
+        if (($isZip -or $isSevenZip) -and
             $entryExtension.Equals(".zip", [System.StringComparison]::OrdinalIgnoreCase)) {
             return $true
         }
@@ -119,7 +128,7 @@ function Add-MediaDir {
     }
 
     $extensions = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    foreach ($extension in @(".adf", ".adz", ".gz", ".zip")) {
+    foreach ($extension in @(".adf", ".adz", ".gz", ".zip", ".tar", ".tgz", ".7z")) {
         [void]$extensions.Add($extension)
     }
 

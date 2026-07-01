@@ -51,14 +51,18 @@ Currently wired:
   `MNEMOS_AMIGA_KICKSTART_DIR` containing model-appropriate names such as
   `Kickstart 1.3.rom` for A500 and `Kickstart 2.0.rom` for A500+/A600.
 - Amiga ADF media may be supplied directly, as `.adz` / `.adf.gz`, in direct
-  ZIP archives, or in one of the common outer ZIP wrappers that contain nested
-  per-disk ZIPs.
+  ZIP or TAR archives, as `.tar.gz` / `.tgz`, in tool-backed `.7z` archives
+  when the platform `tar`/libarchive command can inspect them, or in one of the
+  common outer ZIP wrappers that contain nested per-disk ZIPs.
   When direct or nested archives expose a complete `(Disk N of M)` sequence, the
-  player mounts it in disk order. Only standard
+  player mounts it in disk order. Multiple `--rom`, `-r`, or `--disk` paths are
+  aggregated in command-line order, so separate Boot/Extras archives or
+  per-disk game archives mount as one disk set. Only standard
   901,120-byte DD ADF images are accepted by the current floppy path; extended
   ADF, raw-track, and IPF images are rejected as unsupported media.
   `scripts/amiga/run-corpus-smoke.ps1 -RomDir <path>` scans only direct ADF/ADZ
-  files and ZIPs that expose direct ADF/ADZ entries or nested ZIP candidates.
+  files and supported archives that expose direct ADF/ADZ entries or supported
+  nested ZIP candidates.
 - Amiga 2000 defaults to the base OCS/512 KiB profile. Use
   `--amiga-model ecs-1m` or `MNEMOS_AMIGA2000_MODEL=ecs-1m` for an upgraded
   ECS / 1 MiB Kickstart 2.x-style configuration. Add Fast RAM with a combined

@@ -24,6 +24,7 @@ namespace mnemos::chips::video {
         // this display sequencer models are honoured (others are dropped).
         constexpr std::uint16_t reg_dmacon = 0x096U;
         constexpr std::uint16_t reg_bplcon0 = 0x100U;
+        constexpr std::uint16_t bplcon0_lace = 0x0004U;
         constexpr std::uint16_t reg_bplcon1 = 0x102U;
         constexpr std::uint16_t reg_bplcon2 = 0x104U;
         constexpr std::uint16_t reg_bpl1mod = 0x108U;
@@ -276,7 +277,11 @@ namespace mnemos::chips::video {
                 color_clock_ = 0U;
                 if (++scanline_ == max_line) {
                     scanline_ = 0U;
-                    long_frame_ = !long_frame_;
+                    if ((bplcon0_ & bplcon0_lace) != 0U) {
+                        long_frame_ = !long_frame_;
+                    } else {
+                        long_frame_ = false;
+                    }
                     render_sprites(active_height());
                     ++frame_index_;
                     if (vblank_cb_) {
@@ -326,7 +331,7 @@ namespace mnemos::chips::video {
 
     std::uint16_t agnus::read_vposr() const noexcept {
         std::uint16_t value = 0U;
-        if (long_frame_) {
+        if ((bplcon0_ & bplcon0_lace) != 0U && long_frame_) {
             value |= 0x8000U;
         }
         value |= static_cast<std::uint16_t>((scanline_ >> 8U) & 0x0001U);

@@ -9,7 +9,7 @@
 namespace mnemos::manifests::amiga {
 
     namespace {
-        constexpr std::uint32_t state_version = 27U;
+        constexpr std::uint32_t state_version = 28U;
 
         constexpr std::uint16_t reg_dmaconr = 0x002U;
         constexpr std::uint16_t reg_vposr = 0x004U;
@@ -91,6 +91,8 @@ namespace mnemos::manifests::amiga {
         constexpr std::uint16_t bltcon1_line_aul = 0x0004U;
         constexpr std::uint16_t bltcon1_line_sing = 0x0002U;
         constexpr std::uint16_t adkcon_wordsync = 0x0400U;
+        constexpr std::uint16_t adkcon_audio_volume_mask = 0x000FU;
+        constexpr std::uint16_t adkcon_audio_period_mask = 0x00F0U;
         constexpr std::uint32_t chip_dma_address_mask = 0x001FFFFEU;
         constexpr std::uint32_t chip_dma_address_high_mask = 0x001FU;
         constexpr std::uint32_t ocs_disk_dma_address_mask = 0x0007FFFFU;
@@ -213,6 +215,12 @@ namespace mnemos::manifests::amiga {
             out = static_cast<std::uint8_t>(out |
                                             ((mask & amiga_system::int_aud3) != 0U ? 0x08U : 0U));
             return out;
+        }
+
+        void sync_paula_audio_attachment(amiga_system& sys) noexcept {
+            sys.paula.set_audio_attachment(
+                static_cast<std::uint8_t>(sys.disk_adkcon & adkcon_audio_volume_mask),
+                static_cast<std::uint8_t>((sys.disk_adkcon & adkcon_audio_period_mask) >> 4U));
         }
 
         [[nodiscard]] std::uint16_t chip_ram_address_high_mask(std::size_t size) noexcept {
@@ -432,9 +440,15 @@ namespace mnemos::manifests::amiga {
         }
 
         [[nodiscard]] std::uint16_t shifted_word(std::uint16_t previous, std::uint16_t current,
-                                                 std::uint16_t shift) noexcept {
+                                                 std::uint16_t shift,
+                                                 bool descending) noexcept {
             if (shift == 0U) {
                 return current;
+            }
+            if (descending) {
+                const std::uint32_t composite =
+                    (static_cast<std::uint32_t>(current) << 16U) | previous;
+                return static_cast<std::uint16_t>((composite >> (16U - shift)) & 0xFFFFU);
             }
             const std::uint32_t composite = (static_cast<std::uint32_t>(previous) << 16U) | current;
             return static_cast<std::uint16_t>((composite >> shift) & 0xFFFFU);
@@ -574,22 +588,31 @@ namespace mnemos::manifests::amiga {
                 (static_cast<std::uint32_t>(sector) << 8U) |
                 static_cast<std::uint32_t>(amiga_system::floppy_sectors_per_track - sector);
 
-            std::array<std::uint32_t, 10> header_encoded{};
-            const auto info_encoded = mfm_odd_even(info);
-            header_encoded[0] = info_encoded[0];
-            header_encoded[1] = info_encoded[1];
+            constexpr std::size_t header_raw_longs = 5U;
+            std::array<std::uint32_t, header_raw_longs> header_raw{};
+            header_raw[0] = info;
+
+            std::array<std::uint32_t, header_raw_longs * 2U> header_encoded{};
+            for (std::size_t i = 0U; i < header_raw_longs; ++i) {
+                const auto encoded = mfm_odd_even(header_raw[i]);
+                header_encoded[i * 2U] = encoded[0];
+                header_encoded[i * 2U + 1U] = encoded[1];
+            }
             const std::uint32_t header_checksum = mfm_checksum(header_encoded);
 
-            std::array<std::uint32_t, amiga_system::floppy_sector_size / 2U> data_encoded{};
-            for (std::size_t i = 0U; i < amiga_system::floppy_sector_size / 4U; ++i) {
+            constexpr std::size_t data_raw_longs = amiga_system::floppy_sector_size / 4U;
+            std::array<std::uint32_t, data_raw_longs * 2U> data_encoded{};
+            for (std::size_t i = 0U; i < data_raw_longs; ++i) {
                 const auto encoded = mfm_odd_even(read_be32(sector_data, i * 4U));
-                data_encoded[i * 2U] = encoded[0];
-                data_encoded[i * 2U + 1U] = encoded[1];
+                data_encoded[i] = encoded[0];
+                data_encoded[i + data_raw_longs] = encoded[1];
             }
             const std::uint32_t data_checksum = mfm_checksum(std::span<const std::uint32_t>(
                                                     data_encoded.data(), data_encoded.size())) &
                                                 mask;
 
+            append_be16(out, 0xAAAAU);
+            append_be16(out, 0xAAAAU);
             append_be16(out, 0x4489U);
             append_be16(out, 0x4489U);
             for (std::uint32_t word : header_encoded) {
@@ -607,19 +630,22 @@ namespace mnemos::manifests::amiga {
             std::uint8_t expected_track, std::uint8_t& sector,
             std::array<std::uint8_t, amiga_system::floppy_sector_size>& sector_data) noexcept {
             constexpr std::uint32_t sync = 0x44894489U;
-            constexpr std::size_t header_longs = 10U;
+            constexpr std::size_t header_raw_longs = 5U;
+            constexpr std::size_t header_encoded_longs = header_raw_longs * 2U;
             constexpr std::size_t sync_bytes = 4U;
             constexpr std::size_t checksum_bytes = 8U;
-            constexpr std::size_t data_encoded_longs = amiga_system::floppy_sector_size / 2U;
+            constexpr std::size_t data_raw_longs = amiga_system::floppy_sector_size / 4U;
+            constexpr std::size_t data_encoded_longs = data_raw_longs * 2U;
             constexpr std::size_t sector_bytes =
-                sync_bytes + header_longs * 4U + checksum_bytes * 2U + data_encoded_longs * 4U;
+                sync_bytes + header_encoded_longs * 4U + checksum_bytes * 2U +
+                data_encoded_longs * 4U;
             if (offset + sector_bytes > track_bytes.size() ||
                 read_be32(track_bytes, offset) != sync) {
                 return false;
             }
 
             std::size_t cursor = offset + sync_bytes;
-            std::array<std::uint32_t, header_longs> header_encoded{};
+            std::array<std::uint32_t, header_encoded_longs> header_encoded{};
             for (std::uint32_t& word : header_encoded) {
                 word = read_be32(track_bytes, cursor);
                 cursor += 4U;
@@ -659,9 +685,9 @@ namespace mnemos::manifests::amiga {
                 return false;
             }
 
-            for (std::size_t i = 0U; i < amiga_system::floppy_sector_size / 4U; ++i) {
+            for (std::size_t i = 0U; i < data_raw_longs; ++i) {
                 const std::uint32_t raw =
-                    mfm_decode_odd_even(data_encoded[i * 2U], data_encoded[i * 2U + 1U]);
+                    mfm_decode_odd_even(data_encoded[i], data_encoded[i + data_raw_longs]);
                 const std::size_t dst = i * 4U;
                 sector_data[dst + 0U] = static_cast<std::uint8_t>(raw >> 24U);
                 sector_data[dst + 1U] = static_cast<std::uint8_t>(raw >> 16U);
@@ -1046,6 +1072,7 @@ namespace mnemos::manifests::amiga {
             return;
         case reg_adkcon:
             disk_adkcon = apply_setclr(disk_adkcon, value, 0x7FFFU);
+            sync_paula_audio_attachment(*this);
             if ((disk_adkcon & adkcon_wordsync) == 0U) {
                 disk_wordsync_waiting = false;
             }
@@ -1513,7 +1540,10 @@ namespace mnemos::manifests::amiga {
         const std::uint8_t old_active_drive = floppy_active_drive;
         const std::uint8_t old_side = floppy_side_pos;
 
-        const bool stepping = floppy_selected && floppy_step_line && !next_step_line;
+        const bool next_single_drive_selected =
+            next_selected_mask != 0U && (next_selected_mask & (next_selected_mask - 1U)) == 0U;
+        const bool stepping = next_selected && floppy_step_line && !next_step_line &&
+                              (floppy_selected || next_single_drive_selected);
         floppy_selected_mask = next_selected_mask;
         floppy_selected = next_selected;
         floppy_active_drive = next_active_drive;
@@ -2109,7 +2139,7 @@ namespace mnemos::manifests::amiga {
                 if (use_channel[blit_a]) {
                     blitter_data[blit_a] = a;
                 }
-                const std::uint16_t shifted_a = shifted_word(previous_a, a, ashift);
+                const std::uint16_t shifted_a = shifted_word(previous_a, a, ashift, descending);
                 previous_a = a;
 
                 const std::uint16_t b = use_channel[blit_b] ? read_chip_word(chip_ram, ptr[blit_b])
@@ -2117,7 +2147,7 @@ namespace mnemos::manifests::amiga {
                 if (use_channel[blit_b]) {
                     blitter_data[blit_b] = b;
                 }
-                const std::uint16_t shifted_b = shifted_word(previous_b, b, bshift);
+                const std::uint16_t shifted_b = shifted_word(previous_b, b, bshift, descending);
                 previous_b = b;
 
                 const std::uint16_t c = use_channel[blit_c] ? read_chip_word(chip_ram, ptr[blit_c])
@@ -2241,6 +2271,7 @@ namespace mnemos::manifests::amiga {
         disk_length = 0U;
         disk_sync = 0x4489U;
         disk_adkcon = 0U;
+        sync_paula_audio_attachment(*this);
         disk_data = 0U;
         disk_last_length_write = 0U;
         disk_shift = 0U;
@@ -2501,6 +2532,7 @@ namespace mnemos::manifests::amiga {
         disk_length = reader.u16();
         disk_sync = reader.u16();
         disk_adkcon = reader.u16();
+        sync_paula_audio_attachment(*this);
         disk_data = reader.u16();
         disk_last_length_write = reader.u16();
         disk_shift = reader.u16();

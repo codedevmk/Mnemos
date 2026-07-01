@@ -32,6 +32,14 @@ namespace mnemos::chips::audio {
                    (static_cast<std::uint32_t>(low) & 0xFFFEU);
         }
 
+        [[nodiscard]] std::uint16_t clamp_volume_register(std::uint16_t value) noexcept {
+            std::uint16_t clamped = value & 0x007FU;
+            if (clamped > paula::volume_max) {
+                clamped = paula::volume_max;
+            }
+            return clamped;
+        }
+
         // Interrupt source bit for each audio channel (AUD0..AUD3).
         constexpr std::array<std::uint8_t, paula::channel_count> audio_int_source = {0x01U, 0x02U,
                                                                                      0x04U, 0x08U};
@@ -91,11 +99,7 @@ namespace mnemos::chips::audio {
         case reg_vol: {
             // Paula clamps volume to 0..64 on the DAC path; the low 7 bits hold
             // the written value, then the comparison value is capped at 64.
-            std::uint16_t clamped = value & 0x007FU;
-            if (clamped > volume_max) {
-                clamped = volume_max;
-            }
-            ch.volume = clamped;
+            ch.volume = clamp_volume_register(value);
             break;
         }
         case reg_dat:
@@ -132,12 +136,24 @@ namespace mnemos::chips::audio {
                 ch.live_pointer = ch.lc;
                 ch.words_remaining = ch.len;
                 ch.state = channel_state::ready;
+                ch.modulation_volume_next = true;
             } else if (was_running && !is_running) {
                 // ON->OFF: park, preserving latched lc/len/period/volume for a
                 // clean re-enable.
                 ch.state = channel_state::idle;
                 ch.live_pointer = 0U;
                 ch.words_remaining = 0U;
+            }
+        }
+    }
+
+    void paula::set_audio_attachment(std::uint8_t volume_mask,
+                                     std::uint8_t period_mask) noexcept {
+        volume_attach_mask_ = static_cast<std::uint8_t>(volume_mask & 0x0FU);
+        period_attach_mask_ = static_cast<std::uint8_t>(period_mask & 0x0FU);
+        for (int i = 0; i < channel_count; ++i) {
+            if (channel_attached(i)) {
+                channels_[static_cast<std::size_t>(i)].last_sample = 0;
             }
         }
     }
@@ -183,6 +199,37 @@ namespace mnemos::chips::audio {
                                                    static_cast<std::int32_t>(ch.volume));
     }
 
+    bool paula::channel_attached(int channel_index) const noexcept {
+        if (!channel_valid(channel_index)) {
+            return false;
+        }
+        const auto bit = static_cast<std::uint8_t>(1U << channel_index);
+        return (volume_attach_mask_ & bit) != 0U || (period_attach_mask_ & bit) != 0U;
+    }
+
+    void paula::apply_modulation_word(int channel_index, std::uint16_t value) noexcept {
+        if (!channel_attached(channel_index) || channel_index >= channel_count - 1) {
+            return;
+        }
+        voice& source = channels_[static_cast<std::size_t>(channel_index)];
+        voice& target = channels_[static_cast<std::size_t>(channel_index + 1)];
+        const auto bit = static_cast<std::uint8_t>(1U << channel_index);
+        const bool volume_attached = (volume_attach_mask_ & bit) != 0U;
+        const bool period_attached = (period_attach_mask_ & bit) != 0U;
+        if (volume_attached && period_attached) {
+            if (source.modulation_volume_next) {
+                target.volume = clamp_volume_register(value);
+            } else {
+                target.period = value;
+            }
+            source.modulation_volume_next = !source.modulation_volume_next;
+        } else if (volume_attached) {
+            target.volume = clamp_volume_register(value);
+        } else if (period_attached) {
+            target.period = value;
+        }
+    }
+
     bool paula::advance_channel(int channel_index, voice& ch) noexcept {
         switch (ch.state) {
         case channel_state::idle:
@@ -192,11 +239,22 @@ namespace mnemos::chips::audio {
             // First fetch after DMA came up.
             ch.current_word = fetch_word(ch.live_pointer);
             ch.live_pointer = (ch.live_pointer + 2U) & pointer_mask;
+            if (channel_attached(channel_index)) {
+                apply_modulation_word(channel_index, ch.current_word);
+                ch.last_sample = 0;
+                ch.state = channel_state::play_high;
+                return true;
+            }
             latch_sample(ch, static_cast<std::int8_t>(ch.current_word >> 8U));
             ch.state = channel_state::play_high;
             return true;
 
         case channel_state::play_high:
+            if (channel_attached(channel_index)) {
+                ch.last_sample = 0;
+                ch.state = channel_state::play_low;
+                return true;
+            }
             latch_sample(ch, static_cast<std::int8_t>(ch.current_word & 0xFFU));
             ch.state = channel_state::play_low;
             return true;
@@ -221,16 +279,33 @@ namespace mnemos::chips::audio {
             }
             ch.current_word = fetch_word(ch.live_pointer);
             ch.live_pointer = (ch.live_pointer + 2U) & pointer_mask;
+            if (channel_attached(channel_index)) {
+                apply_modulation_word(channel_index, ch.current_word);
+                ch.last_sample = 0;
+                ch.state = channel_state::play_high;
+                return true;
+            }
             latch_sample(ch, static_cast<std::int8_t>(ch.current_word >> 8U));
             ch.state = channel_state::play_high;
             return true;
 
         case channel_state::manual_ready:
+            if (channel_attached(channel_index)) {
+                apply_modulation_word(channel_index, ch.current_word);
+                ch.last_sample = 0;
+                ch.state = channel_state::manual_low;
+                return true;
+            }
             latch_sample(ch, static_cast<std::int8_t>(ch.current_word >> 8U));
             ch.state = channel_state::manual_high;
             return true;
 
         case channel_state::manual_high:
+            if (channel_attached(channel_index)) {
+                ch.last_sample = 0;
+                ch.state = channel_state::manual_low;
+                return true;
+            }
             latch_sample(ch, static_cast<std::int8_t>(ch.current_word & 0xFFU));
             ch.state = channel_state::manual_low;
             return true;
@@ -253,6 +328,9 @@ namespace mnemos::chips::audio {
             return 0;
         }
         const voice& ch = channels_[static_cast<std::size_t>(channel)];
+        if (channel_attached(channel)) {
+            return 0;
+        }
         if (ch.state == channel_state::idle || ch.state == channel_state::ready ||
             ch.state == channel_state::manual_ready) {
             return 0;
@@ -344,6 +422,7 @@ namespace mnemos::chips::audio {
             ch.current_word = 0U;
             ch.period_counter = 0;
             ch.last_sample = 0;
+            ch.modulation_volume_next = true;
             if (kind == reset_kind::power_on) {
                 ch.lc = 0U;
                 ch.len = 0U;
@@ -352,6 +431,8 @@ namespace mnemos::chips::audio {
                 ch.dat = 0U;
             }
         }
+        volume_attach_mask_ = 0U;
+        period_attach_mask_ = 0U;
         audio_int_ = 0U;
         last_left_ = 0;
         last_right_ = 0;
@@ -377,8 +458,11 @@ namespace mnemos::chips::audio {
             writer.u16(ch.current_word);
             writer.u32(static_cast<std::uint32_t>(ch.period_counter));
             writer.u16(static_cast<std::uint16_t>(ch.last_sample));
+            writer.boolean(ch.modulation_volume_next);
         }
         writer.boolean(dma_master_);
+        writer.u8(volume_attach_mask_);
+        writer.u8(period_attach_mask_);
         writer.u8(audio_int_);
         writer.bytes(chipram_);
         writer.u32(static_cast<std::uint32_t>(clock_divider_));
@@ -401,8 +485,11 @@ namespace mnemos::chips::audio {
             ch.current_word = reader.u16();
             ch.period_counter = static_cast<std::int32_t>(reader.u32());
             ch.last_sample = static_cast<std::int16_t>(reader.u16());
+            ch.modulation_volume_next = reader.boolean();
         }
         dma_master_ = reader.boolean();
+        volume_attach_mask_ = static_cast<std::uint8_t>(reader.u8() & 0x0FU);
+        period_attach_mask_ = static_cast<std::uint8_t>(reader.u8() & 0x0FU);
         audio_int_ = reader.u8();
         reader.bytes(chipram_);
         clock_divider_ = static_cast<int>(reader.u32());
