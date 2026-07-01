@@ -564,6 +564,30 @@ namespace mnemos::apps::player::adapters::amiga {
             return trace_env != nullptr && trace_env[0] != '\0' && trace_env[0] != '0';
         }
 
+        [[nodiscard]] bool trace_cpu_no_effect_opcodes() noexcept {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+            const char* trace_env = std::getenv("MNEMOS_AMIGA500_CPU_NO_EFFECT_TRACE");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            return trace_env != nullptr && trace_env[0] != '\0' && trace_env[0] != '0';
+        }
+
+        [[nodiscard]] bool trace_cpu_unhandled_opcodes() noexcept {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+            const char* trace_env = std::getenv("MNEMOS_AMIGA500_CPU_UNHANDLED_TRACE");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            return trace_env != nullptr && trace_env[0] != '\0' && trace_env[0] != '0';
+        }
+
         [[nodiscard]] bool trace_ram_reads() noexcept {
 #if defined(_MSC_VER)
 #pragma warning(push)
@@ -1384,6 +1408,40 @@ namespace mnemos::apps::player::adapters::amiga {
         const bool ram_trace_reads = trace_ram_reads();
         const std::vector<trace_range> ram_trace_ranges = trace_ram_ranges();
         const std::vector<trace_range> cpu_trace_ranges = trace_cpu_ranges();
+        if (trace_cpu_no_effect_opcodes()) {
+            sys_->cpu.diagnostics().set_no_effect_opcode_callback(
+                [this](std::uint32_t pc, std::uint16_t opcode) {
+                    const auto regs = sys_->cpu.cpu_registers();
+                    std::fprintf(stderr,
+                                 "[amiga-cpu-noeffect] pc=%06X op=%04X beam=%03u:%03u frame=%llu "
+                                 "sr=%04X d0=%08X d1=%08X d2=%08X d3=%08X "
+                                 "a0=%08X a1=%08X a2=%08X a3=%08X "
+                                 "a4=%08X a5=%08X a6=%08X a7=%08X\n",
+                                 pc & 0x00FFFFFFU, opcode, sys_->agnus.beam_line(),
+                                 sys_->agnus.beam_clock(),
+                                 static_cast<unsigned long long>(sys_->frame_index), regs.sr,
+                                 regs.d[0], regs.d[1], regs.d[2], regs.d[3], regs.a[0],
+                                 regs.a[1], regs.a[2], regs.a[3], regs.a[4], regs.a[5],
+                                 regs.a[6], regs.a[7]);
+                });
+        }
+        if (trace_cpu_unhandled_opcodes()) {
+            sys_->cpu.diagnostics().set_unhandled_opcode_callback(
+                [this](std::uint32_t pc, std::uint16_t opcode) {
+                    const auto regs = sys_->cpu.cpu_registers();
+                    std::fprintf(stderr,
+                                 "[amiga-cpu-unhandled] pc=%06X op=%04X beam=%03u:%03u "
+                                 "frame=%llu sr=%04X d0=%08X d1=%08X d2=%08X d3=%08X "
+                                 "a0=%08X a1=%08X a2=%08X a3=%08X "
+                                 "a4=%08X a5=%08X a6=%08X a7=%08X\n",
+                                 pc & 0x00FFFFFFU, opcode, sys_->agnus.beam_line(),
+                                 sys_->agnus.beam_clock(),
+                                 static_cast<unsigned long long>(sys_->frame_index), regs.sr,
+                                 regs.d[0], regs.d[1], regs.d[2], regs.d[3], regs.a[0],
+                                 regs.a[1], regs.a[2], regs.a[3], regs.a[4], regs.a[5],
+                                 regs.a[6], regs.a[7]);
+                });
+        }
         if (!cpu_trace_ranges.empty()) {
             sys_->cpu.diagnostics().set_trace_callback([this, cpu_trace_ranges](std::uint32_t pc) {
                 if (!traced_ram_access(cpu_trace_ranges, pc)) {

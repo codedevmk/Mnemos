@@ -249,7 +249,8 @@ namespace mnemos::manifests::amiga {
         void update_floppy_track_stream(std::size_t drive);
         [[nodiscard]] bool flush_floppy_track_to_image(std::size_t drive) noexcept;
         [[nodiscard]] std::uint8_t next_floppy_byte() noexcept;
-        void accept_floppy_byte(std::uint8_t byte) noexcept;
+        [[nodiscard]] bool accept_floppy_bit(std::uint8_t bit) noexcept;
+        void publish_floppy_byte(std::uint8_t byte) noexcept;
         [[nodiscard]] bool shift_floppy_read_bit() noexcept;
         void shift_floppy_write_bit() noexcept;
         void tick_floppy_scanline() noexcept;

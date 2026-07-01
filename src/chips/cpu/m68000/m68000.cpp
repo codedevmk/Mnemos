@@ -770,6 +770,12 @@ namespace mnemos::chips::cpu {
 
     // ---- instructions ----
 
+    void m68000::notify_unhandled_opcode(std::uint16_t op) noexcept {
+        if (unhandled_opcode_callback_) {
+            unhandled_opcode_callback_(inst_addr_ & address_mask, op);
+        }
+    }
+
     void m68000::op_move(std::uint16_t op) {
         op_size sz{};
         switch ((op >> 12U) & 3U) {
@@ -1044,8 +1050,7 @@ namespace mnemos::chips::cpu {
             cycles_ += 34 + 2 * popcount16(static_cast<std::uint16_t>(sv ^ (sv << 1U)));
             return;
         }
-        // AND <ea>,Dn (opm 0-2) or AND Dn,<ea> (opm 4-6, memory only). ABCD/EXG are
-        // register-only (em < 2) and arrive in a later phase.
+        // AND <ea>,Dn (opm 0-2) or AND Dn,<ea> (opm 4-6, memory only).
         const op_size sz = static_cast<op_size>(opm & 3);
         const std::uint32_t m = size_mask(sz);
         if (opm < 3) {
@@ -1056,13 +1061,17 @@ namespace mnemos::chips::cpu {
             if (sz == op_size::longword) {
                 cycles_ += (em <= 1 || (em == 7 && er == 4)) ? 4 : 2;
             }
-        } else if (em >= 2) {
+            return;
+        }
+        if (em >= 2) {
             std::uint32_t addr = 0;
             const std::uint32_t dst = ea_rmw_read(em, er, sz, addr);
             const std::uint32_t res = (dst & d_[static_cast<std::size_t>(dn)]) & m;
             ea_rmw_write(em, er, sz, res, addr);
             set_logic_flags(sz, res);
+            return;
         }
+        notify_unhandled_opcode(op);
     }
 
     void m68000::op_or(std::uint16_t op) noexcept {
@@ -1163,13 +1172,17 @@ namespace mnemos::chips::cpu {
             if (sz == op_size::longword) {
                 cycles_ += (em <= 1 || (em == 7 && er == 4)) ? 4 : 2;
             }
-        } else if (em >= 2) { // OR Dn,<ea>
+            return;
+        }
+        if (em >= 2) { // OR Dn,<ea>
             std::uint32_t addr = 0;
             const std::uint32_t dst = ea_rmw_read(em, er, sz, addr);
             const std::uint32_t res = (dst | d_[static_cast<std::size_t>(dn)]) & m;
             ea_rmw_write(em, er, sz, res, addr);
             set_logic_flags(sz, res);
+            return;
         }
+        notify_unhandled_opcode(op);
     }
 
     void m68000::op_bit(std::uint16_t op, bool dynamic) noexcept {
@@ -1317,11 +1330,13 @@ namespace mnemos::chips::cpu {
             return;
         }
         if (sub == 7) {
+            notify_unhandled_opcode(op);
             return; // MOVES (68010+) -- unsupported on the 68000
         }
         // Immediate ALU: ORI(0)/ANDI(1)/SUBI(2)/ADDI(3)/EORI(5)/CMPI(6).
         const op_size sz = static_cast<op_size>((op >> 6U) & 3);
         if (static_cast<int>(sz) == 3) {
+            notify_unhandled_opcode(op);
             return;
         }
         std::uint32_t imm =
@@ -1738,6 +1753,13 @@ namespace mnemos::chips::cpu {
             }
             return;
         }
+        if (op == 0x4E7AU || op == 0x4E7BU) {
+            // MOVEC is a 68010+ instruction. The Amiga 500-class systems use an
+            // MC68000, where these encodings must take the illegal-instruction
+            // vector; Kickstart probes this during CPU-type detection.
+            raise_exception(vec_illegal, inst_addr_);
+            return;
+        }
         // Additive cycle accounting throughout: fetch16 has already added 4
         // for the opcode (and pop32/pop16/push32/fetch16 self-account inside
         // the bus helpers), so each case adds only the remaining INTERNAL
@@ -1868,6 +1890,7 @@ namespace mnemos::chips::cpu {
             return;
         }
         // NBCD/SWAP/PEA/LEA/MOVEM/MOVE-to-from-SR/CCR/CHK land in later phases.
+        notify_unhandled_opcode(op);
     }
 
     // ---- supervisor state, stack, exceptions ----
@@ -2367,6 +2390,8 @@ namespace mnemos::chips::cpu {
         case 0x7: // MOVEQ (bit 8 must be 0)
             if ((op & 0x0100U) == 0U) {
                 op_moveq(op);
+            } else {
+                notify_unhandled_opcode(op);
             }
             break;
         case 0x9: // SUB / SUBA / SUBX
@@ -2402,6 +2427,7 @@ namespace mnemos::chips::cpu {
             raise_exception(vec_line_f, inst_addr_);
             break;
         default:
+            notify_unhandled_opcode(op);
             break;
         }
     }
@@ -2496,6 +2522,12 @@ namespace mnemos::chips::cpu {
         // Trace: if T was set entering the instruction, take the trace exception.
         if ((pre_sr & sr_t) != 0U && !halted_ && !exception_raised_) {
             raise_exception(vec_trace, pc_);
+        }
+        if (no_effect_opcode_callback_ && op != 0x4E71U && cycles_ <= 4 && !exception_raised_ &&
+            !halted_ && !stopped_ &&
+            ((pc_ & address_mask) == ((saved_pc + 2U) & address_mask)) && d_ == saved_d &&
+            a_ == saved_a && sr_ == saved_sr && usp_ == saved_usp && ssp_ == saved_ssp) {
+            no_effect_opcode_callback_(saved_pc & address_mask, op);
         }
         if (cycles_ < 4) {
             cycles_ = 4;
@@ -2714,6 +2746,16 @@ namespace mnemos::chips::cpu {
     void m68000_diagnostics::set_trace_callback(
         std::function<void(std::uint32_t pc)> callback) noexcept {
         owner_->trace_callback_ = std::move(callback);
+    }
+
+    void m68000_diagnostics::set_no_effect_opcode_callback(
+        std::function<void(std::uint32_t pc, std::uint16_t opcode)> callback) noexcept {
+        owner_->no_effect_opcode_callback_ = std::move(callback);
+    }
+
+    void m68000_diagnostics::set_unhandled_opcode_callback(
+        std::function<void(std::uint32_t pc, std::uint16_t opcode)> callback) noexcept {
+        owner_->unhandled_opcode_callback_ = std::move(callback);
     }
 
     const m68000_diagnostics::cycle_sources&

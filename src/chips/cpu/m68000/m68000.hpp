@@ -303,6 +303,7 @@ namespace mnemos::chips::cpu {
         void op_shift(std::uint16_t op) noexcept;    // group E: ASL/ASR/LSL/LSR/RO[X]L/RO[X]R
         void op_branch(std::uint16_t op) noexcept;   // group 6: Bcc/BRA/BSR
         void op_dbcc_scc(std::uint16_t op) noexcept; // group 5 (size 3): DBcc/Scc
+        void notify_unhandled_opcode(std::uint16_t op) noexcept;
 
         // ---- supervisor state, stack, exceptions ----
         void set_supervisor(bool supervisor) noexcept; // swap USP/SSP on a mode change
@@ -342,6 +343,8 @@ namespace mnemos::chips::cpu {
                                     std::uint32_t instruction_wait_cycles)>
             bus_wait_callback_{};
         std::function<void(std::uint32_t)> trace_callback_{};
+        std::function<void(std::uint32_t, std::uint16_t)> no_effect_opcode_callback_{};
+        std::function<void(std::uint32_t, std::uint16_t)> unhandled_opcode_callback_{};
         bool exception_raised_{};
         bool exception_entry_{};
         bool stopped_{};

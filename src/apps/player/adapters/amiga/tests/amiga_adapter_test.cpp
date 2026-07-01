@@ -1078,7 +1078,7 @@ TEST_CASE("amiga adapter whole-machine save-state round-trips", "[apps][player][
     amiga_adapter a(tiny_kickstart(), {}, "Workbench", disks);
 
     select_df0(a.system());
-    a.system().cia_b.write(0x01U, 0x76U); // Step inward to make drive state non-default.
+    a.system().cia_b.write(0x01U, 0x74U); // Step inward to make drive state non-default.
     a.system().set_joystick(1U, static_cast<std::uint8_t>(amiga_system::joy_up |
                                                           amiga_system::joy_right |
                                                           amiga_system::joy_fire));
@@ -1163,7 +1163,7 @@ TEST_CASE("amiga adapter player save-state preserves frontend input cursors",
     CHECK(live.system().floppy_drives[0].image[disk_payload_probe] == 0x77U);
     select_df0(live.system());
     live.system().cia_b.write(0x01U,
-                              0x76U); // Step inward to prove load does not remount/reset DF0.
+                              0x74U); // Step inward to prove load does not remount/reset DF0.
     CHECK(live.system().floppy_cylinder() == 1U);
     live.system().floppy_drives[0].image[disk_payload_probe] = 0x99U;
 
@@ -1216,7 +1216,7 @@ TEST_CASE("amiga adapter renders the real Kickstart insert-disk prompt",
              kickstart->size() == amiga_system::kickstart_window_size / 2U));
 
     amiga_adapter adapter(std::move(*kickstart), {}, fs::path(*kickstart_path).filename().string());
-    const std::uint64_t frames = get_env_u64("MNEMOS_AMIGA500_PROMPT_FRAMES", 900U);
+    const std::uint64_t frames = get_env_u64("MNEMOS_AMIGA500_PROMPT_FRAMES", 2200U);
     for (std::uint64_t frame = 0U; frame < frames; ++frame) {
         adapter.step_one_frame();
     }

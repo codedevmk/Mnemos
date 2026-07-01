@@ -573,10 +573,36 @@ namespace mnemos::manifests::amiga {
             return checksum & 0x55555555U;
         }
 
-        void append_mfm_long(std::vector<std::uint8_t>& out, std::uint32_t raw) {
+        [[nodiscard]] std::uint32_t mfm_with_clock_bits(std::uint32_t data_bits,
+                                                        bool& previous_data_bit) noexcept {
+            constexpr std::uint32_t data_mask = 0x55555555U;
+            std::uint32_t encoded = data_bits & data_mask;
+            for (int data_bit = 30; data_bit >= 0; data_bit -= 2) {
+                const bool data = ((data_bits >> static_cast<unsigned>(data_bit)) & 0x01U) != 0U;
+                if (!data && !previous_data_bit) {
+                    encoded |= (1UL << static_cast<unsigned>(data_bit + 1));
+                }
+                previous_data_bit = data;
+            }
+            return encoded;
+        }
+
+        void append_mfm_encoded_long(std::vector<std::uint8_t>& out, std::uint32_t data_bits,
+                                     bool& previous_data_bit) {
+            append_be32(out, mfm_with_clock_bits(data_bits, previous_data_bit));
+        }
+
+        void append_mfm_long(std::vector<std::uint8_t>& out, std::uint32_t raw,
+                             bool& previous_data_bit) {
             const auto encoded = mfm_odd_even(raw);
-            append_be32(out, encoded[0]);
-            append_be32(out, encoded[1]);
+            append_mfm_encoded_long(out, encoded[0], previous_data_bit);
+            append_mfm_encoded_long(out, encoded[1], previous_data_bit);
+        }
+
+        void append_mfm_sync_word(std::vector<std::uint8_t>& out, std::uint16_t value,
+                                  bool& previous_data_bit) {
+            append_be16(out, value);
+            previous_data_bit = (value & 0x0001U) != 0U;
         }
 
         void append_amigados_sector(std::vector<std::uint8_t>& out,
@@ -611,17 +637,18 @@ namespace mnemos::manifests::amiga {
                                                     data_encoded.data(), data_encoded.size())) &
                                                 mask;
 
+            bool previous_data_bit = false;
             append_be16(out, 0xAAAAU);
             append_be16(out, 0xAAAAU);
-            append_be16(out, 0x4489U);
-            append_be16(out, 0x4489U);
+            append_mfm_sync_word(out, 0x4489U, previous_data_bit);
+            append_mfm_sync_word(out, 0x4489U, previous_data_bit);
             for (std::uint32_t word : header_encoded) {
-                append_be32(out, word);
+                append_mfm_encoded_long(out, word, previous_data_bit);
             }
-            append_mfm_long(out, header_checksum);
-            append_mfm_long(out, data_checksum);
+            append_mfm_long(out, header_checksum, previous_data_bit);
+            append_mfm_long(out, data_checksum, previous_data_bit);
             for (std::uint32_t word : data_encoded) {
-                append_be32(out, word);
+                append_mfm_encoded_long(out, word, previous_data_bit);
             }
         }
 
@@ -1468,7 +1495,11 @@ namespace mnemos::manifests::amiga {
     }
 
     void amiga_system::write_cia_a_sp(bool level) noexcept {
+        const bool was_busy = amiga_keyboard_serial_busy(keyboard);
         amiga_keyboard_accept_serial_ack_level(keyboard, level);
+        if (was_busy && !amiga_keyboard_serial_busy(keyboard)) {
+            service_keyboard_queue();
+        }
     }
 
     std::uint8_t amiga_system::cia_a_port_a_inputs() const noexcept {
@@ -1535,7 +1566,7 @@ namespace mnemos::manifests::amiga {
         const bool next_selected = next_active_drive != no_floppy_drive;
         const bool next_motor_latch = (value & 0x80U) == 0U;
         const auto next_side = static_cast<std::uint8_t>((value & 0x04U) == 0U ? 1U : 0U);
-        const bool next_direction_inward = (value & 0x02U) != 0U;
+        const bool next_direction_inward = (value & 0x02U) == 0U;
         const bool next_step_line = (value & 0x01U) != 0U;
         const std::uint8_t old_active_drive = floppy_active_drive;
         const std::uint8_t old_side = floppy_side_pos;
@@ -1742,21 +1773,30 @@ namespace mnemos::manifests::amiga {
         }
         std::uint8_t value = 0U;
         for (std::uint8_t bit = 0U; bit < 8U; ++bit) {
-            value = static_cast<std::uint8_t>((value << 1U) | sample_raw_track_bit(*drive));
+            const std::uint8_t raw_bit = sample_raw_track_bit(*drive);
+            value = static_cast<std::uint8_t>((value << 1U) | raw_bit);
+            (void)accept_floppy_bit(raw_bit);
             advance_raw_track_phase(*drive);
         }
-        accept_floppy_byte(value);
+        publish_floppy_byte(value);
         return value;
     }
 
-    void amiga_system::accept_floppy_byte(std::uint8_t byte) noexcept {
-        disk_data = static_cast<std::uint16_t>((disk_data << 8U) | byte);
-        disk_shift = static_cast<std::uint16_t>((disk_shift << 8U) | byte);
-        disk_byte_valid = true;
-        if (disk_shift == disk_sync) {
-            disk_sync_match = true;
+    bool amiga_system::accept_floppy_bit(std::uint8_t bit) noexcept {
+        disk_shift = static_cast<std::uint16_t>((disk_shift << 1U) | (bit & 0x01U));
+        if (disk_shift != disk_sync) {
+            return false;
+        }
+        disk_sync_match = true;
+        if ((disk_adkcon & adkcon_wordsync) != 0U) {
             request_interrupt(int_dsksyn);
         }
+        return true;
+    }
+
+    void amiga_system::publish_floppy_byte(std::uint8_t byte) noexcept {
+        disk_data = static_cast<std::uint16_t>((disk_data << 8U) | byte);
+        disk_byte_valid = true;
     }
 
     bool amiga_system::shift_floppy_read_bit() noexcept {
@@ -1766,16 +1806,24 @@ namespace mnemos::manifests::amiga {
         }
 
         const std::uint8_t bit = sample_raw_track_bit(*drive);
+        const bool sync_matched = accept_floppy_bit(bit);
+        advance_raw_track_phase(*drive);
+        if (sync_matched && disk_wordsync_waiting) {
+            disk_wordsync_waiting = false;
+            drive->stream_read_shift = 0U;
+            drive->stream_read_bit_count = 0U;
+            return false;
+        }
+
         drive->stream_read_shift =
             static_cast<std::uint8_t>((drive->stream_read_shift << 1U) | bit);
         drive->stream_read_bit_count = static_cast<std::uint8_t>(
             std::min<std::uint8_t>(8U, drive->stream_read_bit_count + 1U));
-        advance_raw_track_phase(*drive);
         if (drive->stream_read_bit_count < 8U) {
             return false;
         }
 
-        accept_floppy_byte(drive->stream_read_shift);
+        publish_floppy_byte(drive->stream_read_shift);
         drive->stream_read_shift = 0U;
         drive->stream_read_bit_count = 0U;
         return true;
@@ -1824,7 +1872,9 @@ namespace mnemos::manifests::amiga {
         disk_byte_valid = true;
         if (disk_shift == disk_sync) {
             disk_sync_match = true;
-            request_interrupt(int_dsksyn);
+            if ((disk_adkcon & adkcon_wordsync) != 0U) {
+                request_interrupt(int_dsksyn);
+            }
         }
         const std::uint8_t write_drive = floppy_active_drive;
         const bool should_flush_track = !drive->write_protected && disk_dma_bytes_remaining == 1U;
@@ -1835,39 +1885,32 @@ namespace mnemos::manifests::amiga {
     }
 
     void amiga_system::tick_floppy_scanline() noexcept {
-        auto* drive = active_floppy_drive_state();
-        if (!floppy_selected || drive == nullptr || !drive->motor_on || drive->image.empty()) {
-            if (drive != nullptr) {
-                drive->index_line_accumulator = 0U;
-                drive->byte_clock_accumulator = 0U;
-            }
-            return;
-        }
-
         const std::uint32_t lines_per_revolution = floppy_index_lines_per_revolution();
         if (lines_per_revolution == 0U) {
             return;
         }
 
-        ++drive->index_line_accumulator;
-        if (drive->index_line_accumulator >= lines_per_revolution) {
-            drive->index_line_accumulator = 0U;
-            cia_b.flag_edge();
+        for (std::size_t drive_index = 0U; drive_index < floppy_drives.size(); ++drive_index) {
+            auto& drive = floppy_drives[drive_index];
+            if (!drive.motor_on || drive.image.empty()) {
+                drive.index_line_accumulator = 0U;
+                continue;
+            }
+
+            ++drive.index_line_accumulator;
+            if (drive.index_line_accumulator < lines_per_revolution) {
+                continue;
+            }
+
+            drive.index_line_accumulator = 0U;
+            if (floppy_selected &&
+                static_cast<std::uint8_t>(drive_index) == floppy_active_drive) {
+                cia_b.flag_edge();
+            }
         }
     }
 
     void amiga_system::tick_floppy_data_cycle() noexcept {
-        auto* drive = active_floppy_drive_state();
-        if (!floppy_selected || drive == nullptr || !drive->motor_on || drive->image.empty()) {
-            if (drive != nullptr) {
-                drive->byte_clock_accumulator = 0U;
-            }
-            return;
-        }
-        if (drive->track_stream.empty()) {
-            return;
-        }
-
         const std::uint32_t lines_per_revolution = floppy_index_lines_per_revolution();
         if (lines_per_revolution == 0U) {
             return;
@@ -1879,24 +1922,44 @@ namespace mnemos::manifests::amiga {
             return;
         }
 
-        drive->byte_clock_accumulator +=
-            static_cast<std::uint64_t>(drive->track_stream.size()) * 8U;
-        while (drive->byte_clock_accumulator >= clocks_per_revolution) {
-            drive->byte_clock_accumulator -= clocks_per_revolution;
-            const bool write_dma =
-                (disk_dma_bytes_remaining != 0U && (disk_length & 0xC000U) == 0xC000U) ||
-                drive->stream_write_bits_remaining != 0U;
-            if (write_dma) {
-                shift_floppy_write_bit();
-            } else if (shift_floppy_read_bit()) {
-                const std::uint8_t byte = static_cast<std::uint8_t>(disk_data);
-                if (disk_wordsync_waiting) {
-                    if (disk_shift == disk_sync) {
-                        disk_wordsync_waiting = false;
-                    }
+        for (std::size_t drive_index = 0U; drive_index < floppy_drives.size(); ++drive_index) {
+            auto& drive = floppy_drives[drive_index];
+            if (!drive.motor_on || drive.image.empty()) {
+                drive.byte_clock_accumulator = 0U;
+                continue;
+            }
+            if (drive.track_stream.empty()) {
+                continue;
+            }
+
+            const bool selected =
+                floppy_selected && static_cast<std::uint8_t>(drive_index) == floppy_active_drive;
+            drive.byte_clock_accumulator +=
+                static_cast<std::uint64_t>(drive.track_stream.size()) * 8U;
+            while (drive.byte_clock_accumulator >= clocks_per_revolution) {
+                drive.byte_clock_accumulator -= clocks_per_revolution;
+                if (!selected) {
+                    advance_raw_track_phase(drive);
+                    drive.stream_read_shift = 0U;
+                    drive.stream_read_bit_count = 0U;
                     continue;
                 }
-                transfer_disk_dma_byte(byte);
+
+                const bool write_dma =
+                    (disk_dma_bytes_remaining != 0U && (disk_length & 0xC000U) == 0xC000U) ||
+                    drive.stream_write_bits_remaining != 0U;
+                if (write_dma) {
+                    shift_floppy_write_bit();
+                } else if (shift_floppy_read_bit()) {
+                    const std::uint8_t byte = static_cast<std::uint8_t>(disk_data);
+                    if (disk_wordsync_waiting) {
+                        if (disk_shift == disk_sync) {
+                            disk_wordsync_waiting = false;
+                        }
+                        continue;
+                    }
+                    transfer_disk_dma_byte(byte);
+                }
             }
         }
     }

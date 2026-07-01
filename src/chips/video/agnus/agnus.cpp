@@ -255,10 +255,10 @@ namespace mnemos::chips::video {
                 if (scanline_ == 0U) {
                     begin_frame_render();
                 }
-                if (scanline_ == vblank_end_line(is_pal_) && dma_copper()) {
-                    // Real OCS returns the Copper to COP1LC as vertical blank
-                    // exits, after the CPU/vblank server has a chance to
-                    // publish the display list for the active field.
+                if (scanline_ == 0U && dma_copper()) {
+                    // Real OCS reloads COP1LC as vertical blank begins. The
+                    // OS header list then waits into vblank before jumping to
+                    // the COP2 list published by the vblank server.
                     copper_pc_ = cop1lc_;
                     copper_running_ = true;
                     copper_delay_ = 0U;
@@ -802,15 +802,20 @@ namespace mnemos::chips::video {
             return;
         }
 
-        // WAIT / SKIP. The upper byte of IR2 is the vertical compare-enable
-        // mask as programmed; Kickstart uses zero-masked impossible waits to
-        // park secondary copper lists.
+        // WAIT / SKIP. The upper byte of IR2 exposes seven vertical
+        // compare-enable bits; VP bit 7 is effectively still compared.
+        // Kickstart 1.x also emits $FFFF,$0000 as a generated-list terminator.
+        // Keep that zero-mask end marker parked instead of letting the copper
+        // run into the adjacent graphics/Exec data structures.
         const std::uint16_t wait_vp = static_cast<std::uint16_t>((ir1 >> 8U) & 0x00FFU);
         const std::uint16_t wait_hp = static_cast<std::uint16_t>(ir1 & 0x00FEU);
-        const std::uint16_t wait_ve = static_cast<std::uint16_t>((ir2 >> 8U) & 0x00FFU);
+        const std::uint16_t wait_ve =
+            static_cast<std::uint16_t>(((ir2 >> 8U) & 0x007FU) | 0x0080U);
         const std::uint16_t wait_he = static_cast<std::uint16_t>(ir2 & 0x00FEU);
         const bool wait_bfd = (ir2 & copper_bfd_mask) != 0U;
         const bool is_skip = (ir2 & 0x0001U) != 0U;
+        const bool zero_mask_terminator =
+            !is_skip && ir1 == 0xFFFFU && ir2 == 0x0000U;
 
         const std::uint16_t vp_beam = static_cast<std::uint16_t>(beam_vp & wait_ve);
         const std::uint16_t vp_target = static_cast<std::uint16_t>(wait_vp & wait_ve);
@@ -818,7 +823,9 @@ namespace mnemos::chips::video {
         const std::uint16_t hp_target = static_cast<std::uint16_t>(wait_hp & wait_he);
 
         bool past = true;
-        if (vp_beam < vp_target) {
+        if (zero_mask_terminator) {
+            past = false;
+        } else if (vp_beam < vp_target) {
             past = false;
         } else if (vp_beam == vp_target && hp_beam < hp_target) {
             past = false;

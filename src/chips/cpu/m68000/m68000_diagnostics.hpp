@@ -37,6 +37,18 @@ namespace mnemos::chips::cpu {
         // instruction's PC BEFORE any decode. Unset = no trace overhead.
         void set_trace_callback(std::function<void(std::uint32_t pc)> callback) noexcept;
 
+        // Diagnostic hook for instructions that retire as a plain opcode fetch
+        // with no architectural effect. It is a clue for decode gaps, not an
+        // illegal-instruction policy.
+        void set_no_effect_opcode_callback(
+            std::function<void(std::uint32_t pc, std::uint16_t opcode)> callback) noexcept;
+
+        // Fired when the decoder reaches an opcode pattern this MC68000 core
+        // has not implemented yet. Unlike the no-effect hook, this is based on
+        // decode fallthrough rather than post-state comparison.
+        void set_unhandled_opcode_callback(
+            std::function<void(std::uint32_t pc, std::uint16_t opcode)> callback) noexcept;
+
         // Cycle-source tags for the last completed instruction.
         [[nodiscard]] const cycle_sources& last_cycle_sources() const noexcept;
 

@@ -319,6 +319,37 @@ namespace mnemos::apps::player::adapters {
             return !entry.name.empty() && entry.name.back() == '/';
         }
 
+        [[nodiscard]] bool archive_entry_is_metadata(std::string_view name) {
+            const std::string lower = lowercase_ascii(name);
+            std::size_t segment_begin = 0U;
+            while (segment_begin <= lower.size()) {
+                const std::size_t segment_end = lower.find_first_of("/\\", segment_begin);
+                const std::string_view segment{
+                    lower.data() + segment_begin,
+                    segment_end == std::string::npos ? lower.size() - segment_begin
+                                                      : segment_end - segment_begin};
+                if (segment == "__macosx") {
+                    return true;
+                }
+                if (segment_end == std::string::npos) {
+                    break;
+                }
+                segment_begin = segment_end + 1U;
+            }
+
+            const std::size_t slash = lower.find_last_of("/\\");
+            const std::string_view basename{
+                lower.data() + (slash == std::string::npos ? 0U : slash + 1U),
+                slash == std::string::npos ? lower.size() : lower.size() - slash - 1U};
+            return basename == ".ds_store" ||
+                   (basename.size() >= 2U && basename[0] == '.' && basename[1] == '_');
+        }
+
+        [[nodiscard]] bool archive_entry_extension_matches(
+            std::string_view name, std::span<const std::string_view> extensions) {
+            return !archive_entry_is_metadata(name) && extension_matches(name, extensions);
+        }
+
         [[nodiscard]] std::string filename_without_extension(std::string_view name) {
             const std::size_t slash = name.find_last_of("/\\");
             const std::size_t begin = slash == std::string_view::npos ? 0U : slash + 1U;
@@ -718,7 +749,7 @@ namespace mnemos::apps::player::adapters {
 
                 if (tar_entry_is_regular(header)) {
                     const std::string name = tar_entry_name(header);
-                    if (extension_matches(name, extensions)) {
+                    if (archive_entry_extension_matches(name, extensions)) {
                         std::vector<std::uint8_t> entry(bytes.begin() + data_offset,
                                                         bytes.begin() + data_offset + size);
                         auto loaded = decode_gzip_or_raw(std::move(entry), name);
@@ -750,7 +781,8 @@ namespace mnemos::apps::player::adapters {
 
             std::vector<loaded_rom> direct;
             for (const auto& entry : archive.entries()) {
-                if (zip_entry_is_directory(entry) || !extension_matches(entry.name, extensions)) {
+                if (zip_entry_is_directory(entry) ||
+                    !archive_entry_extension_matches(entry.name, extensions)) {
                     continue;
                 }
                 if (entry.method == zip_method::unsupported || entry.uncompressed_size == 0U) {
@@ -782,7 +814,8 @@ namespace mnemos::apps::player::adapters {
             std::size_t outer_index = 0U;
             for (const auto& entry : archive.entries()) {
                 const std::size_t current_index = outer_index++;
-                if (zip_entry_is_directory(entry) || lowercase_extension(entry.name) != ".zip" ||
+                if (zip_entry_is_directory(entry) || archive_entry_is_metadata(entry.name) ||
+                    lowercase_extension(entry.name) != ".zip" ||
                     entry.method == zip_method::unsupported || entry.uncompressed_size == 0U) {
                     continue;
                 }
@@ -841,7 +874,7 @@ namespace mnemos::apps::player::adapters {
             std::vector<std::string> entry_names;
             for (std::string& entry : read_text_lines(listing_path)) {
                 if (entry.empty() || entry.back() == '/' ||
-                    !extension_matches(entry, extensions)) {
+                    !archive_entry_extension_matches(entry, extensions)) {
                     continue;
                 }
                 entry_names.push_back(std::move(entry));

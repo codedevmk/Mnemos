@@ -693,6 +693,26 @@ TEST_CASE("amiga500 keyboard queue waits for CIA serial acknowledgement",
     CHECK(sys->cia_a.read(0x0CU) == keyboard_sdr(0xCCU));
 }
 
+TEST_CASE("amiga500 keyboard acknowledgement transmits the next queued byte",
+          "[manifests][amiga500][input]") {
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+
+    REQUIRE(sys->enqueue_keyboard_control_code(amiga_system::keyboard_powerup_stream_start_code));
+    REQUIRE(sys->enqueue_keyboard_control_code(amiga_system::keyboard_powerup_stream_end_code));
+    CHECK(sys->keyboard_pending_count() == 1U);
+    CHECK(sys->cia_a.read(0x0CU) ==
+          keyboard_sdr(amiga_system::keyboard_powerup_stream_start_code));
+
+    sys->write_cia_a_sp(false);
+    sys->write_cia_a_sp(true);
+
+    CHECK(sys->keyboard_pending_count() == 0U);
+    CHECK(amiga_keyboard_serial_busy(sys->keyboard));
+    CHECK(sys->cia_a.read(0x0CU) ==
+          keyboard_sdr(amiga_system::keyboard_powerup_stream_end_code));
+}
+
 TEST_CASE("amiga500 keyboard matrix filters duplicate raw-key edges",
           "[manifests][amiga500][input]") {
     auto sys = assemble_amiga(tiny_kickstart());
@@ -1462,6 +1482,83 @@ TEST_CASE("amiga500 ADKCON WORDSYNC gates disk read DMA until DSKSYNC",
     CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
 }
 
+TEST_CASE("amiga500 WORDSYNC disk DMA finds DSKSYNC at bit granularity",
+          "[manifests][amiga500][disk]") {
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+    REQUIRE(sys->mount_floppy(tiny_adf()));
+    select_df0(*sys);
+
+    const std::uint32_t lines_per_revolution = sys->floppy_index_lines_per_revolution();
+    REQUIRE(lines_per_revolution > 8U);
+    auto& drive = sys->floppy_drives[0];
+    drive.track_stream.assign(lines_per_revolution, 0x00U);
+    drive.track_stream[0] = 0x04U;
+    drive.track_stream[1] = 0x48U;
+    drive.track_stream[2] = 0x9AU;
+    drive.track_stream[3] = 0xABU;
+    drive.track_stream[4] = 0xBCU;
+    drive.track_stream[5] = 0xCDU;
+    drive.track_stream[6] = 0xD0U;
+    reset_floppy_stream_phase(drive);
+
+    sys->write_custom_word(0x020U, 0x0000U);
+    sys->write_custom_word(0x022U, 0x0640U);
+    sys->write_custom_word(0x07EU, 0x4489U);
+    sys->write_custom_word(0x09EU, static_cast<std::uint16_t>(amiga_system::setclr_bit | 0x0400U));
+    sys->write_custom_word(0x096U,
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                      agnus::dmacon_dmaen | agnus::dmacon_dsken));
+
+    constexpr std::uint16_t words_to_read = 2U;
+    const std::uint16_t dsklen = static_cast<std::uint16_t>(0x8000U | words_to_read);
+    sys->write_custom_word(0x024U, dsklen);
+    sys->write_custom_word(0x024U, dsklen);
+    REQUIRE(sys->disk_wordsync_waiting);
+
+    run_scanlines(*sys, 2U);
+    CHECK(sys->disk_wordsync_waiting);
+    CHECK(sys->chip_ram[0x0640U] == 0x00U);
+
+    run_scanlines(*sys, 1U);
+    CHECK_FALSE(sys->disk_wordsync_waiting);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dsksyn) != 0U);
+    CHECK(sys->chip_ram[0x0640U] == 0x00U);
+
+    run_scanlines(*sys, 4U);
+    CHECK(sys->chip_ram[0x0640U] == 0xAAU);
+    CHECK(sys->chip_ram[0x0641U] == 0xBBU);
+    CHECK(sys->chip_ram[0x0642U] == 0xCCU);
+    CHECK(sys->chip_ram[0x0643U] == 0xDDU);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
+}
+
+TEST_CASE("amiga500 DSKSYN interrupt requires ADKCON WORDSYNC",
+          "[manifests][amiga500][disk]") {
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+    REQUIRE(sys->mount_floppy(tiny_adf()));
+    select_df0(*sys);
+
+    const std::uint32_t lines_per_revolution = sys->floppy_index_lines_per_revolution();
+    REQUIRE(lines_per_revolution > 4U);
+    auto& drive = sys->floppy_drives[0];
+    drive.track_stream.assign(lines_per_revolution, 0x00U);
+    drive.track_stream[0] = 0x44U;
+    drive.track_stream[1] = 0x89U;
+    reset_floppy_stream_phase(drive);
+
+    run_scanlines(*sys, 2U);
+    CHECK((sys->read_custom_word(0x01AU) & 0x1000U) != 0U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dsksyn) == 0U);
+
+    reset_floppy_stream_phase(sys->floppy_drives[0]);
+    sys->write_custom_word(0x09EU, static_cast<std::uint16_t>(amiga_system::setclr_bit | 0x0400U));
+
+    run_scanlines(*sys, 2U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dsksyn) != 0U);
+}
+
 TEST_CASE("amiga500 WORDSYNC disk DMA preserves decodable AmigaDOS sectors",
           "[manifests][amiga500][disk]") {
     auto adf = tiny_adf();
@@ -1718,7 +1815,7 @@ TEST_CASE("amiga500 floppy track steps preserve in-flight raw byte shifter",
     constexpr std::size_t cylinder_one_side_zero_track = 2U;
     drive.raw_track_cache[cylinder_one_side_zero_track].assign(16U, 0x00U);
     drive.raw_track_cache[cylinder_one_side_zero_track][0] = 0x0CU;
-    sys->cia_b.write(0x01U, 0x76U); // Step inward while DF0 stays selected and motor-on.
+    sys->cia_b.write(0x01U, 0x74U); // Step inward while DF0 stays selected and motor-on.
 
     CHECK(sys->floppy_cylinder() == 1U);
     CHECK(drive.track_stream_track_index == cylinder_one_side_zero_track);
@@ -2244,11 +2341,11 @@ TEST_CASE("amiga500 CIAB disk control steps the mounted ADF drive", "[manifests]
     CHECK(sys->floppy_cylinder() == 0U);
     CHECK(sys->floppy_side() == 0U);
 
-    sys->cia_b.write(0x01U, 0x76U); // falling /STEP with DIR=1 moves inward.
+    sys->cia_b.write(0x01U, 0x74U); // falling /STEP with DIR=0 moves inward.
     CHECK(sys->floppy_cylinder() == 1U);
 
-    sys->cia_b.write(0x01U, 0x75U); // /STEP high, DIR=0.
-    sys->cia_b.write(0x01U, 0x74U); // falling /STEP with DIR=0 moves outward.
+    sys->cia_b.write(0x01U, 0x77U); // /STEP high, DIR=1.
+    sys->cia_b.write(0x01U, 0x76U); // falling /STEP with DIR=1 moves outward.
     CHECK(sys->floppy_cylinder() == 0U);
 
     sys->cia_b.write(0x01U, 0x71U); // /SIDE=0 selects side 1.
@@ -2326,6 +2423,41 @@ TEST_CASE("amiga500 CIAB disk motor state latches when a drive is selected",
     CHECK((sys->cia_a.read(0x00U) & 0x20U) == 0U);
 }
 
+TEST_CASE("amiga500 motor-latched floppy keeps rotating while deselected",
+          "[manifests][amiga500][disk][cia]") {
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+    REQUIRE(sys->mount_floppy(tiny_adf()));
+    select_df0(*sys);
+
+    const std::uint32_t lines_per_revolution = sys->floppy_index_lines_per_revolution();
+    REQUIRE(lines_per_revolution > 2U);
+
+    auto& drive = sys->floppy_drives[0];
+    drive.track_stream.assign(lines_per_revolution, 0x00U);
+    drive.track_stream[0] = 0xA5U;
+    drive.track_stream[1] = 0x5AU;
+    drive.raw_track_cache[0] = drive.track_stream;
+    reset_floppy_stream_phase(drive);
+
+    sys->cia_b.write(0x01U, 0xFFU); // Deselect DF0; its latched motor stays on.
+    CHECK(sys->selected_floppy_drive() == amiga_system::no_floppy_drive);
+    CHECK(sys->floppy_drives[0].motor_on);
+    CHECK_FALSE(sys->floppy_motor_on);
+
+    run_scanlines(*sys, 1U);
+    CHECK(drive.stream_offset == 1U);
+    CHECK(drive.stream_bit_offset == 0U);
+    CHECK((sys->read_custom_word(0x01AU) & 0x8000U) == 0U);
+
+    sys->cia_b.write(0x01U, 0x77U); // Re-select DF0 and keep its motor latched on.
+    run_scanlines(*sys, 1U);
+
+    const std::uint16_t dskbytr = sys->read_custom_word(0x01AU);
+    CHECK((dskbytr & 0x8000U) != 0U);
+    CHECK((dskbytr & 0x00FFU) == 0x005AU);
+}
+
 TEST_CASE("amiga500 CIAB disk select lines address independent DF0-DF3 state",
           "[manifests][amiga500][disk]") {
     auto sys = assemble_amiga(tiny_kickstart());
@@ -2338,7 +2470,7 @@ TEST_CASE("amiga500 CIAB disk select lines address independent DF0-DF3 state",
     CHECK(sys->floppy_loaded(1U));
     CHECK(sys->floppy_cylinder(1U) == 0U);
 
-    sys->cia_b.write(0x01U, 0x6EU); // Falling inward /STEP on DF1.
+    sys->cia_b.write(0x01U, 0x6CU); // Falling inward /STEP on DF1.
     CHECK(sys->floppy_cylinder(0U) == 0U);
     CHECK(sys->floppy_cylinder(1U) == 1U);
     CHECK((sys->cia_a.read(0x00U) & 0x10U) != 0U);
@@ -2382,7 +2514,7 @@ TEST_CASE("amiga500 multidrive selection survives system save state",
     REQUIRE(sys->mount_floppy(1U, tiny_adf()));
 
     select_df1(*sys);
-    sys->cia_b.write(0x01U, 0x6EU);
+    sys->cia_b.write(0x01U, 0x6CU);
     CHECK(sys->floppy_cylinder(1U) == 1U);
 
     std::vector<std::uint8_t> blob;
@@ -2390,7 +2522,7 @@ TEST_CASE("amiga500 multidrive selection survives system save state",
     sys->save_state(writer);
 
     select_df0(*sys);
-    sys->cia_b.write(0x01U, 0x76U);
+    sys->cia_b.write(0x01U, 0x74U);
     CHECK(sys->floppy_cylinder(0U) == 1U);
 
     mnemos::chips::state_reader reader(blob);
@@ -2414,7 +2546,8 @@ TEST_CASE("amiga500 CIAA disk change latch clears after a selected step",
     CHECK((sys->cia_a.read(0x00U) & 0x04U) == 0U);
     CHECK((sys->cia_a.read(0x00U) & 0x10U) == 0U);
 
-    sys->cia_b.write(0x01U, 0x74U); // outward /STEP at track 0 clears /CHNG without moving.
+    sys->cia_b.write(0x01U, 0x77U);
+    sys->cia_b.write(0x01U, 0x76U); // outward /STEP at track 0 clears /CHNG without moving.
     CHECK((sys->cia_a.read(0x00U) & 0x04U) != 0U);
     CHECK(sys->floppy_cylinder() == 0U);
 
@@ -2434,8 +2567,8 @@ TEST_CASE("amiga500 Kickstart-style DF0 probe releases disk change after step",
     sys->cia_b.write(0x01U, 0xF7U); // DF0 selected, motor off, STEP high.
     CHECK((sys->cia_a.read(0x00U) & 0x04U) == 0U);
 
-    sys->cia_b.write(0x01U, 0xF4U); // Falling outward STEP at track 0 clears /CHNG.
-    sys->cia_b.write(0x01U, 0xF5U);
+    sys->cia_b.write(0x01U, 0xF6U); // Falling outward STEP at track 0 clears /CHNG.
+    sys->cia_b.write(0x01U, 0xF7U);
     sys->cia_b.write(0x01U, 0xFFU);
     sys->cia_b.write(0x01U, 0xF5U);
 
@@ -2454,8 +2587,8 @@ TEST_CASE("amiga500 simultaneous DF0 select and step releases disk change",
     CHECK((sys->cia_a.read(0x00U) & 0x04U) == 0U);
 
     sys->cia_b.write(0x01U, 0xFFU);
-    sys->cia_b.write(0x01U, 0xF6U); // Select DF0 and assert inward /STEP in one write.
-    sys->cia_b.write(0x01U, 0xF7U);
+    sys->cia_b.write(0x01U, 0xF4U); // Select DF0 and assert inward /STEP in one write.
+    sys->cia_b.write(0x01U, 0xF5U);
     CHECK((sys->cia_a.read(0x00U) & 0x04U) != 0U);
     CHECK(sys->floppy_cylinder() == 1U);
 }
@@ -3845,7 +3978,7 @@ TEST_CASE("amiga500 save_state restores overlay and chip RAM", "[manifests][amig
     sys->agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) * 10U);
     REQUIRE(sys->mount_floppy(tiny_adf()));
     select_df0(*sys);
-    sys->cia_b.write(0x01U, 0x76U);
+    sys->cia_b.write(0x01U, 0x74U);
     REQUIRE(sys->press_caps_lock());
     CHECK(sys->keyboard_caps_lock_led_on());
     CHECK((sys->cia_a.read(0x00U) & 0x04U) != 0U);

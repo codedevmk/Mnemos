@@ -119,6 +119,27 @@ TEST_CASE("m68000 ILLEGAL ($4AFC) traps through vector 4 with the faulting PC") 
     CHECK(m.bus.read8(0x2FFFU) == 0x00U);
 }
 
+TEST_CASE("m68000 MOVEC encodings trap as illegal on MC68000") {
+    static constexpr std::array<std::uint16_t, 2> opcodes{0x4E7AU, 0x4E7BU};
+    for (const std::uint16_t op : opcodes) {
+        INFO("opcode $" << std::hex << op);
+        machine m;
+        m.w32(0x0010U, 0x00004000U); // vector 4 (illegal instruction) -> $4000
+        m68000::registers s{};
+        s.sr = m68000::sr_s;
+        s.a[7] = 0x00003000U;
+        s.pc = 0x1000U;
+        m.cpu.set_registers(s);
+        m.load(0x1000U, {op, 0x8000U}); // MOVEC has an extension word on 68010+
+        m.cpu.step_instruction();
+        const auto r = m.cpu.cpu_registers();
+        CHECK(r.pc == 0x00004000U);
+        CHECK(r.a[7] == 0x00002FFAU);
+        CHECK(m.bus.read8(0x2FFEU) == 0x10U); // faulting PC $1000
+        CHECK(m.bus.read8(0x2FFFU) == 0x00U);
+    }
+}
+
 TEST_CASE("m68000 odd instruction fetch raises an address-error group-0 frame") {
     machine m;
     m.w32(0x000CU, 0x00004000U); // address-error vector (3) -> $4000
