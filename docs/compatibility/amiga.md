@@ -476,7 +476,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Alien Fires 2199 AD (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien Legion (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien Storm (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Alien Syndrome | TBD | Visual defect | TBD | TBD | TBD | Requirement/error prompt | Requirement/error prompt | TBD | TBD | TBD |
+| Alien Syndrome | TBD | Requirement/error prompt | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
 | Alien Syndrome (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien Syndrome (USA) (Budget - Mindscape) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien World (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -550,7 +550,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Arnie 2 (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Arnie (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Art of Chess, The (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Arthur | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
+| Arthur | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Arthur [savegame] | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | Arthur - The Quest for Excalibur (USA) (r54) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Artificial Dreams (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -850,7 +850,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Campaign - Tactical & Strategic War Simulation (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Cannon Fodder 1993 Virgin DE cr TRSI | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Cannon Fodder (1993)(Virgin)(DE)[cr TRSI] | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
-| Cannon Fodder 2 1994 Virgin cr PDX | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
+| Cannon Fodder 2 1994 Virgin cr PDX | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Cannon Fodder 2 (1994)(Virgin)[cr PDX] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Cannon Fodder 2 (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Cannon Fodder 2 (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1153,7 +1153,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Dennis (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dennis (Europe) (AGA) (Amiga 1200 Bundle - Desktop Dynamite) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Denver Presente - Je Decouvre les Couleurs (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Desert Strike | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Desert Strike | TBD | Visual defect | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
 | Desert Strike-3 (1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Desert Strike - Return to the Gulf (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Destroyer (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2479,7 +2479,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Pioneer Plague (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pipe Mania (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Piracy on the High Seas (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Pirates | TBD | Visual defect | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Pirates | TBD | Operational (visual smoke) | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
 | Pirates! (Europe) (v832.02) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pirates! (Europe) (v832.04) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pit-Fighter (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
@@ -3664,6 +3664,7 @@ not committed.
 | 2026-07-01 | Chunked requested-title smoke runs across A500/A500+/A600 with `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <82 exact local media paths>` found 80 IPF-backed root `.7z` routes that fail before emulation with explicit `IPF/CAPS flux decoding is not implemented yet` messages, plus `Apidya - CD32.zip` and `psygnosis_demos_cdtv.rar` archives with no supported ADF/ADZ/IPF/HDF entries. Existing ADF-proven rows from the request list were not downgraded. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Emerald Mine/Desert Strike/Cannon Fodder/Bubble Bobble/Arthur/Alien Syndrome/P47/Pang/Pinball Dreams/Pirates/R-Type/Rainbow Islands ADF ZIP slice>` produced 33 successful disk-smoke launches and 3 black-frame Rainbow Islands failures. Manual review of `build/scratch/amiga-corpus/requested-batch-1500-contact.png` promoted Desert Strike, P47, Pang-500-NTSC, and Pinball Dreams to visual smoke; kept Cannon Fodder and Emerald Mine as previously classified; reclassified Bubble Bobble, R-Type, Rainbow Islands, and Pirates A500 as visual defects; and classified Alien Syndrome A500 as a visual defect plus Alien Syndrome A500+/A600 as Workbench error prompts. The same request batch inspected additional root `.7z` media and marked the remaining exact IPF-backed rows as `Unsupported media (format pending)`. |
 | 2026-07-02 | After high-resolution DDF start/stop quantization was added, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Bubble Bobble/R-Type ADF ZIP slice>` passed all 6 launches. Manual review of `build/scratch/amiga-corpus/ddf-quantization-contact.png` showed readable Bubble Bobble and R-Type trainer/crack screens on A500/A500+/A600, so those aggregate ADF rows are promoted to visual smoke. |
+| 2026-07-02 | Requested-title batch probe for Emerald Mine through Street Fighter resolved 97 user-requested names: 2 were skipped as non-A500/A500+/A600 targets (`CD32`, `Psygnosis`), and 89 selected root `.7z` media failed before emulation with explicit IPF/CAPS unsupported messages (`build/scratch/amiga-corpus/requested-root-format-probe.csv`). Separately, 13 ADF-backed launch sets from the same request were smoke-tested with `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <requested ADF ZIP slice>`. Manual review of `build/scratch/amiga-corpus/requested-adf-batch-contact.png` promoted Arthur and Cannon Fodder 2 PDX to visual smoke; kept P47, Pang-500-NTSC, Pinball Dreams, Bubble Bobble, R-Type, Cannon Fodder TRSI, and Emerald Mine per existing visual classifications; classified Alien Syndrome A500 as a readable Workbench error prompt and Alien Syndrome A500+/A600 as visual defects; kept Desert Strike and Rainbow Islands as visual defects; and reclassified Pirates as visual smoke only on A500, with A500+/A600 visual defects. |
 
 ## Update Rules
 
