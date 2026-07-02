@@ -64,7 +64,7 @@ TEST_CASE("m68000 TRAP vectors through the exception table") {
     CHECK(m.bus.read8(0x2FFFU) == 0x02U);
 }
 
-TEST_CASE("m68000 Line-1111 (Line-F) opcode traps through vector $2C with the faulting PC") {
+TEST_CASE("m68000 Line-1111 (Line-F) opcode traps through vector $2C with the next PC") {
     machine m;
     m.w32(0x002CU, 0x00004000U); // vector 11 (Line-1111 emulator) -> $4000
     m68000::registers s{};
@@ -77,15 +77,15 @@ TEST_CASE("m68000 Line-1111 (Line-F) opcode traps through vector $2C with the fa
     const auto r = m.cpu.cpu_registers();
     CHECK(r.pc == 0x00004000U);   // vectored through $2C
     CHECK(r.a[7] == 0x00002FFAU); // pushed PC (4) + SR (2)
-    // The 68000 Line-A/F frame stacks the FAULTING instruction's PC ($1000), not
-    // the next ($1002), so the handler can read the trapping opcode back.
+    // The MC68000 group-1/2 frame stacks the next PC ($1002). A handler can read
+    // the trapping opcode at saved_pc - 2.
     CHECK(m.bus.read8(0x2FFEU) == 0x10U);
-    CHECK(m.bus.read8(0x2FFFU) == 0x00U);
+    CHECK(m.bus.read8(0x2FFFU) == 0x02U);
     CHECK(m.bus.read8(0x2FFAU) == 0x20U); // stacked old SR ($2000, S set)
     CHECK(m.bus.read8(0x2FFBU) == 0x00U);
 }
 
-TEST_CASE("m68000 Line-1010 (Line-A) opcode traps through vector $28 with the faulting PC") {
+TEST_CASE("m68000 Line-1010 (Line-A) opcode traps through vector $28 with the next PC") {
     machine m;
     m.w32(0x0028U, 0x00004000U); // vector 10 (Line-1010 emulator) -> $4000
     m68000::registers s{};
@@ -98,11 +98,11 @@ TEST_CASE("m68000 Line-1010 (Line-A) opcode traps through vector $28 with the fa
     const auto r = m.cpu.cpu_registers();
     CHECK(r.pc == 0x00004000U);           // vectored through $28
     CHECK(r.a[7] == 0x00002FFAU);         // pushed PC (4) + SR (2)
-    CHECK(m.bus.read8(0x2FFEU) == 0x10U); // faulting PC $1000
-    CHECK(m.bus.read8(0x2FFFU) == 0x00U);
+    CHECK(m.bus.read8(0x2FFEU) == 0x10U); // stacked next PC $1002
+    CHECK(m.bus.read8(0x2FFFU) == 0x02U);
 }
 
-TEST_CASE("m68000 ILLEGAL ($4AFC) traps through vector 4 with the faulting PC") {
+TEST_CASE("m68000 ILLEGAL ($4AFC) traps through vector 4 with the next PC") {
     machine m;
     m.w32(0x0010U, 0x00004000U); // vector 4 (illegal instruction) -> $4000
     m68000::registers s{};
@@ -115,11 +115,11 @@ TEST_CASE("m68000 ILLEGAL ($4AFC) traps through vector 4 with the faulting PC") 
     const auto r = m.cpu.cpu_registers();
     CHECK(r.pc == 0x00004000U);           // vectored through $10
     CHECK(r.a[7] == 0x00002FFAU);         // pushed PC (4) + SR (2)
-    CHECK(m.bus.read8(0x2FFEU) == 0x10U); // faulting PC $1000
-    CHECK(m.bus.read8(0x2FFFU) == 0x00U);
+    CHECK(m.bus.read8(0x2FFEU) == 0x10U); // stacked next PC $1002
+    CHECK(m.bus.read8(0x2FFFU) == 0x02U);
 }
 
-TEST_CASE("m68000 MOVEC encodings trap as illegal on MC68000") {
+TEST_CASE("m68000 MOVEC encodings trap as illegal on MC68000 after the extension word") {
     static constexpr std::array<std::uint16_t, 2> opcodes{0x4E7AU, 0x4E7BU};
     for (const std::uint16_t op : opcodes) {
         INFO("opcode $" << std::hex << op);
@@ -135,8 +135,8 @@ TEST_CASE("m68000 MOVEC encodings trap as illegal on MC68000") {
         const auto r = m.cpu.cpu_registers();
         CHECK(r.pc == 0x00004000U);
         CHECK(r.a[7] == 0x00002FFAU);
-        CHECK(m.bus.read8(0x2FFEU) == 0x10U); // faulting PC $1000
-        CHECK(m.bus.read8(0x2FFFU) == 0x00U);
+        CHECK(m.bus.read8(0x2FFEU) == 0x10U); // stacked next PC $1004
+        CHECK(m.bus.read8(0x2FFFU) == 0x04U);
     }
 }
 

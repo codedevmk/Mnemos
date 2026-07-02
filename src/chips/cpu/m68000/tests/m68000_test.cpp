@@ -50,6 +50,11 @@ namespace {
         }
     };
 
+    std::uint16_t r16(machine& m, std::uint32_t a) {
+        return static_cast<std::uint16_t>((static_cast<std::uint16_t>(m.bus.read8(a)) << 8U) |
+                                          m.bus.read8(a + 1U));
+    }
+
 } // namespace
 
 static_assert(std::is_base_of_v<mnemos::chips::icpu, m68000>);
@@ -78,6 +83,32 @@ TEST_CASE("m68000 resets from the SSP/PC vectors in supervisor mode") {
     CHECK(r.pc == 0x1000U);
     CHECK((r.sr & m68000::sr_s) != 0U);
     CHECK((r.sr & m68000::sr_ipm) == m68000::sr_ipm);
+}
+
+TEST_CASE("m68000 sequential instruction fetch observes the two-word prefetch queue") {
+    machine m;
+    m.w32(0x0010U, 0x00004000U); // vector 4 (illegal instruction) -> $4000
+    m68000::registers s{};
+    s.sr = m68000::sr_s;
+    s.a[7] = 0x00003000U;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+
+    // MOVE.W #$4E71,$1006 overwrites the immediately following ILLEGAL word.
+    // A real MC68000 has already prefetched that next word, so the sequential
+    // fetch still executes the stale $4AFC. A branch/return/exception flush is
+    // required before the rewritten $4E71 becomes visible as instruction text.
+    m.load(0x1000U, {0x31FCU, 0x4E71U, 0x1006U, 0x4AFCU, 0x4E71U});
+
+    m.cpu.step_instruction();
+    CHECK(r16(m, 0x1006U) == 0x4E71U);
+    CHECK(m.cpu.cpu_registers().pc == 0x00001006U);
+
+    m.cpu.step_instruction();
+    const auto r = m.cpu.cpu_registers();
+    CHECK(r.pc == 0x00004000U);
+    CHECK(r.a[7] == 0x00002FFAU);
+    CHECK(r16(m, 0x2FFEU) == 0x1008U);
 }
 
 TEST_CASE("m68000 opcode/data split: decrypted opcodes, encrypted data, opcode-path reset") {
@@ -697,6 +728,36 @@ TEST_CASE("m68000 ASR preserves the sign bit") {
     CHECK((r.sr & m68000::sr_c) == 0U);
 }
 
+TEST_CASE("m68000 ASR register counts report the final shifted-out sign bit") {
+    machine m;
+    m68000::registers s{};
+    s.d[0] = 0x000000FFU;
+    s.d[1] = 0x00000008U;
+    auto r = run_one(m, {0xE220U}, s); // ASR.B D1,D0
+    CHECK((r.d[0] & 0xFFU) == 0xFFU);
+    CHECK((r.sr & m68000::sr_n) != 0U);
+    CHECK((r.sr & m68000::sr_c) != 0U);
+    CHECK((r.sr & m68000::sr_x) != 0U);
+
+    s.d[0] = 0x000000FFU;
+    s.d[1] = 0x00000009U;
+    s.sr = static_cast<std::uint16_t>(m68000::sr_s | m68000::sr_c | m68000::sr_x);
+    r = run_one(m, {0xE220U}, s); // ASR.B D1,D0
+    CHECK((r.d[0] & 0xFFU) == 0xFFU);
+    CHECK((r.sr & m68000::sr_n) != 0U);
+    CHECK((r.sr & m68000::sr_c) != 0U);
+    CHECK((r.sr & m68000::sr_x) != 0U);
+
+    s.d[0] = 0x0000007FU;
+    s.d[1] = 0x00000009U;
+    s.sr = static_cast<std::uint16_t>(m68000::sr_s | m68000::sr_c | m68000::sr_x);
+    r = run_one(m, {0xE220U}, s); // ASR.B D1,D0
+    CHECK((r.d[0] & 0xFFU) == 0x00U);
+    CHECK((r.sr & m68000::sr_z) != 0U);
+    CHECK((r.sr & m68000::sr_c) == 0U);
+    CHECK((r.sr & m68000::sr_x) == 0U);
+}
+
 TEST_CASE("m68000 ROL/ROR rotate and set carry from the wrapped bit") {
     machine m;
     m68000::registers s{};
@@ -881,13 +942,12 @@ TEST_CASE("m68000 LINK and UNLK manage a stack frame") {
     s.a[7] = 0x00003000U;
     s.pc = 0x1000U;
     m.cpu.set_registers(s);
-    m.load(0x1000U, {0x4E56U, 0xFFFCU}); // LINK A6,#-4
+    m.load(0x1000U, {0x4E56U, 0xFFFCU, 0x4E5EU}); // LINK A6,#-4; UNLK A6
     m.cpu.step_instruction();
     auto r = m.cpu.cpu_registers();
     CHECK(r.a[6] == 0x00002FFCU); // A6 = SP after the push
     CHECK(r.a[7] == 0x00002FF8U); // SP -= 4 (frame) after pushing old A6
 
-    m.load(r.pc, {0x4E5EU}); // UNLK A6
     m.cpu.step_instruction();
     r = m.cpu.cpu_registers();
     CHECK(r.a[6] == 0x12345678U); // restored
@@ -1061,12 +1121,11 @@ TEST_CASE("m68000 MOVEM round-trips registers through the stack") {
     s.a[7] = 0x00003000U;
     s.pc = 0x1000U;
     m.cpu.set_registers(s);
-    m.load(0x1000U, {0x48E7U, 0xC000U}); // MOVEM.L D0/D1,-(A7)
+    m.load(0x1000U, {0x48E7U, 0xC000U, 0x4CDFU, 0x000CU});
     m.cpu.step_instruction();
     auto r = m.cpu.cpu_registers();
     CHECK(r.a[7] == 0x00002FF8U); // two longwords pushed
 
-    m.load(r.pc, {0x4CDFU, 0x000CU}); // MOVEM.L (A7)+,D2/D3
     m.cpu.step_instruction();
     r = m.cpu.cpu_registers();
     CHECK(r.d[2] == 0xAAAA0000U); // restored from D0
@@ -1168,6 +1227,45 @@ TEST_CASE("JSR pushes return address as big-endian long (BoV $0690 scenario)") {
     // What the 68K would read back as a word at $FFC must be $0196.
     const std::uint32_t word = (static_cast<std::uint32_t>(m.ram[0x0FFCU]) << 8U) | m.ram[0x0FFDU];
     CHECK(word == 0x0196U);
+}
+
+TEST_CASE("m68000 diagnostics reports internal exception entry") {
+    machine m;
+    m.w32(11U * 4U, 0x00001234U); // Line-F vector.
+    m.load(0x1000U, {0xF123U});
+
+    m68000::registers s{};
+    s.sr = m68000::sr_s | 0x0010U;
+    s.a[7] = 0x2000U;
+    s.ssp = 0x2000U;
+    s.pc = 0x1000U;
+    m.cpu.set_registers(s);
+
+    bool called = false;
+    int vector = 0;
+    std::uint32_t stacked_pc = 0U;
+    std::uint32_t handler_pc = 0U;
+    std::uint16_t opcode = 0U;
+    std::uint16_t old_sr = 0U;
+    m.cpu.diagnostics().set_exception_callback(
+        [&](int v, std::uint32_t pc, std::uint32_t handler, std::uint16_t op,
+            std::uint16_t sr) {
+            called = true;
+            vector = v;
+            stacked_pc = pc;
+            handler_pc = handler;
+            opcode = op;
+            old_sr = sr;
+        });
+
+    m.cpu.step_instruction();
+
+    CHECK(called);
+    CHECK(vector == 11);
+    CHECK(stacked_pc == 0x1002U);
+    CHECK(handler_pc == 0x1234U);
+    CHECK(opcode == 0xF123U);
+    CHECK(old_sr == (m68000::sr_s | 0x0010U));
 }
 
 // ---------------------------------------------------------------------------

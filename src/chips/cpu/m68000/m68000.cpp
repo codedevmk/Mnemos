@@ -363,6 +363,31 @@ namespace mnemos::chips::cpu {
     void m68000::attach_bus(ibus& bus) noexcept {
         bus_ = &bus;
         install_fetch_invalidation(bus);
+        invalidate_prefetch();
+    }
+
+    void m68000::invalidate_prefetch() noexcept {
+        prefetch_valid_ = false;
+    }
+
+    std::uint16_t m68000::prefetch_word(std::uint32_t a) noexcept {
+        const std::uint32_t off = a - fetch_lo_;
+        return (off < fetch_len_ && off + 2U <= fetch_len_)
+                   ? static_cast<std::uint16_t>(
+                         (static_cast<std::uint16_t>(fetch_data_[off]) << 8U) |
+                         fetch_data_[off + 1U])
+                   : fetch_span_refill(a);
+    }
+
+    void m68000::refill_prefetch() noexcept {
+        prefetch_pc_ = pc_ & address_mask;
+        prefetch_words_[0] = prefetch_word(prefetch_pc_);
+        if (!group0_fault_.pending) {
+            prefetch_words_[1] = prefetch_word((prefetch_pc_ + 2U) & address_mask);
+        } else {
+            prefetch_words_[1] = 0U;
+        }
+        prefetch_valid_ = true;
     }
 
     std::uint16_t m68000::fetch16() noexcept {
@@ -373,23 +398,23 @@ namespace mnemos::chips::cpu {
         charge_bus_cycle(a, true, false);
         if (!exception_entry_ && (a & 1U) != 0U) {
             queue_address_error(a, a, true, true);
+            invalidate_prefetch();
             return 0U;
         }
+        if (!prefetch_valid_ || prefetch_pc_ != a) {
+            refill_prefetch();
+        }
+        const std::uint16_t word = prefetch_words_[0];
         pc_ += 2U;
-        // Fetch through the cached direct span when the PC is inside it (span
-        // lengths sit far below 2^31, so an out-of-span subtraction always
-        // fails the compare).
-        const std::uint32_t off = a - fetch_lo_;
-        const std::uint16_t word =
-            (off < fetch_len_ && off + 2U <= fetch_len_)
-                ? static_cast<std::uint16_t>((static_cast<std::uint16_t>(fetch_data_[off]) << 8U) |
-                                             fetch_data_[off + 1U])
-                : fetch_span_refill(a);
         const ibus::bus_fault fault = consume_bus_fault();
         if (!exception_entry_ && fault.asserted) {
             queue_bus_error(fault.address, a, true, !fault.write);
+            invalidate_prefetch();
             return 0U;
         }
+        prefetch_pc_ = pc_ & address_mask;
+        prefetch_words_[0] = prefetch_words_[1];
+        prefetch_words_[1] = prefetch_word((prefetch_pc_ + 2U) & address_mask);
         return word;
     }
     std::uint32_t m68000::fetch32() noexcept {
@@ -397,20 +422,7 @@ namespace mnemos::chips::cpu {
         if (group0_fault_.pending) {
             return 0U;
         }
-        const std::uint32_t a = pc_ & address_mask;
-        charge_bus_cycle(a, true, false);
-        pc_ += 2U;
-        const std::uint32_t off = a - fetch_lo_;
-        const std::uint32_t lo =
-            (off < fetch_len_ && off + 2U <= fetch_len_)
-                ? static_cast<std::uint32_t>((static_cast<std::uint32_t>(fetch_data_[off]) << 8U) |
-                                             fetch_data_[off + 1U])
-                : fetch_span_refill(a);
-        const ibus::bus_fault fault = consume_bus_fault();
-        if (!exception_entry_ && fault.asserted) {
-            queue_bus_error(fault.address, a, true, !fault.write);
-            return 0U;
-        }
+        const std::uint32_t lo = fetch16();
         return (hi << 16U) | lo;
     }
 
@@ -1430,10 +1442,10 @@ namespace mnemos::chips::cpu {
         }
         if (op == 0x4AFCU) {
             // The dedicated ILLEGAL opcode. Take the illegal-instruction exception
-            // (vector 4); the frame stacks the faulting PC. Caught here because the
+            // (vector 4); the frame stacks the next PC. Caught here because the
             // TAS decode below ($4AC0 mask) would otherwise mis-handle it as a TAS
             // with an immediate effective address.
-            raise_exception(vec_illegal, inst_addr_);
+            raise_exception(vec_illegal, pc_);
             return;
         }
         if ((op & 0xFFB8U) == 0x4880U) { // EXT
@@ -1756,8 +1768,14 @@ namespace mnemos::chips::cpu {
         if (op == 0x4E7AU || op == 0x4E7BU) {
             // MOVEC is a 68010+ instruction. The Amiga 500-class systems use an
             // MC68000, where these encodings must take the illegal-instruction
-            // vector; Kickstart probes this during CPU-type detection.
-            raise_exception(vec_illegal, inst_addr_);
+            // vector after consuming the MOVEC extension word. Some Amiga loaders
+            // deliberately place code after that extension and depend on the
+            // stacked PC advancing past the complete encoded instruction.
+            (void)fetch16();
+            if (group0_fault_.pending) {
+                return;
+            }
+            raise_exception(vec_illegal, pc_);
             return;
         }
         // Additive cycle accounting throughout: fetch16 has already added 4
@@ -1803,11 +1821,13 @@ namespace mnemos::chips::cpu {
             const std::uint16_t s = pop16();
             pc_ = pop32();
             write_sr(s);
+            invalidate_prefetch();
             cycles_ += 4;
             return;
         }
         case 0x4E75U: // RTS -- total 16 = fetch16(4) + pop32(8) + 4 idle
             pc_ = pop32();
+            invalidate_prefetch();
             cycles_ += 4;
             return;
         case 0x4E76U: // TRAPV -- 4 cycles when no trap; just the fetch16
@@ -1819,6 +1839,7 @@ namespace mnemos::chips::cpu {
             const std::uint16_t ccr = pop16();
             sr_ = static_cast<std::uint16_t>((sr_ & ~sr_ccr) | (ccr & sr_ccr));
             pc_ = pop32();
+            invalidate_prefetch();
             cycles_ += 4;
             return;
         }
@@ -1829,6 +1850,7 @@ namespace mnemos::chips::cpu {
             const std::uint32_t target = ea_address(em, er, op_size::longword, false);
             push32(pc_);
             pc_ = target;
+            invalidate_prefetch();
             // JSR Motorola totals (incl. opcode fetch + EA reads + push):
             //   (An) 16, (d16,An) 18, (d8,An,Xn) 22, (xxx).W 18, (xxx).L 20,
             //   (d16,PC) 18, (d8,PC,Xn) 22.
@@ -1862,6 +1884,7 @@ namespace mnemos::chips::cpu {
         }
         if ((op & 0xFFC0U) == 0x4EC0U) { // JMP <ea>
             pc_ = ea_address(em, er, op_size::longword, false);
+            invalidate_prefetch();
             // JMP Motorola totals: (An) 8, (d16,An) 10, (d8,An,Xn) 14,
             //   (xxx).W 10, (xxx).L 12, (d16,PC) 10, (d8,PC,Xn) 14.
             // Bus already counted: fetch16 (4) + EA address (0/4/6/8 depending on mode).
@@ -1943,7 +1966,12 @@ namespace mnemos::chips::cpu {
         push32(exc_pc);
         push16(old_sr);
         pc_ = read32(static_cast<std::uint32_t>(vector) * 4U);
+        invalidate_prefetch();
         (void)consume_bus_fault();
+        if (exception_callback_) {
+            exception_callback_(vector, exc_pc & address_mask, pc_ & address_mask,
+                                current_opcode_, old_sr);
+        }
         exception_entry_ = false;
         // Motorola 68000 internal-exception entry = 34 cycles (TRAP, TRAPV,
         // CHK trap, illegal, divzero, privilege). The bus model above counts
@@ -2013,7 +2041,12 @@ namespace mnemos::chips::cpu {
         push32(fault.access_address);
         push16(fault.status_word);
         pc_ = read32(static_cast<std::uint32_t>(vector) * 4U);
+        invalidate_prefetch();
         (void)consume_bus_fault();
+        if (exception_callback_) {
+            exception_callback_(vector, fault.stacked_pc & address_mask, pc_ & address_mask,
+                                fault.instruction_register, old_sr);
+        }
         exception_entry_ = false;
 
         // Address-error entry is 50 cycles on the MC68000. The bus helpers above
@@ -2032,6 +2065,7 @@ namespace mnemos::chips::cpu {
         push32(pc_);
         push16(old_sr);
         pc_ = read32(static_cast<std::uint32_t>(vec_autovector_base + level) * 4U);
+        invalidate_prefetch();
         (void)consume_bus_fault();
         exception_entry_ = false;
         stopped_ = false;
@@ -2112,9 +2146,11 @@ namespace mnemos::chips::cpu {
         if (cc == 1) {   // BSR (Motorola total = 18 cycles)
             push32(pc_); // adds 8 cycles
             pc_ = target;
+            invalidate_prefetch();
             cycles_ += (d8 == 0) ? 2 : 6;    // .W: 4+4+8+2=18 ; .S: 4+8+6=18
         } else if (cc == 0 || test_cc(cc)) { // BRA / Bcc taken (= 10)
             pc_ = target;
+            invalidate_prefetch();
             cycles_ += (d8 == 0) ? 2 : 6; // .W: 4+4+2=10 ; .S: 4+6=10
         } else {                          // Bcc not taken
             cycles_ += 4;                 // .W: 4+4+4=12 ; .S: 4+4=8
@@ -2143,6 +2179,7 @@ namespace mnemos::chips::cpu {
                     (d_[static_cast<std::size_t>(er)] & 0xFFFF0000U) | cnt;
                 if (cnt != 0xFFFFU) {
                     pc_ = target;
+                    invalidate_prefetch();
                     cycles_ += 2; // 10 - 8 bus
                 } else {
                     cycles_ += 6; // 14 - 8 bus (one extra prefetch when falling through)
@@ -2417,14 +2454,13 @@ namespace mnemos::chips::cpu {
             break;
         case 0xA:
             // Line-1010 emulator exception. Unimplemented $Axxx opcodes vector
-            // through $28; the frame stacks the FAULTING opcode's PC (inst_addr_),
-            // not the next instruction, so a handler can read the trapping opcode
-            // back -- some titles use line-A/F as syscalls and depend on it.
-            raise_exception(vec_line_a, inst_addr_);
+            // through $28 and stack the next PC. Handlers that need the trap word
+            // can read it at saved_pc - 2.
+            raise_exception(vec_line_a, pc_);
             break;
         case 0xF:
-            // Line-1111 emulator exception ($Fxxx -> $2C), same faulting-PC frame.
-            raise_exception(vec_line_f, inst_addr_);
+            // Line-1111 emulator exception ($Fxxx -> $2C), same next-PC frame.
+            raise_exception(vec_line_f, pc_);
             break;
         default:
             notify_unhandled_opcode(op);
@@ -2567,6 +2603,7 @@ namespace mnemos::chips::cpu {
         group0_fault_ = {};
         exception_raised_ = false;
         exception_entry_ = false;
+        invalidate_prefetch();
         (void)consume_bus_fault();
         stopped_ = false;
         halted_ = false;
@@ -2629,6 +2666,7 @@ namespace mnemos::chips::cpu {
         group0_fault_ = {};
         exception_raised_ = false;
         exception_entry_ = false;
+        invalidate_prefetch();
         (void)consume_bus_fault();
     }
 
@@ -2682,6 +2720,7 @@ namespace mnemos::chips::cpu {
         group0_fault_ = {};
         exception_raised_ = false;
         exception_entry_ = false;
+        invalidate_prefetch();
         (void)consume_bus_fault();
     }
 
@@ -2756,6 +2795,12 @@ namespace mnemos::chips::cpu {
     void m68000_diagnostics::set_unhandled_opcode_callback(
         std::function<void(std::uint32_t pc, std::uint16_t opcode)> callback) noexcept {
         owner_->unhandled_opcode_callback_ = std::move(callback);
+    }
+
+    void m68000_diagnostics::set_exception_callback(
+        std::function<void(int vector, std::uint32_t stacked_pc, std::uint32_t handler_pc,
+                           std::uint16_t opcode, std::uint16_t sr)> callback) noexcept {
+        owner_->exception_callback_ = std::move(callback);
     }
 
     const m68000_diagnostics::cycle_sources&

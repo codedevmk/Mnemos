@@ -76,6 +76,7 @@ namespace mnemos::manifests::amiga {
         constexpr std::uint16_t reg_sprpt_base = 0x120U;
         constexpr std::uint16_t reg_spr_base = 0x140U;
         constexpr std::uint16_t reg_color_base = 0x180U;
+        constexpr std::uint16_t reg_diwhigh = 0x1E4U;
         constexpr std::uint16_t bltcon0_usea = 0x0800U;
         constexpr std::uint16_t bltcon0_useb = 0x0400U;
         constexpr std::uint16_t bltcon0_usec = 0x0200U;
@@ -1193,6 +1194,9 @@ namespace mnemos::manifests::amiga {
         case reg_diwstop:
             agnus.set_diwstop(value);
             return;
+        case reg_diwhigh:
+            agnus.set_diwhigh(value);
+            return;
         case reg_ddfstrt:
             agnus.set_ddfstrt(value);
             return;
@@ -2183,7 +2187,16 @@ namespace mnemos::manifests::amiga {
         }
 
         disk_dma_bytes_remaining = static_cast<std::uint32_t>(words) * 2U;
-        disk_wordsync_waiting = (value & 0x4000U) == 0U && (disk_adkcon & adkcon_wordsync) != 0U;
+        const bool wordsync_enabled =
+            (value & 0x4000U) == 0U && (disk_adkcon & adkcon_wordsync) != 0U;
+        disk_wordsync_waiting = wordsync_enabled && !disk_sync_match;
+        if (wordsync_enabled && disk_sync_match) {
+            auto* active_drive = active_floppy_drive_state();
+            if (active_drive != nullptr) {
+                active_drive->stream_read_shift = 0U;
+                active_drive->stream_read_bit_count = 0U;
+            }
+        }
     }
 
     void amiga_system::start_blitter_line(std::uint32_t length) noexcept {

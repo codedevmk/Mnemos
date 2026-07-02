@@ -69,9 +69,11 @@ and the `R#` cross-reference to the risk register where one exists.
 > TAR/TAR.GZ-contained ADF, and tool-backed `.7z` ADF player proof without
 > committing copyrighted media; directory scans filter non-ADF archives out of
 > mixed local libraries. The
-> player also resolves A500/A500+/A600 Kickstart ROMs from
-> `MNEMOS_AMIGA_BIOS_DIR` / `MNEMOS_AMIGA_KICKSTART_DIR`, with local A500,
-> A500+, and A600 ZIP-ADF smoke proof against `D:\emu\amiga\bios`. Outer ZIP
+> player also resolves A1000/A500/A500+/A600 Kickstart ROMs from
+> `MNEMOS_AMIGA_BIOS_DIR` / `MNEMOS_AMIGA_KICKSTART_DIR`, with A1000 resident
+> Kickstart 1.0 route tests and local A500, A500+, and A600 ZIP-ADF smoke proof
+> against `D:\emu\amiga\bios`. The original A1000 bootstrap ROM plus
+> Kickstart-disk WCS loading path is still pending. Outer ZIP
 > wrappers containing nested per-disk ZIPs now select the first complete
 > `(Disk N of M)` set and mount it in disk order; direct multi-ADF ZIPs use the
 > same disk-order selection when they expose a complete sequence, with local

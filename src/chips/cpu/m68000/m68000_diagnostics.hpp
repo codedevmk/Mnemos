@@ -49,6 +49,14 @@ namespace mnemos::chips::cpu {
         void set_unhandled_opcode_callback(
             std::function<void(std::uint32_t pc, std::uint16_t opcode)> callback) noexcept;
 
+        // Fired when the core enters an internal exception handler. `stacked_pc`
+        // is the PC written to the 68000 exception frame, and `handler_pc` is
+        // the vector target read from the bus.
+        void set_exception_callback(
+            std::function<void(int vector, std::uint32_t stacked_pc,
+                               std::uint32_t handler_pc, std::uint16_t opcode,
+                               std::uint16_t sr)> callback) noexcept;
+
         // Cycle-source tags for the last completed instruction.
         [[nodiscard]] const cycle_sources& last_cycle_sources() const noexcept;
 

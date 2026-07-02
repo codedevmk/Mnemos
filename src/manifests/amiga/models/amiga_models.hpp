@@ -11,6 +11,7 @@ namespace mnemos::manifests::amiga {
     enum class amiga_keyboard_layout : std::uint8_t { us, qwerty_international, german, azerty };
 
     enum class amiga_model : std::uint8_t {
+        amiga1000,
         amiga500,
         amiga500_plus,
         amiga600,

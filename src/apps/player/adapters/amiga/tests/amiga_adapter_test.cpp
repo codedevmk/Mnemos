@@ -358,6 +358,40 @@ TEST_CASE("amiga adapter drains Paula audio through the 48 kHz player path",
     CHECK(adapter.drain_audio().frame_count == 0U);
 }
 
+TEST_CASE("amiga adapter configures Amiga 1000 metadata and base chip RAM",
+          "[apps][player][amiga1000]") {
+    const amiga_config config{.video_region = mnemos::video_region::pal,
+                              .keyboard_layout = amiga_keyboard_layout::us,
+                              .model = amiga_model::amiga1000};
+    std::vector<std::vector<std::uint8_t>> disks;
+    disks.push_back(tiny_adf(0x22U));
+    amiga_adapter adapter(tiny_kickstart(), config, "Kickstart 1.0", std::move(disks));
+    auto& sys = adapter.system();
+
+    REQUIRE(sys.chip_ram.size() == amiga_system::size_256k);
+    REQUIRE(sys.paula.chipram().size() == amiga_system::size_256k);
+    REQUIRE(adapter.memory_views().size() == 1U);
+    CHECK(adapter.memory_views()[0]->bytes().size() == amiga_system::size_256k);
+
+    const auto& spec = adapter.system_spec();
+    REQUIRE(spec.size() >= 3U);
+    CHECK(spec[0].label == "System");
+    CHECK(spec[0].value == "Amiga 1000");
+    CHECK(spec[1].label == "Chip RAM");
+    CHECK(spec[1].value == "256 KiB");
+    CHECK(spec[2].label == "Configuration");
+    CHECK(spec[2].value == "OCS / 256 KiB base");
+
+    const auto& media = adapter.media_capabilities();
+    REQUIRE(media.media.size() == 2U);
+    CHECK(media.media[0].provider_id == "amiga1000.kickstart");
+    CHECK(media.media[1].provider_id == "amiga1000.df0");
+
+    sys.bus.write8(0x000123U, 0x2AU);
+    CHECK(sys.chip_ram[0x000123U] == 0x2AU);
+    CHECK(sys.paula.chipram()[0x000123U] == 0x2AU);
+}
+
 TEST_CASE("amiga adapter configures Amiga 500+ metadata and chip RAM",
           "[apps][player][amiga500plus]") {
     const amiga_config config{.video_region = mnemos::video_region::pal,

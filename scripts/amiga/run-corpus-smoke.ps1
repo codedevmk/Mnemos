@@ -11,11 +11,13 @@ param(
     [string]$BuildDir = "build/windows-msvc-debug",
     [string[]]$Rom = @(),
     [string[]]$RomDir = @(),
-    [ValidateSet("amiga500", "amiga500plus", "amiga600")]
+    [ValidateSet("amiga1000", "amiga500", "amiga500plus", "amiga600", "amiga2000")]
     [string[]]$System = @("amiga500"),
+    [string]$Kickstart1000 = $env:MNEMOS_AMIGA1000_KICKSTART,
     [string]$Kickstart500 = $env:MNEMOS_AMIGA500_KICKSTART,
     [string]$Kickstart500Plus = $env:MNEMOS_AMIGA500PLUS_KICKSTART,
     [string]$Kickstart600 = $env:MNEMOS_AMIGA600_KICKSTART,
+    [string]$Kickstart2000 = $env:MNEMOS_AMIGA2000_KICKSTART,
     [string]$BiosDir = $env:MNEMOS_AMIGA_BIOS_DIR,
     [string]$KickstartDir = $env:MNEMOS_AMIGA_KICKSTART_DIR,
     [int]$Frames = 120,
@@ -460,6 +462,12 @@ function Test-MediaLaunchSetSelectorMatch {
 function Get-KickstartConfig {
     param([Parameter(Mandatory = $true)][string]$SystemName)
     switch ($SystemName) {
+        "amiga1000" {
+            return [pscustomobject]@{
+                EnvVar = "MNEMOS_AMIGA1000_KICKSTART"
+                Path = $Kickstart1000
+            }
+        }
         "amiga500" {
             return [pscustomobject]@{
                 EnvVar = "MNEMOS_AMIGA500_KICKSTART"
@@ -476,6 +484,12 @@ function Get-KickstartConfig {
             return [pscustomobject]@{
                 EnvVar = "MNEMOS_AMIGA600_KICKSTART"
                 Path = $Kickstart600
+            }
+        }
+        "amiga2000" {
+            return [pscustomobject]@{
+                EnvVar = "MNEMOS_AMIGA2000_KICKSTART"
+                Path = $Kickstart2000
             }
         }
     }
@@ -602,6 +616,20 @@ function Get-AmigaDisplayClassification {
     if ($Stats.Width -eq 320 -and $Stats.Height -eq 256 -and
         $Stats.NonBlackPixels -eq 79293) {
         return "kickstart_1_3_insert_disk_prompt"
+    }
+    switch ($Stats.Sha256) {
+        "4F228C20463809C5947548EACFECDDDE5EA5C85891EED25C3AE6192A234C27DF" {
+            return "kickstart_2_0_insert_disk_prompt"
+        }
+        "726C30DEA667C0DABF2493219C57BAB161850E7BD986F8F832DEC0EA5F6C74E2" {
+            return "kickstart_2_0_insert_disk_prompt"
+        }
+        "B7ACC6ECA5FE662FE9542047B3AC9C0DD9C7CC49A43438CD34BFD92CD461B03F" {
+            return "kickstart_2_05_insert_disk_prompt"
+        }
+        "F92ACD05C21EF970120F7D66B06E876188D82D5D046DBD9EB8EAF65330F93E22" {
+            return "kickstart_3_1_or_4_0_insert_disk_prompt"
+        }
     }
     return "unknown_or_booted"
 }

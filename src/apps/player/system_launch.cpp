@@ -435,14 +435,24 @@ namespace {
     [[nodiscard]] bool
     is_amiga_family(mnemos::apps::player::adapters::system_family family) noexcept {
         using mnemos::apps::player::adapters::system_family;
-        return family == system_family::amiga500 || family == system_family::amiga500_plus ||
-               family == system_family::amiga600 || family == system_family::amiga2000;
+        return family == system_family::amiga1000 || family == system_family::amiga500 ||
+               family == system_family::amiga500_plus || family == system_family::amiga600 ||
+               family == system_family::amiga2000;
+    }
+
+    [[nodiscard]] mnemos::video_region
+    amiga_default_video_region(mnemos::apps::player::adapters::system_family family) noexcept {
+        using mnemos::apps::player::adapters::system_family;
+        return family == system_family::amiga1000 ? mnemos::video_region::ntsc
+                                                  : mnemos::video_region::pal;
     }
 
     [[nodiscard]] const char*
     amiga_kickstart_env_var(mnemos::apps::player::adapters::system_family family) noexcept {
         using mnemos::apps::player::adapters::system_family;
         switch (family) {
+        case system_family::amiga1000:
+            return "MNEMOS_AMIGA1000_KICKSTART";
         case system_family::amiga500_plus:
             return "MNEMOS_AMIGA500PLUS_KICKSTART";
         case system_family::amiga600:
@@ -458,6 +468,8 @@ namespace {
     amiga_bios_env_var(mnemos::apps::player::adapters::system_family family) noexcept {
         using mnemos::apps::player::adapters::system_family;
         switch (family) {
+        case system_family::amiga1000:
+            return "MNEMOS_AMIGA1000_BIOS";
         case system_family::amiga500_plus:
             return "MNEMOS_AMIGA500PLUS_BIOS";
         case system_family::amiga600:
@@ -473,6 +485,8 @@ namespace {
     amiga_kickstart_dir_env_var(mnemos::apps::player::adapters::system_family family) noexcept {
         using mnemos::apps::player::adapters::system_family;
         switch (family) {
+        case system_family::amiga1000:
+            return "MNEMOS_AMIGA1000_KICKSTART_DIR";
         case system_family::amiga500_plus:
             return "MNEMOS_AMIGA500PLUS_KICKSTART_DIR";
         case system_family::amiga600:
@@ -488,6 +502,8 @@ namespace {
     amiga_bios_dir_env_var(mnemos::apps::player::adapters::system_family family) noexcept {
         using mnemos::apps::player::adapters::system_family;
         switch (family) {
+        case system_family::amiga1000:
+            return "MNEMOS_AMIGA1000_BIOS_DIR";
         case system_family::amiga500_plus:
             return "MNEMOS_AMIGA500PLUS_BIOS_DIR";
         case system_family::amiga600:
@@ -502,6 +518,12 @@ namespace {
     [[nodiscard]] std::span<const std::string_view> amiga_kickstart_filename_candidates(
         mnemos::apps::player::adapters::system_family family) noexcept {
         using mnemos::apps::player::adapters::system_family;
+        static constexpr std::string_view a1000[] = {
+            "Kickstart 1.0.rom",
+            "Kickstart 1.0 (NTSC) (A1000) (Commodore) (1985).rom",
+            "kick10.rom",
+            "kickstart10.rom",
+            "kickstart1.0.rom"};
         static constexpr std::string_view a500[] = {
             "Kickstart 1.3.rom", "Kickstart 1.2.rom", "kick13.rom",       "kick12.rom",
             "kickstart13.rom",   "kickstart12.rom",   "kickstart1.3.rom", "kickstart1.2.rom"};
@@ -513,6 +535,8 @@ namespace {
             "kick20.rom",        "kick205.rom",        "kick31.rom",
             "kickstart20.rom",   "kickstart2.0.rom",   "kickstart31.rom"};
         switch (family) {
+        case system_family::amiga1000:
+            return a1000;
         case system_family::amiga500_plus:
             return a500plus;
         case system_family::amiga600:
@@ -668,7 +692,7 @@ namespace mnemos::apps::player {
             }
 
             const auto video =
-                resolve_video_region(options.region_override, mnemos::video_region::pal);
+                resolve_video_region(options.region_override, amiga_default_video_region(family));
             std::fprintf(stderr, "[mnemos_player] system: %s  region: %s (%s)\n",
                          family_label(family), video == mnemos::video_region::pal ? "PAL" : "NTSC",
                          adapters::region_source_label(options.region_override));
@@ -818,11 +842,12 @@ namespace mnemos::apps::player {
         case system_family::msx:
             cart_default = mnemos::video_region::ntsc;
             break;
+        case system_family::amiga1000:
         case system_family::amiga500:
         case system_family::amiga500_plus:
         case system_family::amiga600:
         case system_family::amiga2000:
-            cart_default = mnemos::video_region::pal;
+            cart_default = amiga_default_video_region(family);
             break;
         case system_family::msx2:
             cart_default = mnemos::video_region::ntsc;

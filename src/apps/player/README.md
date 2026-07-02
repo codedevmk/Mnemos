@@ -8,7 +8,7 @@ Currently wired:
 
 - **Genesis / Mega Drive** - `.md`, `.gen`, `.smd`, `.bin`, `.68k`
 - **Sega Master System / Game Gear** - `.sms`, `.sg`, `.gg`
-- **Commodore 64, ZX Spectrum, NES, MSX, MSX2, Amiga 500/500+/600/2000**
+- **Commodore 64, ZX Spectrum, NES, MSX, MSX2, Amiga 1000/500/500+/600/2000**
 - **Sega CD, Sega 32X, Irem M72, Taito F2, Capcom CPS1/CPS2**
 
 ## Stack
@@ -44,16 +44,19 @@ Currently wired:
 
 - `--keyboard-layout <token>` selects the host physical keyboard layout for
   computer adapters that expose a keyboard port.
-- Amiga 500/500+/600/2000 accepts `us`, `de`, `qwertz`, `fr`, `azerty`,
+- Amiga 1000/500/500+/600/2000 accepts `us`, `de`, `qwertz`, `fr`, `azerty`,
   `en-gb`, `es`, `it`, `sv`, `fi`, `dk`, and `nb-no`.
   `MNEMOS_AMIGA500_KEYBOARD_LAYOUT` remains the fallback when the CLI option is
   absent.
 - Amiga Kickstart ROMs can be supplied explicitly with
-  `MNEMOS_AMIGA500_KICKSTART`, `MNEMOS_AMIGA500PLUS_KICKSTART`,
-  `MNEMOS_AMIGA600_KICKSTART`, or `MNEMOS_AMIGA2000_KICKSTART`. The player also
-  accepts matching `*_BIOS` aliases, or a shared `MNEMOS_AMIGA_BIOS_DIR` /
-  `MNEMOS_AMIGA_KICKSTART_DIR` containing model-appropriate names such as
-  `Kickstart 1.3.rom` for A500 and `Kickstart 2.0.rom` for A500+/A600.
+  `MNEMOS_AMIGA1000_KICKSTART`, `MNEMOS_AMIGA500_KICKSTART`,
+  `MNEMOS_AMIGA500PLUS_KICKSTART`, `MNEMOS_AMIGA600_KICKSTART`, or
+  `MNEMOS_AMIGA2000_KICKSTART`. The player also accepts matching `*_BIOS`
+  aliases, or a shared `MNEMOS_AMIGA_BIOS_DIR` / `MNEMOS_AMIGA_KICKSTART_DIR`
+  containing model-appropriate names such as `Kickstart 1.0.rom` for A1000,
+  `Kickstart 1.3.rom` for A500/A2000, and `Kickstart 2.0.rom` for A500+/A600.
+  A1000 currently supports resident Kickstart 1.0 ROM dumps; the real bootstrap
+  ROM plus Kickstart-disk WCS loading path is still a follow-up.
 - Amiga ADF media may be supplied directly, as `.adz` / `.adf.gz`, in direct
   ZIP or TAR archives, as `.tar.gz` / `.tgz`, in tool-backed `.7z`, `.rar`,
   `.lha`, or `.lzh` archives when the platform `tar`/libarchive command can
@@ -99,6 +102,8 @@ Currently wired:
   `-ExpectedSummary <csv-or-json>` to compare current screenshot/audio hashes
   against a prior or reference summary; add `-RequireExpectedRows` when every
   current row must have a baseline.
+- Amiga 1000 defaults to an OCS/256 KiB NTSC profile suitable for resident
+  Kickstart 1.0 testing; use `--region pal` for PAL hardware routes.
 - Amiga 2000 defaults to the base OCS/512 KiB profile. Use
   `--amiga-model ecs-1m` or `MNEMOS_AMIGA2000_MODEL=ecs-1m` for an upgraded
   ECS / 1 MiB Kickstart 2.x-style configuration. Add Fast RAM with a combined

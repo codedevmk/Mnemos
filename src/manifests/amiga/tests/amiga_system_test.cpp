@@ -408,6 +408,12 @@ TEST_CASE("amiga memory size constants share a binary size vocabulary",
 
 TEST_CASE("amiga model descriptors capture base chipset and expansion policy",
           "[manifests][amiga][models]") {
+    const auto& a1000 = amiga_model_profile(amiga_model::amiga1000);
+    CHECK(a1000.chipset == amiga_chipset::ocs);
+    CHECK(a1000.chip_ram_size == amiga_system::size_256k);
+    CHECK_FALSE(a1000.zorro2_expansion_bus);
+    CHECK_FALSE(a1000.fast_ram_configurable);
+
     const auto& a500 = amiga_model_profile(amiga_model::amiga500);
     CHECK(a500.chipset == amiga_chipset::ocs);
     CHECK(a500.chip_ram_size == amiga_system::chip_ram_size);
@@ -447,6 +453,10 @@ TEST_CASE("amiga chipset descriptors own Copper address width policy",
 
 TEST_CASE("amiga model descriptors gate configurable Fast RAM",
           "[manifests][amiga][models][memory]") {
+    const amiga_config a1000_fast{.model = amiga_model::amiga1000,
+                                  .fast_ram_size = amiga_system::fast_ram_size_2m};
+    CHECK(amiga_fast_ram_size_for_config(a1000_fast, amiga_system::fast_ram_max_size) == 0U);
+
     const amiga_config a500_fast{.model = amiga_model::amiga500,
                                  .fast_ram_size = amiga_system::fast_ram_size_2m};
     CHECK(amiga_fast_ram_size_for_config(a500_fast, amiga_system::fast_ram_max_size) == 0U);
@@ -1248,6 +1258,35 @@ TEST_CASE("amiga500plus ECS high-resolution DDF 3c-d4 advances by forty words",
     CHECK(frame.pixels[agnus::framebuffer_stride] == 0x00FF0000U);
 }
 
+TEST_CASE("amiga500plus routes ECS DIWHIGH custom writes into Agnus display clipping",
+          "[manifests][amiga500plus][video]") {
+    const amiga_config config{.model = amiga_model::amiga500_plus};
+    auto sys = assemble_amiga(tiny_kickstart(), config);
+    REQUIRE(sys != nullptr);
+
+    write_chip_word(*sys, 41U * 2U, 0x8000U);
+    sys->write_custom_word(0x180U, 0x0000U); // COLOR00 = black backdrop.
+    sys->write_custom_word(0x182U, 0x0F00U); // COLOR01 = red foreground.
+    sys->write_custom_word(0x100U, 0x9000U); // HIRES | BPU = 1.
+    sys->write_custom_word(0x08EU, 0x2C78U);
+    sys->write_custom_word(0x090U, 0x010AU);
+    sys->write_custom_word(0x1E4U, 0x0100U);
+    sys->write_custom_word(0x092U, 0x0030U);
+    sys->write_custom_word(0x094U, 0x00D8U);
+    sys->write_custom_word(0x0E0U, 0x0000U); // BPL1PTH.
+    sys->write_custom_word(0x0E2U, 0x0000U); // BPL1PTL.
+    sys->write_custom_word(0x096U,
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                      agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    sys->agnus.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) *
+                    agnus::scanlines_pal);
+    const auto frame = sys->agnus.framebuffer();
+
+    CHECK(frame.pixels[607U] == 0x00000000U);
+    CHECK(frame.pixels[608U] == 0x00FF0000U);
+}
+
 TEST_CASE("amiga500 DMACON routes audio DMA to Paula", "[manifests][amiga500]") {
     auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
@@ -1686,6 +1725,51 @@ TEST_CASE("amiga500 WORDSYNC disk DMA finds DSKSYNC at bit granularity",
     CHECK(sys->chip_ram[0x0641U] == 0xBBU);
     CHECK(sys->chip_ram[0x0642U] == 0xCCU);
     CHECK(sys->chip_ram[0x0643U] == 0xDDU);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
+}
+
+TEST_CASE("amiga500 WORDSYNC disk DMA can start from a latched DSKSYN",
+          "[manifests][amiga500][disk]") {
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+    REQUIRE(sys->mount_floppy(tiny_adf()));
+    select_df0(*sys);
+
+    const std::uint32_t lines_per_revolution = sys->floppy_index_lines_per_revolution();
+    REQUIRE(lines_per_revolution > 8U);
+    auto& drive = sys->floppy_drives[0];
+    drive.track_stream.assign(lines_per_revolution, 0x00U);
+    drive.track_stream[0] = 0x44U;
+    drive.track_stream[1] = 0x89U;
+    drive.track_stream[2] = 0xAAU;
+    drive.track_stream[3] = 0xBBU;
+    drive.track_stream[4] = 0xCCU;
+    drive.track_stream[5] = 0xDDU;
+    reset_floppy_stream_phase(drive);
+
+    sys->write_custom_word(0x020U, 0x0000U);
+    sys->write_custom_word(0x022U, 0x0660U);
+    sys->write_custom_word(0x07EU, 0x4489U);
+    sys->write_custom_word(0x09EU, static_cast<std::uint16_t>(amiga_system::setclr_bit | 0x0400U));
+    sys->write_custom_word(0x096U,
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                      agnus::dmacon_dmaen | agnus::dmacon_dsken));
+
+    run_scanlines(*sys, 2U);
+    REQUIRE(sys->disk_sync_match);
+    REQUIRE((sys->read_custom_word(0x01EU) & amiga_system::int_dsksyn) != 0U);
+
+    constexpr std::uint16_t words_to_read = 2U;
+    const std::uint16_t dsklen = static_cast<std::uint16_t>(0x8000U | words_to_read);
+    sys->write_custom_word(0x024U, dsklen);
+    sys->write_custom_word(0x024U, dsklen);
+    CHECK_FALSE(sys->disk_wordsync_waiting);
+
+    run_scanlines(*sys, 4U);
+    CHECK(sys->chip_ram[0x0660U] == 0xAAU);
+    CHECK(sys->chip_ram[0x0661U] == 0xBBU);
+    CHECK(sys->chip_ram[0x0662U] == 0xCCU);
+    CHECK(sys->chip_ram[0x0663U] == 0xDDU);
     CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
 }
 

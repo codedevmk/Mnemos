@@ -113,7 +113,7 @@ TEST_CASE("agnus exposes palette and renderer sample debug layers", "[agnus][deb
     auto* registers = chip.introspection().registers();
     REQUIRE(registers != nullptr);
     const auto regs = registers->registers();
-    CHECK(regs.size() == 58U);
+    CHECK(regs.size() == 59U);
     const auto find_reg = [&](std::string_view name) {
         return std::find_if(regs.begin(), regs.end(), [&](const auto& reg) {
             return reg.name == name;
@@ -430,15 +430,78 @@ TEST_CASE("agnus high-resolution DDF 3c-d4 advances by forty words per line", "[
     CHECK(frame.pixels[agnus::framebuffer_stride] == 0x00FF0000U);
 }
 
-TEST_CASE("agnus quantizes high-resolution DDF 38-cc to a forty-word pitch", "[agnus]") {
+TEST_CASE("agnus preserves exact high-resolution DDF 40-d0 as a thirty-eight-word pitch",
+          "[agnus]") {
     agnus chip;
     std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
     const auto palette = make_palette(1U, 0x0F00U);
 
-    // In hires mode DDFSTRT/DDFSTOP are quantized to positions ending in 4/C.
-    // DDFSTRT $38 therefore rounds down to $34. The resulting pitch is 40
-    // words; using the raw $38 value would advance by only 39 and shear text
-    // screens that use BPLxMOD=0.
+    // Kickstart 2.x's insert-disk prompt uses this high-resolution fetch
+    // window with negative BPLxMOD. Rounding both ends out to $3c-$d4 makes
+    // the line pitch too wide and shears the prompt.
+    write_word(chip_ram, 0U, 0x8000U);
+    write_word(chip_ram, 38U * 2U, 0x8000U);
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    chip.set_bplcon0(0x9000U);
+    chip.set_diwstrt(0x2C81U);
+    chip.set_diwstop(0xF4C1U);
+    chip.set_ddfstrt(0x0040U);
+    chip.set_ddfstop(0x00D0U);
+    chip.set_bitplane_pointer(0U, 0U);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    chip.tick(frame_ticks);
+    const auto frame = chip.framebuffer();
+
+    CHECK(frame.pixels[16U] == 0x00FF0000U);
+    CHECK(frame.pixels[agnus::framebuffer_stride + 16U] == 0x00FF0000U);
+    constexpr std::uint32_t visible_diw_lines = 0xF4U - agnus::display_line_origin;
+    CHECK(chip.bitplane_pointer(0U) == visible_diw_lines * 38U * 2U);
+}
+
+TEST_CASE("agnus high-resolution DDF stop follows the start phase for 34-d0 windows",
+          "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    const auto palette = make_palette(1U, 0x0F00U);
+
+    // Romantic Encounters' A500 copper list uses DDFSTRT $34 / DDFSTOP $d0
+    // with zero modulo and plane bases spaced for an 84-byte row pitch. The
+    // stop phase therefore has to advance to the next $x4 slot; preserving raw
+    // $d0 would fetch 41 words and shear each line by one word.
+    write_word(chip_ram, 2U * 2U, 0x8000U);
+    write_word(chip_ram, (42U + 2U) * 2U, 0x8000U);
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    chip.set_bplcon0(0x9000U);
+    chip.set_diwstrt(0x2C81U);
+    chip.set_diwstop(0xF4C1U);
+    chip.set_ddfstrt(0x0034U);
+    chip.set_ddfstop(0x00D0U);
+    chip.set_bitplane_pointer(0U, 0U);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    chip.tick(frame_ticks);
+    const auto frame = chip.framebuffer();
+
+    CHECK(frame.pixels[0U] == 0x00FF0000U);
+    CHECK(frame.pixels[agnus::framebuffer_stride] == 0x00FF0000U);
+    constexpr std::uint32_t visible_diw_lines = 0xF4U - agnus::display_line_origin;
+    CHECK(chip.bitplane_pointer(0U) == visible_diw_lines * 42U * 2U);
+}
+
+TEST_CASE("agnus quantizes off-phase high-resolution DDF start to a forty-word pitch", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    const auto palette = make_palette(1U, 0x0F00U);
+
+    // In hires mode off-phase DDFSTRT/DDFSTOP values are quantized to
+    // positions ending in 4/C. DDFSTRT $3a therefore rounds down to $34. The
+    // resulting pitch is 40 words; using the raw $3a value would advance by
+    // only 38 and shear text screens that use BPLxMOD=0.
     write_word(chip_ram, 2U * 2U, 0x8000U);
     write_word(chip_ram, (40U + 2U) * 2U, 0x8000U);
     chip.attach_chip_ram(chip_ram);
@@ -446,7 +509,7 @@ TEST_CASE("agnus quantizes high-resolution DDF 38-cc to a forty-word pitch", "[a
     chip.set_bplcon0(0x9000U);
     chip.set_diwstrt(0x2C81U);
     chip.set_diwstop(0xF4C1U);
-    chip.set_ddfstrt(0x0038U);
+    chip.set_ddfstrt(0x003AU);
     chip.set_ddfstop(0x00CCU);
     chip.set_bitplane_pointer(0U, 0U);
     chip.write_dmacon(
@@ -520,6 +583,56 @@ TEST_CASE("agnus clips high-resolution fetch guard words to the horizontal displ
     CHECK(frame.pixels[40U] == 0x00FF0000U);
     CHECK(frame.pixels[47U] == 0x00FF0000U);
     CHECK(frame.pixels[48U] == 0x00000000U);
+    CHECK(frame.pixels[608U] == 0x00000000U);
+}
+
+TEST_CASE("agnus ECS DIWHIGH wraps high-resolution horizontal display windows", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    const auto palette = make_palette(1U, 0x0F00U);
+
+    write_word(chip_ram, 41U * 2U, 0x8000U); // DDFSTRT $30 places this bit at x=608.
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    chip.set_ecs_display_fetch_timing(true);
+    chip.set_bplcon0(0x9000U);
+    chip.set_diwstrt(0x2C78U);
+    chip.set_diwstop(0x010AU);
+    chip.set_diwhigh(0x0100U);
+    chip.set_ddfstrt(0x0030U);
+    chip.set_ddfstop(0x00D8U);
+    chip.set_bitplane_pointer(0U, 0U);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    chip.tick(frame_ticks);
+    const auto frame = chip.framebuffer();
+
+    CHECK(frame.pixels[607U] == 0x00000000U);
+    CHECK(frame.pixels[608U] == 0x00FF0000U);
+}
+
+TEST_CASE("agnus OCS ignores ECS DIWHIGH display-window extension", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    const auto palette = make_palette(1U, 0x0F00U);
+
+    write_word(chip_ram, 41U * 2U, 0x8000U);
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    chip.set_bplcon0(0x9000U);
+    chip.set_diwstrt(0x2C78U);
+    chip.set_diwstop(0x010AU);
+    chip.set_diwhigh(0x0100U);
+    chip.set_ddfstrt(0x0030U);
+    chip.set_ddfstop(0x00D8U);
+    chip.set_bitplane_pointer(0U, 0U);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    chip.tick(frame_ticks);
+    const auto frame = chip.framebuffer();
+
     CHECK(frame.pixels[608U] == 0x00000000U);
 }
 

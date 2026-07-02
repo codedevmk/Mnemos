@@ -296,6 +296,8 @@ namespace mnemos::apps::player::adapters::amiga {
         [[nodiscard]] const char* model_family_id(manifests::amiga::amiga_model model) noexcept {
             using model_t = manifests::amiga::amiga_model;
             switch (model) {
+            case model_t::amiga1000:
+                return "amiga1000";
             case model_t::amiga500_plus:
                 return "amiga500plus";
             case model_t::amiga600:
@@ -312,6 +314,8 @@ namespace mnemos::apps::player::adapters::amiga {
         [[nodiscard]] const char* model_display_name(manifests::amiga::amiga_model model) noexcept {
             using model_t = manifests::amiga::amiga_model;
             switch (model) {
+            case model_t::amiga1000:
+                return "Amiga 1000";
             case model_t::amiga500_plus:
                 return "Amiga 500+";
             case model_t::amiga600:
@@ -329,6 +333,8 @@ namespace mnemos::apps::player::adapters::amiga {
         model_configuration_label(manifests::amiga::amiga_model model) noexcept {
             using model_t = manifests::amiga::amiga_model;
             switch (model) {
+            case model_t::amiga1000:
+                return "OCS / 256 KiB base";
             case model_t::amiga2000:
                 return "OCS base";
             case model_t::amiga2000_ecs_1m:
@@ -589,6 +595,18 @@ namespace mnemos::apps::player::adapters::amiga {
             return trace_env != nullptr && trace_env[0] != '\0' && trace_env[0] != '0';
         }
 
+        [[nodiscard]] bool trace_cpu_exceptions() noexcept {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+            const char* trace_env = std::getenv("MNEMOS_AMIGA500_CPU_EXCEPTION_TRACE");
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+            return trace_env != nullptr && trace_env[0] != '\0' && trace_env[0] != '0';
+        }
+
         [[nodiscard]] bool trace_ram_reads() noexcept {
 #if defined(_MSC_VER)
 #pragma warning(push)
@@ -837,7 +855,7 @@ namespace mnemos::apps::player::adapters::amiga {
             const std::uint32_t normalized = reg & 0x01FEU;
             return (normalized >= 0x08EU && normalized <= 0x094U) ||
                    (normalized >= 0x0E0U && normalized < 0x0F8U) ||
-                   (normalized >= 0x100U && normalized <= 0x10AU);
+                   (normalized >= 0x100U && normalized <= 0x10AU) || normalized == 0x1E4U;
         }
 
         [[nodiscard]] const char* sprite_register_name(std::uint32_t reg) noexcept {
@@ -1476,14 +1494,16 @@ namespace mnemos::apps::player::adapters::amiga {
                     std::fprintf(stderr,
                                  "[amiga-cpu-noeffect] pc=%06X op=%04X beam=%03u:%03u frame=%llu "
                                  "sr=%04X d0=%08X d1=%08X d2=%08X d3=%08X "
+                                 "d4=%08X d5=%08X d6=%08X d7=%08X "
                                  "a0=%08X a1=%08X a2=%08X a3=%08X "
                                  "a4=%08X a5=%08X a6=%08X a7=%08X\n",
                                  pc & 0x00FFFFFFU, opcode, sys_->agnus.beam_line(),
                                  sys_->agnus.beam_clock(),
                                  static_cast<unsigned long long>(sys_->frame_index), regs.sr,
-                                 regs.d[0], regs.d[1], regs.d[2], regs.d[3], regs.a[0],
-                                 regs.a[1], regs.a[2], regs.a[3], regs.a[4], regs.a[5],
-                                 regs.a[6], regs.a[7]);
+                                 regs.d[0], regs.d[1], regs.d[2], regs.d[3], regs.d[4],
+                                 regs.d[5], regs.d[6], regs.d[7], regs.a[0], regs.a[1],
+                                 regs.a[2], regs.a[3], regs.a[4], regs.a[5], regs.a[6],
+                                 regs.a[7]);
                 });
         }
         if (trace_cpu_unhandled_opcodes()) {
@@ -1493,14 +1513,36 @@ namespace mnemos::apps::player::adapters::amiga {
                     std::fprintf(stderr,
                                  "[amiga-cpu-unhandled] pc=%06X op=%04X beam=%03u:%03u "
                                  "frame=%llu sr=%04X d0=%08X d1=%08X d2=%08X d3=%08X "
+                                 "d4=%08X d5=%08X d6=%08X d7=%08X "
                                  "a0=%08X a1=%08X a2=%08X a3=%08X "
                                  "a4=%08X a5=%08X a6=%08X a7=%08X\n",
                                  pc & 0x00FFFFFFU, opcode, sys_->agnus.beam_line(),
                                  sys_->agnus.beam_clock(),
                                  static_cast<unsigned long long>(sys_->frame_index), regs.sr,
-                                 regs.d[0], regs.d[1], regs.d[2], regs.d[3], regs.a[0],
-                                 regs.a[1], regs.a[2], regs.a[3], regs.a[4], regs.a[5],
-                                 regs.a[6], regs.a[7]);
+                                 regs.d[0], regs.d[1], regs.d[2], regs.d[3], regs.d[4],
+                                 regs.d[5], regs.d[6], regs.d[7], regs.a[0], regs.a[1],
+                                 regs.a[2], regs.a[3], regs.a[4], regs.a[5], regs.a[6],
+                                 regs.a[7]);
+                });
+        }
+        if (trace_cpu_exceptions()) {
+            sys_->cpu.diagnostics().set_exception_callback(
+                [this](int vector, std::uint32_t stacked_pc, std::uint32_t handler_pc,
+                       std::uint16_t opcode, std::uint16_t sr) {
+                    const auto regs = sys_->cpu.cpu_registers();
+                    std::fprintf(stderr,
+                                 "[amiga-cpu-exception] vector=%02d stacked_pc=%06X "
+                                 "handler=%06X op=%04X old_sr=%04X beam=%03u:%03u "
+                                 "frame=%llu d0=%08X d1=%08X d2=%08X d3=%08X "
+                                 "d4=%08X d5=%08X d6=%08X d7=%08X "
+                                 "a0=%08X a1=%08X a2=%08X a3=%08X "
+                                 "a4=%08X a5=%08X a6=%08X a7=%08X\n",
+                                 vector, stacked_pc & 0x00FFFFFFU, handler_pc & 0x00FFFFFFU,
+                                 opcode, sr, sys_->agnus.beam_line(), sys_->agnus.beam_clock(),
+                                 static_cast<unsigned long long>(sys_->frame_index), regs.d[0],
+                                 regs.d[1], regs.d[2], regs.d[3], regs.d[4], regs.d[5],
+                                 regs.d[6], regs.d[7], regs.a[0], regs.a[1], regs.a[2],
+                                 regs.a[3], regs.a[4], regs.a[5], regs.a[6], regs.a[7]);
                 });
         }
         if (!cpu_trace_ranges.empty()) {
@@ -1510,15 +1552,19 @@ namespace mnemos::apps::player::adapters::amiga {
                 }
                 const auto regs = sys_->cpu.cpu_registers();
                 std::fprintf(stderr,
-                             "[amiga-cpu] pc=%06X op=%04X beam=%03u:%03u frame=%llu "
+                             "[amiga-cpu] pc=%06X op=%04X ext=%04X,%04X "
+                             "beam=%03u:%03u frame=%llu "
                              "sr=%04X d0=%08X d1=%08X d2=%08X d3=%08X "
+                             "d4=%08X d5=%08X d6=%08X d7=%08X "
                              "a0=%08X a1=%08X a2=%08X a3=%08X "
                              "a4=%08X a5=%08X a6=%08X a7=%08X\n",
-                             pc & 0x00FFFFFFU, trace_fetch_word(*sys_, pc), sys_->agnus.beam_line(),
-                             sys_->agnus.beam_clock(),
+                             pc & 0x00FFFFFFU, trace_fetch_word(*sys_, pc),
+                             trace_fetch_word(*sys_, pc + 2U), trace_fetch_word(*sys_, pc + 4U),
+                             sys_->agnus.beam_line(), sys_->agnus.beam_clock(),
                              static_cast<unsigned long long>(sys_->frame_index), regs.sr, regs.d[0],
-                             regs.d[1], regs.d[2], regs.d[3], regs.a[0], regs.a[1], regs.a[2],
-                             regs.a[3], regs.a[4], regs.a[5], regs.a[6], regs.a[7]);
+                             regs.d[1], regs.d[2], regs.d[3], regs.d[4], regs.d[5], regs.d[6],
+                             regs.d[7], regs.a[0], regs.a[1], regs.a[2], regs.a[3], regs.a[4],
+                             regs.a[5], regs.a[6], regs.a[7]);
             });
         }
         if (trace_enabled) {
@@ -1562,12 +1608,15 @@ namespace mnemos::apps::player::adapters::amiga {
                     const auto regs = sys_->cpu.cpu_registers();
                     std::fprintf(stderr,
                                  "[amiga-ram] pc=%06X beam=%03u:%03u %c %06X %02X "
-                                 "d0=%08X d1=%08X a0=%08X a1=%08X "
-                                 "a3=%08X a5=%08X a6=%08X\n",
+                                 "d0=%08X d1=%08X d2=%08X d3=%08X "
+                                 "d4=%08X d5=%08X d6=%08X d7=%08X "
+                                 "a0=%08X a1=%08X a3=%08X a5=%08X a6=%08X\n",
                                  sys_->cpu.current_instruction_addr(), sys_->agnus.beam_line(),
                                  sys_->agnus.beam_clock(), ev.write ? 'W' : 'R',
                                  ev.address & 0x00FFFFFFU, ev.value, regs.d[0], regs.d[1],
-                                 regs.a[0], regs.a[1], regs.a[3], regs.a[5], regs.a[6]);
+                                 regs.d[2], regs.d[3], regs.d[4], regs.d[5], regs.d[6],
+                                 regs.d[7], regs.a[0], regs.a[1], regs.a[3], regs.a[5],
+                                 regs.a[6]);
                 }
                 if (!trace_enabled || !traced_amiga_register(ev.address, ev.write)) {
                     return;
@@ -2066,6 +2115,7 @@ namespace mnemos::apps::player::adapters::amiga {
         }
 
         const auto register_amiga = [] {
+            register_amiga_family("amiga1000", manifests::amiga::amiga_model::amiga1000);
             register_amiga_family("amiga500", manifests::amiga::amiga_model::amiga500);
             register_amiga_family("amiga500plus", manifests::amiga::amiga_model::amiga500_plus);
             register_amiga_family("amiga600", manifests::amiga::amiga_model::amiga600);

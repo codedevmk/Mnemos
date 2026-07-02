@@ -31,6 +31,7 @@ namespace mnemos::chips::video {
         constexpr std::uint16_t reg_bpl2mod = 0x10AU;
         constexpr std::uint16_t reg_diwstrt = 0x08EU;
         constexpr std::uint16_t reg_diwstop = 0x090U;
+        constexpr std::uint16_t reg_diwhigh = 0x1E4U;
         constexpr std::uint16_t reg_ddfstrt = 0x092U;
         constexpr std::uint16_t reg_ddfstop = 0x094U;
         constexpr std::uint16_t reg_clxcon = 0x098U;
@@ -132,6 +133,9 @@ namespace mnemos::chips::video {
             if (!hires) {
                 return raw & ~0x07U;
             }
+            if ((raw & 0x03U) == 0U) {
+                return raw;
+            }
             if ((raw & 0x07U) >= 0x04U) {
                 return (raw & ~0x07U) | 0x04U;
             }
@@ -139,15 +143,65 @@ namespace mnemos::chips::video {
         }
 
         [[nodiscard]] std::uint32_t effective_ddf_stop(std::uint16_t value,
-                                                       bool hires) noexcept {
+                                                       bool hires,
+                                                       std::uint32_t ddf_start) noexcept {
             const std::uint32_t raw = value & 0xFFU;
             if (!hires) {
                 return (raw + 0x07U) & ~0x07U;
+            }
+            if ((raw & 0x03U) == 0U) {
+                if ((raw & 0x04U) == (ddf_start & 0x04U)) {
+                    return raw;
+                }
+                return (raw + 0x04U) & 0xFFU;
             }
             if ((raw & 0x07U) <= 0x04U) {
                 return (raw & ~0x07U) | 0x04U;
             }
             return ((raw + 0x08U) & ~0x07U) | 0x04U;
+        }
+
+        struct display_window_bounds final {
+            std::uint32_t v_start{};
+            std::uint32_t v_stop{};
+            std::uint32_t h_start{};
+            std::uint32_t h_stop{};
+        };
+
+        [[nodiscard]] display_window_bounds decode_display_window(std::uint16_t diwstrt,
+                                                                  std::uint16_t diwstop,
+                                                                  std::uint16_t diwhigh,
+                                                                  bool diwhigh_written,
+                                                                  bool ecs) noexcept {
+            std::uint32_t v_start = (diwstrt >> 8U) & 0xFFU;
+            std::uint32_t v_stop = (diwstop >> 8U) & 0xFFU;
+            std::uint32_t h_start = diwstrt & 0x00FFU;
+            std::uint32_t h_stop = diwstop & 0x00FFU;
+
+            if (ecs && diwhigh_written) {
+                v_start |= (diwhigh & 0x0007U) << 8U;
+                v_stop |= ((diwhigh >> 8U) & 0x0007U) << 8U;
+                h_start |= ((diwhigh >> 5U) & 1U) << 8U;
+                h_stop |= ((diwhigh >> 13U) & 1U) << 8U;
+            } else {
+                v_stop |= ((v_stop & 0x80U) == 0U) ? 0x100U : 0U;
+                h_stop |= 0x100U;
+            }
+
+            return {
+                .v_start = v_start,
+                .v_stop = v_stop,
+                .h_start = h_start,
+                .h_stop = h_stop,
+            };
+        }
+
+        [[nodiscard]] bool horizontal_display_contains(std::uint32_t raw_x,
+                                                       const display_window_bounds& window) noexcept {
+            if (window.h_start <= window.h_stop) {
+                return raw_x >= window.h_start && raw_x < window.h_stop;
+            }
+            return raw_x >= window.h_start || raw_x < window.h_stop;
         }
 
         [[nodiscard]] constexpr std::uint32_t vblank_end_line(bool pal) noexcept {
@@ -252,6 +306,8 @@ namespace mnemos::chips::video {
         clxdat_ = 0U;
         diwstrt_ = 0U;
         diwstop_ = 0U;
+        diwhigh_ = 0U;
+        diwhigh_written_ = false;
         ddfstrt_ = 0U;
         ddfstop_ = 0U;
         sprite_ = {};
@@ -278,6 +334,14 @@ namespace mnemos::chips::video {
         if (scanline_ >= max_line) {
             scanline_ = max_line - 1U;
         }
+    }
+
+    void agnus::set_diwhigh(std::uint16_t value) noexcept {
+        if (!ecs_display_fetch_timing_) {
+            return;
+        }
+        diwhigh_ = static_cast<std::uint16_t>(value & 0x2727U);
+        diwhigh_written_ = true;
     }
 
     void agnus::tick(std::uint64_t cycles) {
@@ -440,17 +504,16 @@ namespace mnemos::chips::video {
             return {};
         }
 
-        const std::uint32_t diw_v_start = (diwstrt_ >> 8U) & 0xFFU;
-        const std::uint32_t diw_v_stop_raw = (diwstop_ >> 8U) & 0xFFU;
-        const std::uint32_t diw_v_stop =
-            diw_v_stop_raw | (((diw_v_stop_raw & 0x80U) == 0U) ? 0x100U : 0U);
-        if (beam_line < diw_v_start || beam_line >= diw_v_stop) {
+        const display_window_bounds display_window =
+            decode_display_window(diwstrt_, diwstop_, diwhigh_, diwhigh_written_,
+                                  ecs_display_fetch_timing_);
+        if (beam_line < display_window.v_start || beam_line >= display_window.v_stop) {
             return {};
         }
 
         const bool hires = hires_enabled();
         const std::uint32_t ddf_start = effective_ddf_start(ddfstrt_, hires);
-        const std::uint32_t ddf_stop = effective_ddf_stop(ddfstop_, hires);
+        const std::uint32_t ddf_stop = effective_ddf_stop(ddfstop_, hires, ddf_start);
         if (ddf_start >= color_clocks_per_line || ddf_stop < ddf_start) {
             return {};
         }
@@ -973,10 +1036,13 @@ namespace mnemos::chips::video {
             modulo_even_ = static_cast<std::int16_t>(value);
             return;
         case reg_diwstrt:
-            diwstrt_ = value;
+            set_diwstrt(value);
             return;
         case reg_diwstop:
-            diwstop_ = value;
+            set_diwstop(value);
+            return;
+        case reg_diwhigh:
+            set_diwhigh(value);
             return;
         case reg_ddfstrt:
             ddfstrt_ = value;
@@ -1213,34 +1279,28 @@ namespace mnemos::chips::video {
         const bool dual_playfield = (bplcon0_ & 0x0400U) != 0U && !ham;
         const bool ehb = !ham && !dual_playfield && planes == 6U;
 
-        // Display window: DIWSTRT/DIWSTOP give the visible vertical band; the
-        // horizontal start positions the first fetched word. The data-fetch
-        // window (DDFSTRT/DDFSTOP) bounds the per-line word count: low-res
-        // fetches at 8-clock granularity, high-res at 4-clock granularity.
-        const std::uint32_t diw_v_start = (diwstrt_ >> 8U) & 0xFFU;
-        const std::uint32_t diw_v_stop_raw = (diwstop_ >> 8U) & 0xFFU;
-        // DIWSTOP V bit 8 is the complement of bit 7 (so stops >= 0x100 are
-        // expressible); reconstruct the 9-bit stop.
-        const std::uint32_t diw_v_stop =
-            diw_v_stop_raw | (((diw_v_stop_raw & 0x80U) == 0U) ? 0x100U : 0U);
-
+        // Display window: DIWSTRT/DIWSTOP give the visible vertical band and
+        // horizontal mask. ECS DIWHIGH replaces the old implicit high bits and
+        // can express horizontal windows that wrap around the end of a line.
+        const display_window_bounds display_window =
+            decode_display_window(diwstrt_, diwstop_, diwhigh_, diwhigh_written_,
+                                  ecs_display_fetch_timing_);
         const bool hires = hires_enabled();
         const std::uint32_t ddf_start = effective_ddf_start(ddfstrt_, hires);
-        const std::uint32_t ddf_stop = effective_ddf_stop(ddfstop_, hires);
+        const std::uint32_t ddf_stop = effective_ddf_stop(ddfstop_, hires, ddf_start);
         const std::uint32_t pixel_scale = hires ? 2U : 1U;
         constexpr std::uint32_t diw_h_origin = 0x81U;
-        const std::int32_t display_start_x =
-            (static_cast<std::int32_t>(diwstrt_ & 0x00FFU) -
-             static_cast<std::int32_t>(diw_h_origin)) *
-            static_cast<std::int32_t>(pixel_scale);
-        const std::int32_t display_stop_x =
-            (static_cast<std::int32_t>((diwstop_ & 0x00FFU) + 0x100U) -
-             static_cast<std::int32_t>(diw_h_origin)) *
-            static_cast<std::int32_t>(pixel_scale);
-        const std::uint32_t display_left = static_cast<std::uint32_t>(
-            std::clamp(display_start_x, 0, static_cast<std::int32_t>(width)));
-        const std::uint32_t display_right = static_cast<std::uint32_t>(
-            std::clamp(display_stop_x, 0, static_cast<std::int32_t>(width)));
+        const auto display_contains_x = [&](std::uint32_t x) noexcept {
+            const std::uint32_t raw_x = diw_h_origin + (x / pixel_scale);
+            return horizontal_display_contains(raw_x, display_window);
+        };
+        bool any_display_x = false;
+        for (std::uint32_t x = 0; x < width; ++x) {
+            if (display_contains_x(x)) {
+                any_display_x = true;
+                break;
+            }
+        }
         std::uint32_t words_per_line = 0U;
         if (ddf_stop >= ddf_start) {
             const std::uint32_t clocks_per_word = hires ? 4U : 8U;
@@ -1248,8 +1308,8 @@ namespace mnemos::chips::video {
             words_per_line = ((ddf_stop - ddf_start) / clocks_per_word) + terminal_words;
         }
 
-        if (beam_line < diw_v_start || beam_line >= diw_v_stop ||
-            display_left >= display_right) {
+        if (beam_line < display_window.v_start || beam_line >= display_window.v_stop ||
+            !any_display_x) {
             return;
         }
 
@@ -1280,7 +1340,10 @@ namespace mnemos::chips::video {
                 }
             }
         }
-        for (std::uint32_t x = display_left; x < display_right; ++x) {
+        for (std::uint32_t x = 0; x < width; ++x) {
+            if (!display_contains_x(x)) {
+                continue;
+            }
             const std::size_t out = static_cast<std::size_t>(line) * stride + x;
             const std::uint32_t index = line_sample[x];
             bitplane_sample_[out] = static_cast<std::uint8_t>(index & 0x3FU);
@@ -1865,6 +1928,8 @@ namespace mnemos::chips::video {
         writer.u16(clxdat_);
         writer.u16(diwstrt_);
         writer.u16(diwstop_);
+        writer.u16(diwhigh_);
+        writer.boolean(diwhigh_written_);
         writer.u16(ddfstrt_);
         writer.u16(ddfstop_);
         writer.u32(cop1lc_);
@@ -1909,6 +1974,8 @@ namespace mnemos::chips::video {
         clxdat_ = reader.u16();
         diwstrt_ = reader.u16();
         diwstop_ = reader.u16();
+        diwhigh_ = reader.u16();
+        diwhigh_written_ = reader.boolean();
         ddfstrt_ = reader.u16();
         ddfstop_ = reader.u16();
         cop1lc_ = reader.u32() & copper_address_mask_;
@@ -1959,6 +2026,7 @@ namespace mnemos::chips::video {
         push("BPL2MOD", static_cast<std::uint16_t>(a.modulo_even_), 16U, signed_integer);
         push("DIWSTRT", a.diwstrt_, 16U, unsigned_integer);
         push("DIWSTOP", a.diwstop_, 16U, unsigned_integer);
+        push("DIWHIGH", a.diwhigh_, 16U, unsigned_integer);
         push("DDFSTRT", a.ddfstrt_, 16U, unsigned_integer);
         push("DDFSTOP", a.ddfstop_, 16U, unsigned_integer);
         push("COP1LC", a.cop1lc_, 24U, unsigned_integer);

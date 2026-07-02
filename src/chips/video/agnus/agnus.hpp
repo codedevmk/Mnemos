@@ -214,8 +214,15 @@ namespace mnemos::chips::video {
         void write_clxcon(std::uint16_t value) noexcept { clxcon_ = value; }
         [[nodiscard]] std::uint16_t read_clxdat() noexcept;
         // Display window start/stop, raw register words (V in 8:8, H low).
-        void set_diwstrt(std::uint16_t value) noexcept { diwstrt_ = value; }
-        void set_diwstop(std::uint16_t value) noexcept { diwstop_ = value; }
+        void set_diwstrt(std::uint16_t value) noexcept {
+            diwstrt_ = value;
+            diwhigh_written_ = false;
+        }
+        void set_diwstop(std::uint16_t value) noexcept {
+            diwstop_ = value;
+            diwhigh_written_ = false;
+        }
+        void set_diwhigh(std::uint16_t value) noexcept;
         // Data-fetch window start/stop, in color clocks (bits 7:0).
         void set_ddfstrt(std::uint16_t value) noexcept { ddfstrt_ = value; }
         void set_ddfstop(std::uint16_t value) noexcept { ddfstop_ = value; }
@@ -332,7 +339,7 @@ namespace mnemos::chips::video {
 
               private:
                 agnus* owner_;
-                std::array<register_descriptor, 58> registers_{};
+                std::array<register_descriptor, 59> registers_{};
             };
 
             class sample_layer final : public instrumentation::debug_layer {
@@ -467,6 +474,8 @@ namespace mnemos::chips::video {
         std::uint16_t clxdat_{};
         std::uint16_t diwstrt_{};
         std::uint16_t diwstop_{};
+        std::uint16_t diwhigh_{};
+        bool diwhigh_written_{};
         std::uint16_t ddfstrt_{};
         std::uint16_t ddfstop_{};
 

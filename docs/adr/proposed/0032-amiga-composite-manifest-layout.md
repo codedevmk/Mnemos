@@ -17,9 +17,9 @@ proposed: 2026-06-30
 
 The initial Amiga integration landed under `src/manifests/amiga500/` because
 the Amiga 500 was the first boot target. The same implementation now assembles
-Amiga 500, Amiga 500+, Amiga 600, and Amiga 2000 profiles. Keeping shared OCS,
-ECS, floppy, keyboard, and Zorro II work under an `amiga500` directory makes
-Amiga 2000 changes appear misplaced and invites duplicate machine
+Amiga 1000, Amiga 500, Amiga 500+, Amiga 600, and Amiga 2000 profiles. Keeping
+shared OCS, ECS, floppy, keyboard, and Zorro II work under an `amiga500`
+directory makes non-A500 changes appear misplaced and invites duplicate machine
 implementations.
 
 ADR-0009 currently prefers flat modules with public headers at the module root.

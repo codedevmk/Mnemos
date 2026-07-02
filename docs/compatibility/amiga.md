@@ -9,14 +9,15 @@ software + model + Kickstart route has current-build evidence.
 | Status | Meaning |
 | --- | --- |
 | `TBD` | Not yet verified for this model/Kickstart route. |
+| `N/A` | Not applicable to this model route; the firmware/media combination is outside the hardware route Mnemos intends to support, rather than merely untested. |
 | `Operational (smoke)` | Current build loads the media, runs the requested smoke window, renders a nonblack frame, and meets the configured headless speed floor. |
 | `Operational (disk smoke)` | `Operational (smoke)` plus the Amiga board register dump shows disk DMA pointer programming and the output is not a known Kickstart insert-disk prompt. |
 | `Operational (visual smoke)` | `Operational (disk smoke)` plus a manual screenshot spot-check showed a plausible title, loader, application, or Workbench screen for that media. |
 | `Operational (A/V smoke)` | `Operational (smoke)` plus rendered-audio export produced nonzero output under the documented probe. |
 | `Operational (BIOS smoke)` | Current build boots far enough with this Kickstart route to support the listed smoke-proven ADF paths. |
-| `Prompt only` | Current build reaches a known Kickstart insert-disk prompt, so the title is not proven operational on that route. |
-| `Requirement/error prompt` | Current build reaches title-owned or Workbench-owned UI, but that UI reports a missing requirement or error before useful execution. |
-| `Visual defect` | Current build passes mechanical smoke gates but manual screenshot review shows black output, severe corruption, or unusable positioning. |
+| `Broken (prompt only)` | Current build reaches a known Kickstart insert-disk prompt, so the title is not usable on that route yet. |
+| `Broken (requirement/error prompt)` | Current build reaches title-owned or Workbench-owned UI, but that UI reports a missing requirement or error before useful execution. |
+| `Broken (visual defect)` | Current build passes mechanical smoke gates but manual screenshot review shows black output, severe corruption, or unusable positioning. |
 | `Unsupported archive entries` | Archive opens, but it contains only media types this Amiga route does not currently load, such as ISO/CUE/BIN CD media. |
 | `Unsupported media (format pending)` | Current build recognizes the media class but cannot mount it on that route yet, such as HDF/HDZ images before hard-drive controller support, IPF/CAPS rows recorded before decoder support, or IPF/CAPS launches when the required user-supplied CAPSImg library is unavailable. |
 
@@ -29,6 +30,47 @@ candidates under `D:\emu\amiga` and `D:\emu\amiga\adf`, with obvious
 multi-disk sets collapsed to one row where the harness can identify the set.
 Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 
+Implementation note: `--system amiga1000` / `a1000` is wired for resident
+Kickstart 1.0/1.1 ROM dumps via `MNEMOS_AMIGA1000_KICKSTART`,
+`MNEMOS_AMIGA1000_BIOS`, or shared BIOS/Kickstart directories containing names
+such as `Kickstart 1.0.rom`, `kick10.rom`, or `kickstart1.0.rom`. Resident
+A1000 Kickstart 1.0/1.1 routes have BIOS-smoke evidence below. The original
+A1000 bootstrap ROM plus Kickstart-disk WCS loading path is not implemented
+yet.
+
+2026-07-01 IPF/CAPS smoke evidence: A500, A500+, and A600 were run for 4500
+frames with `-RequireDiskProgress`, `-RejectKickstartPrompt`, and a 50 FPS
+headless floor against selected IPF archives. Exact rows below are promoted
+only where the resulting screenshots showed a plausible title/protection screen
+or a clear prompt/defect.
+
+2026-07-02 ADF/ZIP smoke evidence: A500, A500+, and A600 were run for 2400
+frames with `-RequireDiskProgress`, `-RejectKickstartPrompt`, and a 50 FPS
+headless floor against direct ADF apps and ZIP-contained ADF titles. Exact rows
+below are promoted only where the resulting screenshots showed a plausible app,
+loader, Workbench screen, or a clear visual defect.
+
+2026-07-02 Kickstart 1.3 route evidence: forcing
+`D:\emu\amiga\bios\Kickstart 1.3.rom` booted Workbench 1.3 for 2400 frames on
+the currently wired A1000, A500, A500+, A600, and A2000 routes. A1000 is
+resident-ROM override evidence only; the original bootstrap-ROM plus
+Kickstart-disk WCS path remains separate and unimplemented. A500+ and A600 are
+explicit ROM-override/downgrade routes, not their default shipping Kickstart
+routes. A3000 and CDTV stay `TBD` because exact Kickstart 1.3 variants exist in
+the inventory but those model routes are not smoke-proven here. A1200, A4000,
+and CD32 are marked `N/A` for the aggregate Kickstart 1.3 route.
+
+2026-07-02 broader Kickstart sweep evidence: resident A1000 Kickstart 1.0/1.1
+ROMs, A500/A2000-family Kickstart 1.2 and 1.4, and later Kickstart 2.x/3.x/4.x
+ROM overrides were booted for 400 frames on the currently wired model routes.
+Manual review of `build/scratch/kickstart-route-sweep/kickstart-route-contact.png`
+and `build/scratch/kickstart-route-sweep-extra/kickstart-extra-contact.png`
+found a high-resolution DDF pitch defect on Kickstart 2.x/3.1/4.0 prompt
+screens. After the DDF fix, manual review of
+`build/scratch/kickstart-route-sweep-after-hres-fix/contact.png` promoted those
+readable insert-disk prompt routes to BIOS smoke. AGA-only 3.0 routes outside
+the OCS/ECS model family are marked `N/A`.
+
 ## Matrix
 
 | Type / Title | Amiga 1000 | Amiga 500 | Amiga 2000 | Amiga 3000 | CDTV | Amiga 500+ | Amiga 600 | Amiga 1200 | Amiga 4000 | CD32 |
@@ -37,53 +79,55 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Amiga 1000 Bootstrap 8 KiB | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Amiga 1000 Bootstrap 64 KiB | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Kickstart 0.7 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.0 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.1 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.2 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.3 | TBD | Operational (BIOS smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.4 beta | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 2.0 / 2.04 | TBD | TBD | TBD | TBD | TBD | Operational (BIOS smoke) | Operational (BIOS smoke) | TBD | TBD | TBD |
-| Kickstart 2.05 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.0 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.1 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.5 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 4.0 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Kickstart 1.0 | Operational (BIOS smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 1.0 (NTSC) | Operational (BIOS smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 1.1 | Operational (BIOS smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 1.1 (31.34) (NTSC) | Operational (BIOS smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 1.2 | TBD | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
+| Kickstart 1.3 | Operational (BIOS smoke) | Operational (BIOS smoke) | Operational (BIOS smoke) | TBD | TBD | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
+| Kickstart 1.4 | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | TBD | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
+| Kickstart 2.0 | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | TBD | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
+| Kickstart 2.05 | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
+| Kickstart 3.0 | N/A | N/A | N/A | TBD | N/A | N/A | N/A | TBD | TBD | N/A |
+| Kickstart 3.1 | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | TBD | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | TBD | TBD | TBD |
+| Kickstart 3.5 | N/A | Broken (visual defect) | Broken (visual defect) | TBD | N/A | Broken (visual defect) | Broken (visual defect) | TBD | TBD | N/A |
+| Kickstart 4.0 | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | TBD | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | TBD | TBD | TBD |
 | [BIOS] Amiga 1000 Bootstrap (USA, Europe) (64k) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | [BIOS] Amiga 1000 Bootstrap (USA, Europe) (8k) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v1.2) (Rev 33.180) (A500, A2000) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v1.3) (Rev 34.005) (A500, A2000) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v1.4) (Rev 36.015) (Beta) (A500, A2000) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v1.4) (Rev 36.016) (A3000) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v2.04) (Rev 37.175) (A3000) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v2.04) (Rev 37.175) (A500 Plus, A2000) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| [BIOS] Kickstart (USA, Europe) (v1.2) (Rev 33.180) (A500, A2000) | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
+| [BIOS] Kickstart (USA, Europe) (v1.3) (Rev 34.005) (A500, A2000) | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | TBD | TBD | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
+| [BIOS] Kickstart (USA, Europe) (v1.4) (Rev 36.015) (Beta) (A500, A2000) | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
+| [BIOS] Kickstart (USA, Europe) (v1.4) (Rev 36.016) (A3000) | N/A | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A |
+| [BIOS] Kickstart (USA, Europe) (v2.04) (Rev 37.175) (A3000) | N/A | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A |
+| [BIOS] Kickstart (USA, Europe) (v2.04) (Rev 37.175) (A500 Plus, A2000) | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
 | [BIOS] Kickstart (USA, Europe) (v2.04) (Rev 37.175) (Proto) (A500 Plus, A2000) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | [BIOS] Kickstart (USA, Europe) (v2.05) (Rev 37.210) (Proto) (A600) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v2.05) (Rev 37.299) (A600) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v2.05) (Rev 37.300) (A600HD) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v2.05) (Rev 37.350) (A600HD) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v3.0) (Rev 39.065) (Beta) (A3000) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v3.0) (Rev 39.106) (A1200) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v3.0) (Rev 39.106) (A4000) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v3.1) (Rev 40.055) (Beta) (A3000) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v3.1) (Rev 40.063) (A500, A600, A2000) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v3.1) (Rev 40.068) (A1200) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v3.1) (Rev 40.068) (A3000) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v3.1) (Rev 40.068) (A4000) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v3.1) (Rev 40.068) (Proto) (A600) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v3.1) (Rev 40.070) (A4000) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| [BIOS] Kickstart (USA, Europe) (v3.1) (Rev 40.070) (A4000T) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| [BIOS] Kickstart (USA, Europe) (v2.05) (Rev 37.299) (A600) | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
+| [BIOS] Kickstart (USA, Europe) (v2.05) (Rev 37.300) (A600HD) | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
+| [BIOS] Kickstart (USA, Europe) (v2.05) (Rev 37.350) (A600HD) | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
+| [BIOS] Kickstart (USA, Europe) (v3.0) (Rev 39.065) (Beta) (A3000) | N/A | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A |
+| [BIOS] Kickstart (USA, Europe) (v3.0) (Rev 39.106) (A1200) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | N/A | N/A |
+| [BIOS] Kickstart (USA, Europe) (v3.0) (Rev 39.106) (A4000) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | N/A |
+| [BIOS] Kickstart (USA, Europe) (v3.1) (Rev 40.055) (Beta) (A3000) | N/A | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A |
+| [BIOS] Kickstart (USA, Europe) (v3.1) (Rev 40.063) (A500, A600, A2000) | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
+| [BIOS] Kickstart (USA, Europe) (v3.1) (Rev 40.068) (A1200) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | N/A | N/A |
+| [BIOS] Kickstart (USA, Europe) (v3.1) (Rev 40.068) (A3000) | N/A | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A |
+| [BIOS] Kickstart (USA, Europe) (v3.1) (Rev 40.068) (A4000) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | N/A |
+| [BIOS] Kickstart (USA, Europe) (v3.1) (Rev 40.068) (Proto) (A600) | N/A | TBD | TBD | N/A | N/A | TBD | TBD | N/A | N/A | N/A |
+| [BIOS] Kickstart (USA, Europe) (v3.1) (Rev 40.070) (A4000) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | N/A |
+| [BIOS] Kickstart (USA, Europe) (v3.1) (Rev 40.070) (A4000T) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | N/A |
 | Kickstart 0.7 (27.3) (NTSC) (A1000) (Commodore) (1985) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.0 (NTSC) (A1000) (Commodore) (1985) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.0 (NTSC) (A1000) (Commodore) (1985) (disk) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.1 (31.34) (NTSC) (A1000) (Commodore) (1985) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.1 (31.34) (PAL) (A1000) (Commodore) (1986) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.1 (31.34) (PAL) (A1000) (Commodore) (1986) (disk) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.2 (33.166) (A1000) (Commodore) (1986) [!] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.2 (33.166) (A1000) (Commodore) (1986) [b] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.2 (33.166) (A1000) (Commodore) (1986) [b] (1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.2 (33.166) (A1000) (Commodore) (1986) (disk) [!] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.2 (33.166) (A1000) (Commodore) (1986) (disk) [b] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.2 (33.180) (A500-A2000) (Commodore) (1986) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Kickstart 1.0 (NTSC) (A1000) (Commodore) (1985) | Operational (BIOS smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 1.0 (NTSC) (A1000) (Commodore) (1985) (disk) | TBD | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 1.1 (31.34) (NTSC) (A1000) (Commodore) (1985) | Operational (BIOS smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 1.1 (31.34) (PAL) (A1000) (Commodore) (1986) | Operational (BIOS smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 1.1 (31.34) (PAL) (A1000) (Commodore) (1986) (disk) | TBD | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 1.2 (33.166) (A1000) (Commodore) (1986) [!] | Broken (visual defect) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 1.2 (33.166) (A1000) (Commodore) (1986) [b] | TBD | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 1.2 (33.166) (A1000) (Commodore) (1986) [b] (1) | TBD | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 1.2 (33.166) (A1000) (Commodore) (1986) (disk) [!] | TBD | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 1.2 (33.166) (A1000) (Commodore) (1986) (disk) [b] | TBD | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 1.2 (33.180) (A500-A2000) (Commodore) (1986) | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
 | Kickstart 1.3 (34.1001) (CDTV) (Commodore) (1991) [b] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Kickstart 1.3 (34.5) (1000) (Commodore) (1987) (disk) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Kickstart 1.3 (34.5) (A500-A2500-A3000-CDTV) (Commodore) (1987)[!] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -92,40 +136,40 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Kickstart 1.3 (34.5) (A500-A2500-A3000-CDTV) (Commodore-Cloanto) (1987) (encrypted) [h] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Kickstart 1.3 (34.5) (A500-A2500-A3000-CDTV) (Commodore-Cloanto) (1987) [h] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Kickstart 1.3 (34.5) (A500-A2500-A3000-CDTV) (Guardian 1.2) (Commodore-Transactor) (1988) [h] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.4 (36.015) (A500-A2000) Alpha Release 15 (Commodore) (1989) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.4 (36.02.20) (A3000) Alpha Release 18 (Commodore) (1989) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 1.4 (36.02.20) (A3000) Alpha Release 18 (Commodore) (1989) (disk) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 2.0 (36.143) (A3000) (Commodore) (1990) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 2.0 (36.143) (A3000) (Commodore) (1990) (disk) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Kickstart 1.4 (36.015) (A500-A2000) Alpha Release 15 (Commodore) (1989) | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
+| Kickstart 1.4 (36.02.20) (A3000) Alpha Release 18 (Commodore) (1989) | N/A | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 1.4 (36.02.20) (A3000) Alpha Release 18 (Commodore) (1989) (disk) | N/A | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 2.0 (36.143) (A3000) (Commodore) (1990) | N/A | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 2.0 (36.143) (A3000) (Commodore) (1990) (disk) | N/A | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A |
 | Kickstart 2.0 (37.175.20) Development (Commodore) (1991) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Kickstart 2.0 (37.175.20) Development (Commodore) (1991) (disk) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 2.0 (37.175) (A3000) (Commodore) (1991) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 2.0 (37.175) (A3000) (Commodore) (1991) (disk) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Kickstart 2.0 (37.175) (A3000) (Commodore) (1991) | N/A | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 2.0 (37.175) (A3000) (Commodore) (1991) (disk) | N/A | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A |
 | Kickstart 2.0 (37.175) (A500+) (Commodore-Cloanto) (1991) (encrypted) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 2.0 (37.210) (A2500) (Commodore) (1991) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 2.0 (37.210) (A2500) (Commodore) (1991) [b] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 2.0 (37.210) (A3000) (Commodore) (1991) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 2.0 (37.210) (A3000) (Commodore) (1991) [b] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 2.0 (37.299) (A600) (Commodore) (1991) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 2.0 (37.300) (A600) (Commodore) (1991) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 2.0 (37.350) (A600) (Commodore) (1992) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 2.04 (37.175) (A500+) (Commodore) (1991)[!] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.0 (39.106) (A1200) (Commodore) (1992) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.0 (39.106) (A1200) (Commodore) (1992) (1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.0 (39.106) (A4000) (Commodore) (1992) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.0 (39.106) (A4000) (Commodore-Cloanto) (1992) (encrypted) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.1 (40.055) (A3000) (Commodore) (1993) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.1 (40.060) (CD32) (Commodore) (1993) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.1 (40.063) (A600) (Commodore) (1993) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.1 (40.068) (A1200) (Commodore) (1993) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.1 (40.068) (A4000) (Commodore) (1993) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.1 (40.068) (A4000) (Commodore-Cloanto) (1993) (encrypted) [h] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.1 (40.068) (A4000) (Commodore-Cloanto) (1993) [h] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.1 (40.068) (A4000) (ShapeShifter) (Commodore) (1993) [h] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.1 (40.068) (A600) (Commodore) (1993) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.1 (40.069) (A1200) (Commodore) (1993) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.1 (40.070) (A4000T) (Commodore) (1993) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Kickstart 3.5 (40.071) (OS3.5) (Commodore) (1996) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Kickstart 2.0 (37.210) (A2500) (Commodore) (1991) | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 2.0 (37.210) (A2500) (Commodore) (1991) [b] | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 2.0 (37.210) (A3000) (Commodore) (1991) | N/A | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 2.0 (37.210) (A3000) (Commodore) (1991) [b] | N/A | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 2.0 (37.299) (A600) (Commodore) (1991) | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
+| Kickstart 2.0 (37.300) (A600) (Commodore) (1991) | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
+| Kickstart 2.0 (37.350) (A600) (Commodore) (1992) | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
+| Kickstart 2.04 (37.175) (A500+) (Commodore) (1991)[!] | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
+| Kickstart 3.0 (39.106) (A1200) (Commodore) (1992) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | N/A | N/A |
+| Kickstart 3.0 (39.106) (A1200) (Commodore) (1992) (1) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | N/A | N/A |
+| Kickstart 3.0 (39.106) (A4000) (Commodore) (1992) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | N/A |
+| Kickstart 3.0 (39.106) (A4000) (Commodore-Cloanto) (1992) (encrypted) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | N/A |
+| Kickstart 3.1 (40.055) (A3000) (Commodore) (1993) | N/A | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A |
+| Kickstart 3.1 (40.060) (CD32) (Commodore) (1993) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD |
+| Kickstart 3.1 (40.063) (A600) (Commodore) (1993) | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | Operational (BIOS smoke) | Operational (BIOS smoke) | N/A | N/A | N/A |
+| Kickstart 3.1 (40.068) (A1200) (Commodore) (1993) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | N/A | N/A |
+| Kickstart 3.1 (40.068) (A4000) (Commodore) (1993) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | N/A |
+| Kickstart 3.1 (40.068) (A4000) (Commodore-Cloanto) (1993) (encrypted) [h] | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | N/A |
+| Kickstart 3.1 (40.068) (A4000) (Commodore-Cloanto) (1993) [h] | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | N/A |
+| Kickstart 3.1 (40.068) (A4000) (ShapeShifter) (Commodore) (1993) [h] | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | N/A |
+| Kickstart 3.1 (40.068) (A600) (Commodore) (1993) | N/A | N/A | N/A | N/A | N/A | N/A | Broken (visual defect) | N/A | N/A | N/A |
+| Kickstart 3.1 (40.069) (A1200) (Commodore) (1993) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | N/A | N/A |
+| Kickstart 3.1 (40.070) (A4000T) (Commodore) (1993) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | N/A |
+| Kickstart 3.5 (40.071) (OS3.5) (Commodore) (1996) | N/A | Broken (visual defect) | Broken (visual defect) | TBD | N/A | Broken (visual defect) | Broken (visual defect) | TBD | TBD | N/A |
 | **Applications** |  |  |  |  |  |  |  |  |  |  |
 | A1060-A2088-A2286 Janus Setup Disk 1.3 German | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A1060-A2088-A2286 Janus Setup Disk (1.3) (German) (Commodore) (1988) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -135,71 +179,71 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | A1060 PC Sidecar System Disk (A1000) (Commodore) (1985) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A1060 PC Sidecar Workbench 1.2 D | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A1060 PC Sidecar Workbench 1.2 D (33.56) - (A1000) (Commodore) (1987) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A1942 Monitor Setup Disk | TBD | Prompt only | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A1942 Monitor Setup Disk (Commodore) (1993) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| A1942 Monitor Setup Disk | TBD | Broken (prompt only) | Broken (prompt only) | TBD | TBD | Broken (prompt only) | Broken (prompt only) | TBD | TBD | TBD |
+| A1942 Monitor Setup Disk (Commodore) (1993) | TBD | Broken (prompt only) | Broken (prompt only) | TBD | TBD | Broken (prompt only) | Broken (prompt only) | TBD | TBD | TBD |
 | A2010-A2020 Janus Test Diagnostics Disk 1.4 German | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A2010-A2020 Janus Test Diagnostics Disk (1.4) (German) (Commodore) (1987) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2024 Monitor Setup Jumpstart Disk | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2024 Monitor Setup Jumpstart Disk [!] | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2024 Monitor Setup 'Jumpstart' Disk (Commodore) (1988) [!] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2024 Monitor Setup 'Jumpstart' Disk (Commodore) (1988) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2088-2286 PC Bridgeboard Install Disk 1.1 | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2088-2286 PC Bridgeboard Install Disk (1.1) (A2000) (Commodore) (1987) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2088-2286 PC Bridgeboard Install Disk 1.3 [!] | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2088-2286 PC Bridgeboard Install Disk (1.3) (A2000) (Commodore) (1988) [!] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2088-2286 PC Bridgeboard Install Disk 2.0 [!] | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2088-2286 PC Bridgeboard Install Disk (2.0) (A2000) (Commodore) (1989) [!] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2088T-2286 PC Bridgeboard Install Disk 1.02 | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2088T-2286 PC Bridgeboard Install Disk (1.02) (A2000) (Commodore) (1989) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2090 A2000HD-A25000 HD ReInstall Disk 1.0 | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2090 A2000HD-A25000 HD ReInstall Disk (1.0) (Commodore) (1989) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2090 Hard-Disk Utilities (3.0) (A2000) (Commodore) (1989) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2090 Hard-Disk Utilities 3.0 [m] | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2090 HD Autoboot Disk (Commodore) (1988) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2090 HD Autoboot Disk [m] | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2090 HD Install Disk | TBD | Prompt only | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2090 HD Install Disk (Commodore) (1987) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2090 HD Install Disk (Commodore) (1987) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2090 HD Install Disk [m] | TBD | Prompt only | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2090 Miniscribe 8425 ReInstall Disk | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2090 Miniscribe 8425 ReInstall Disk (Commodore) (1989) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2090 Miniscribe 8425 ReInstall Disk (Commodore) (1989) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2090 Miniscribe 8425 ReInstall Disk [m] | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2090 Rodime RO3055 ReInstall Disk | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2090 Rodime RO3055 ReInstall Disk (Commodore) (1989) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2090 Toshiba MK-134FA ReInstall Disk (Commodore) (1989) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2090 Toshiba MK-134FA ReInstall Disk [m] | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2091 SCSI Controller Install Disk (1.27) (Commodore) (1990) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2091 SCSI Controller Install Disk 1.27 [m] | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2091 SCSI Controller Install Disk 1.3 | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2091 SCSI Controller Install Disk (1.3) (Commodore) (1991) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2232 Serial Board Install Disk | TBD | Prompt only | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2232 Serial Board Install Disk (A2000) (Commodore) (1990) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| A2024 Monitor Setup Jumpstart Disk | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| A2024 Monitor Setup Jumpstart Disk [!] | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| A2024 Monitor Setup 'Jumpstart' Disk (Commodore) (1988) [!] | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| A2024 Monitor Setup 'Jumpstart' Disk (Commodore) (1988) | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| A2088-2286 PC Bridgeboard Install Disk 1.1 | N/A | N/A | Operational (visual smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2088-2286 PC Bridgeboard Install Disk (1.1) (A2000) (Commodore) (1987) | N/A | N/A | Operational (visual smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2088-2286 PC Bridgeboard Install Disk 1.3 [!] | N/A | N/A | Operational (visual smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2088-2286 PC Bridgeboard Install Disk (1.3) (A2000) (Commodore) (1988) [!] | N/A | N/A | Operational (visual smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2088-2286 PC Bridgeboard Install Disk 2.0 [!] | N/A | N/A | Operational (visual smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2088-2286 PC Bridgeboard Install Disk (2.0) (A2000) (Commodore) (1989) [!] | N/A | N/A | Operational (visual smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2088T-2286 PC Bridgeboard Install Disk 1.02 | N/A | N/A | Operational (visual smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2088T-2286 PC Bridgeboard Install Disk (1.02) (A2000) (Commodore) (1989) | N/A | N/A | Operational (visual smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2090 A2000HD-A25000 HD ReInstall Disk 1.0 | N/A | N/A | Operational (visual smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2090 A2000HD-A25000 HD ReInstall Disk (1.0) (Commodore) (1989) | N/A | N/A | Operational (visual smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2090 Hard-Disk Utilities (3.0) (A2000) (Commodore) (1989) [m] | N/A | N/A | Operational (visual smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2090 Hard-Disk Utilities 3.0 [m] | N/A | N/A | Operational (visual smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2090 HD Autoboot Disk (Commodore) (1988) [m] | N/A | N/A | Operational (visual smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2090 HD Autoboot Disk [m] | N/A | N/A | Operational (visual smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2090 HD Install Disk | N/A | N/A | Broken (prompt only) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2090 HD Install Disk (Commodore) (1987) | N/A | N/A | Broken (prompt only) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2090 HD Install Disk (Commodore) (1987) [m] | N/A | N/A | Broken (prompt only) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2090 HD Install Disk [m] | N/A | N/A | Broken (prompt only) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2090 Miniscribe 8425 ReInstall Disk | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2090 Miniscribe 8425 ReInstall Disk (Commodore) (1989) | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2090 Miniscribe 8425 ReInstall Disk (Commodore) (1989) [m] | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2090 Miniscribe 8425 ReInstall Disk [m] | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2090 Rodime RO3055 ReInstall Disk | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2090 Rodime RO3055 ReInstall Disk (Commodore) (1989) | N/A | N/A | TBD | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2090 Toshiba MK-134FA ReInstall Disk (Commodore) (1989) [m] | N/A | N/A | Operational (visual smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2090 Toshiba MK-134FA ReInstall Disk [m] | N/A | N/A | Operational (visual smoke) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2091 SCSI Controller Install Disk (1.27) (Commodore) (1990) [m] | N/A | N/A | Operational (visual smoke) | TBD | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2091 SCSI Controller Install Disk 1.27 [m] | N/A | N/A | Operational (visual smoke) | TBD | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2091 SCSI Controller Install Disk 1.3 | N/A | N/A | Operational (visual smoke) | TBD | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2091 SCSI Controller Install Disk (1.3) (Commodore) (1991) | N/A | N/A | Operational (visual smoke) | TBD | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2232 Serial Board Install Disk | N/A | N/A | Broken (prompt only) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| A2232 Serial Board Install Disk (A2000) (Commodore) (1990) | N/A | N/A | Broken (prompt only) | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | A2320 Flicker-Fixer Test Disk | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A2320 Flicker-Fixer Test Disk (Commodore) (1990) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A2386 PC Bridgeboard Install Disk | TBD | Prompt only | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| A2386 PC Bridgeboard Install Disk | TBD | Broken (prompt only) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A2386 PC Bridgeboard Install Disk (A2000-A3000) (Commodore) (1992) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A3000 Burn-In Disk 1.0 | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A3000 Burn-In Disk (1.0) (A3000) (Commodore) (1987) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A3000 Burn-In Disk Final | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A3000 Burn-In Disk (Final) (A3000) (Commodore) (1991) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A3000 Multimedia Demo Disk 1 German | TBD | Prompt only | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A3000 Multimedia Demo Disk 2 German | TBD | Prompt only | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| A3000 Multimedia Demo Disk 1 German | TBD | Broken (prompt only) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| A3000 Multimedia Demo Disk 2 German | TBD | Broken (prompt only) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A3000 Multimedia Demo (German) (A3000) (DSP) (1990) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A3000 PCBA Test Disk 1.0 | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A3000 PCBA Test Disk (1.0) (A3000) (Commodore) (1990) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A4091 SCSI Controller Install Disk | TBD | Prompt only | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| A4091 SCSI Controller Install Disk | TBD | Broken (prompt only) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A4091 SCSI Controller Install Disk (Commodore) (1993) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A570 CD Utility Disk (Commodore) (1990) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| A570 CD Utility Disk [m] | TBD | Prompt only | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| A570 CD Utility Disk [m] | TBD | Broken (prompt only) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A590 HD RAM Test Disk 1.0 | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A590 HD RAM Test Disk (1.0) (Commodore) (1989) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A590 HD RAM Test Disk (1.0) (Commodore) (1989) (1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A590 HD RAM Test Disk 1.0 duplicate | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | A590 HD Setup Disk (1.1) (Commodore) (1989) | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
-| Action Replay (19xx)(ALE) | TBD | Prompt only | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
-| Action Replay (19xx)(Datel Electronics)[cr Hackers Ethic] | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
-| Action Replay 4 BETA (1993)(-)(AGA)[cr Paradox - Interpol] | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
+| Action Replay (19xx)(ALE) | TBD | Broken (prompt only) | Broken (prompt only) | TBD | TBD | Broken (prompt only) | Broken (prompt only) | TBD | TBD | TBD |
+| Action Replay (19xx)(Datel Electronics)[cr Hackers Ethic] | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Action Replay 4 BETA (1993)(-)(AGA)[cr Paradox - Interpol] | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | TBD | TBD |
 | Amiga BASIC (1.0) (Commodore-Microsoft) (1985) | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | Amiga BASIC (1.0) (Commodore-Microsoft) (1985) [m] | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | Antheads - It Came from the Desert II Data Disk (Europe) (Addon) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -212,14 +256,14 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Manchester United - Premier League Champions - 1994-95 Season Data Disk (Europe) (Addon) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Myth - History in the Making (Europe) (Amiga 600 HD Bundles - Epic + Language Lab) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | ProTracker v1.0b | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| ProTracker v1.0b (1990-09)(Amiga Freelancers)(PD)(m TITAN) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| ProTracker v1.0b (1990-09)(Amiga Freelancers)(PD)(m TITAN) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
 | ProTracker v2.0a | TBD | TBD | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
-| ProTracker v2.0a (1991-02)(Amiga Freelancers - 17-Bit Software)(PD) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| ProTracker v2.0a (1991-02)(Amiga Freelancers - 17-Bit Software)(PD) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | ProTracker v3.62 AGA | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| ProTracker v3.62 (AGA)(Y2K fixed)(Cryptoburners - RD10)(PD)(m TITAN) | TBD | Visual defect | TBD | TBD | TBD | Requirement/error prompt | Requirement/error prompt | TBD | TBD | TBD |
+| ProTracker v3.62 (AGA)(Y2K fixed)(Cryptoburners - RD10)(PD)(m TITAN) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
 | ProTracker v4.0 Beta 2 AGA | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| ProTracker v4.0 Beta 2 (AGA)(Cryptoburners - RD10)(PD)(m TITAN) | TBD | Visual defect | TBD | TBD | TBD | Requirement/error prompt | Requirement/error prompt | TBD | TBD | TBD |
-| Rome AD 92 - The Pathway to Power (Europe) (Amiga 600 HD Bundles - Epic + Language Lab) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| ProTracker v4.0 Beta 2 (AGA)(Cryptoburners - RD10)(PD)(m TITAN) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Rome AD 92 - The Pathway to Power (Europe) (Amiga 600 HD Bundles - Epic + Language Lab) | TBD | Broken (prompt only) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Strip Poker II+ Data Disk 1 (Europe) (Addon) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Trivial Pursuit - The Language Laboratory Edition + Amiga Text (Europe) (ECS) (Amiga 600 HD Bundles - Epic + Language Lab) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Vroom - Data Disk (Europe) (Addon) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -258,11 +302,11 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Workbench 1.3.3 (34.34) - Extras (Commodore) (1991) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 1.3.3 (34.34) - Extras (Commodore) (1991) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 1.3.3 (34.34) - Extras (Commodore) (1991) [m2] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Workbench 1.3.3 D (34.34) - Boot (A500-A2000) (Commodore) (1991) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Workbench 1.3.3 D (34.34) - Boot (A500-A2000) (Commodore) (1991) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Workbench 1.3.3 D (34.34) - Boot (A500-A2000) (Commodore) (1991) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 1.3.3 D (34.34) - Extras (A500-A2000) (Commodore) (1991) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 1.3.3 D (34.34) - Extras (A500-A2000) (Commodore) (1991) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Workbench 1.3 (34.20) - Boot (Commodore) (1988) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Workbench 1.3 (34.20) - Boot (Commodore) (1988) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Workbench 1.3 (34.20) - Boot (Commodore) (1988) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 1.3 (34.20) - Extras (Commodore) (1988) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 1.3 Boot | TBD | Operational (disk smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -275,7 +319,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Workbench 2.0 (36.68) - Boot (Commodore) (1991) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 2.0 (36.68) - Extras (Commodore) (1991) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 2.0 (36.68) - Fonts (Commodore) (1991) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Workbench 2.04 (37.67) - Boot (Commodore) (1992) | TBD | Visual defect | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Workbench 2.04 (37.67) - Boot (Commodore) (1992) | TBD | Broken (visual defect) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Workbench 2.04 (37.67) - Boot (Commodore) (1992) (International) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 2.04 (37.67) - Boot (Commodore) (1992) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 2.04 (37.67) - Extras (Commodore) (1992) (International) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -303,7 +347,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Workbench 2.1 (38.35) - Install (Commodore) (1992) (International) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 2.1 (38.35) - Locale (Commodore) (1992) (International) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 2.1 (38.35) - Locale (Commodore) (1992) (International) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Workbench 2.1 (38.36) - Boot (Commodore) (1992) | TBD | Prompt only | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Workbench 2.1 (38.36) - Boot (Commodore) (1992) | TBD | Broken (prompt only) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Workbench 2.1 (38.36) - Extras (Commodore) (1992) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 2.1 (38.36) - Fonts (Commodore) (1992) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 2.1 (38.36) - Fonts (Commodore) (1992) (1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -357,21 +401,21 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Workbench 3.1 (40.42) - Storage (Commodore) (1994) [m2] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 3.1 (40.42) - Storage (Commodore) (1994) [m3] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 3.1 (40.42) - Storage (Commodore) (1994) [m4] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| X-Copy v5.21 USA Master Optimized | TBD | Operational (smoke) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| X-Copy v5.21 USA Master Optimized | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | XTreme Racing - Data Disks (Europe) (v2.0) (Addon) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | **Games** |  |  |  |  |  |  |  |  |  |  |
-| 10 out of 10 - Early Essentials (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| 10 out of 10 - Essential Science (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| 10 out of 10 - Maths Number (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| 1869 - Erlebte Geschichte Teil I (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| 1869 - Erlebte Geschichte Teil I (Germany) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| 1st Division Manager (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| 3D Construction Kit 2 (Europe) (r2.01) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| 3D Construction Kit (Europe) (En,Fr,De,It) (r01.1000) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| 3D Galax (Europe) (Compilation - Action Amiga) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| 3D Pool (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| 3D World Boxing (Europe) (En,Fr,De,It) (Compilation - Amiga Sports Pack) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| 3D World Tennis (Europe) (En,Fr,De,It) (Compilation - Amiga Sports Pack) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| 10 out of 10 - Early Essentials (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| 10 out of 10 - Essential Science (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| 10 out of 10 - Maths Number (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| 1869 - Erlebte Geschichte Teil I (Germany) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| 1869 - Erlebte Geschichte Teil I (Germany) (AGA) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| 1st Division Manager (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| 3D Construction Kit 2 (Europe) (r2.01) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| 3D Construction Kit (Europe) (En,Fr,De,It) (r01.1000) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| 3D Galax (Europe) (Compilation - Action Amiga) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| 3D Pool (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| 3D World Boxing (Europe) (En,Fr,De,It) (Compilation - Amiga Sports Pack) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| 3D World Tennis (Europe) (En,Fr,De,It) (Compilation - Amiga Sports Pack) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | 4D Sports Boxing (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | 4D Sports Driving (Europe) (v1.2) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | 4th & Inches (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -464,7 +508,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Alien 3 (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Alien Breed 3D - CD32 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien Breed 3D (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Alien Breed (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| Alien Breed (Europe) | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
 | Alien Breed II - The Horror Continues (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Alien Breed II - The Horror Continues (Europe) (AGA) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Alien Breed - Special Edition 92 (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -476,7 +520,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Alien Fires 2199 AD (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien Legion (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien Storm (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Alien Syndrome | TBD | Requirement/error prompt | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
+| Alien Syndrome | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
 | Alien Syndrome (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien Syndrome (USA) (Budget - Mindscape) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien World (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -502,7 +546,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Amnios (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Anarchy (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Ancient Art of War in the Skies, The (Europe) (v1.12) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Another World (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| Another World (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Another World (Europe) (Compilation - The Delphine Collection) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Another World (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Anstoss - Die Fussball-Manager-Simulation (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -810,7 +854,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Buck Rogers Countdown to Doomsday | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Buck Rogers - Countdown to Doomsday - Science Fiction Role-Playing Computer Game, Vol.I (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Buck Rogers - Countdown to Doomsday - Science Fiction Role-Playing Computer Game, Vol.I (USA) (v1.0) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Budokan | TBD | Visual defect | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
+| Budokan | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
 | Budokan - The Martial Spirit (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Buffalo Bill's Rodeo Games (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bug Bash (Europe) (Compilation - Bug Bash + Nucleus) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1153,7 +1197,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Dennis (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dennis (Europe) (AGA) (Amiga 1200 Bundle - Desktop Dynamite) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Denver Presente - Je Decouvre les Couleurs (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Desert Strike | TBD | Visual defect | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
+| Desert Strike | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Desert Strike-3 (1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Desert Strike - Return to the Gulf (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Destroyer (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1174,7 +1218,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Disc (Europe) (Budget - Action Sixteen) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Disc (Europe) (Compilation - Podium) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Discovery - In the Steps of Columbus (Europe) (En,Fr,De,Es,It) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Disk-O-Rogue | TBD | Visual defect | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Disk-O-Rogue | TBD | Broken (visual defect) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Disposable Hero (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Distant Armies - A Playing History of Chess (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dizzy Collection - 5 Game Pack (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1182,7 +1226,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Dizzy Panic (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dizzy - Prince of the Yolkfolk (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Dizzy's Excellent Adventures (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| DM2 Skullkeep | TBD | Prompt only | TBD | TBD | TBD | Prompt only | Prompt only | TBD | TBD | TBD |
+| DM2 Skullkeep | TBD | Broken (prompt only) | TBD | TBD | TBD | Broken (prompt only) | Broken (prompt only) | TBD | TBD | TBD |
 | DNA Warrior (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dogfight - 80 Years of Aerial Warfare (Europe) (En,Fr,De,It) (v1.01) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dogs of War (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
@@ -1248,7 +1292,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Dune II | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | Dune II - Battle for Arrakis (Europe) (En,Fr,De) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dune (Italy) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Dungeon Master | TBD | Requirement/error prompt | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Dungeon Master | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Dungeon Master (Europe) (En,Fr,De) (v3.6) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dungeon Master II - The Legend of Skullkeep (Europe) (En,Fr,De) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dungeon Quest (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1296,7 +1340,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Elvira - Mistress of the Dark (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Elvira - Mistress of the Dark (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Embryo (Europe) (En,Fr,Hr) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Emerald Mine | TBD | Operational (visual smoke) | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
+| Emerald Mine | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
 | Emerald Mine 3 - Professional (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Emerald Mine 3 - Professional (Europe) (Alt) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Emerald Mine (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1407,11 +1451,11 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Final Assault (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Final Battle, The (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Final Battle, The (France) (En,Fr) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Final Blow (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Final Blow (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Final Command (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Final Command (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Final Countdown (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Final Fight (Europe) (Compilation - Super Fighter) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Final Fight (Europe) (Compilation - Super Fighter) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
 | Final Mission (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Fire and Brimstone (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Fire and Forget (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1430,12 +1474,12 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | FireZone (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | First Contact (Europe) (En,Fr,De) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | First Person Pinball (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| First Samurai (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| First Samurai (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
 | First Samurai (Europe) (Demo) (Compilation - Double Confrontation) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Fish! (Europe) (v1.03) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Fist Fighter (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Flamingo Tours (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Flashback (Europe) (1993-04-22) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Flashback (Europe) (1993-04-22) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
 | Flashback (Europe) (Compilation - The Delphine Collection) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Flashback (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Flashback (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1524,7 +1568,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Galactic Invasion (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Galactic Warrior Rats (Europe) (Compilation - The Sci-Fi Collection) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Galaxy Blast (Europe) (Coverdisk - Amiga Mania - Issue August '92) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Galaxy Force II (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Galaxy Force II (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
 | Galdregon's Domain (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Gamers Delight - CD32 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Games, The - Summer Edition (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1537,7 +1581,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Gary Lineker's Hot-Shot! (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Gauntlet II | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | Gauntlet II (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Gauntlet III - The Final Quest (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Gauntlet III - The Final Quest (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Gazza II (Europe) (En,Fr,De,It) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Gazza's Super Soccer (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | GBA Championship Basketball - Two-on-Two (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1553,8 +1597,8 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | GFL Championship Football (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Ghostbusters II (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Ghostbusters II (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Ghosts'n Goblins (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Ghouls 'n' Ghosts (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Ghosts'n Goblins (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Ghouls 'n' Ghosts (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Ghouls 'n' Ghosts (Europe) (Compilation - Platinum) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Ghouls 'n' Ghosts + Venus - The Flytrap (Europe) (Compilation - Chart Attack) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Gilbert - Escape from Drill (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1570,7 +1614,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Gnome Ranger (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Goal! (Europe) (En,Fr,De,Es,It) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Goal! (Europe) (En,Fr,De,Es,It,No) (v1.1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Gobliiins (Europe) (En,Fr,De,Es,It) (Compilation - Kings of Adventure 1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Gobliiins (Europe) (En,Fr,De,Es,It) (Compilation - Kings of Adventure 1) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
 | Gobliiins (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Gobliins 2 - The Prince Buffoon (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Gobliins 2 - The Prince Buffoon (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1614,15 +1658,15 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Great Giana Sisters, The (Europe) (First Release) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Great Napoleonic Battles (Europe) (En,Fr,De,Es,It) (v1.00) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Greens - The Ultimate 3-D Golf Simulation (Europe) (v2.3) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Gremlins 2 - The New Batch (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Gremlins 2 - The New Batch (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Gremlins 2 - The New Batch (Europe) (Alt) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Grid Start (Europe) (Compilation - Sextett) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Gridiron! (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Grimblood (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Grimblood (Europe) (Alt) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Growth (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Guardian Angel (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Guardian (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Guardian Angel (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Guardian (Europe) (AGA) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | TBD | TBD |
 | Guild of Thieves, The (Europe) (v1.01) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Guldkorn Expressen (Denmark) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Gulp - CD32 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1641,7 +1685,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Hagar (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Hagar the Horrible (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Halley Project, The - A Mission in Our Solar System (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Hammer Boy (Europe) (Budget - PC Hits) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Hammer Boy (Europe) (Budget - PC Hits) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
 | Hammerfist (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Hanse - Die Expedition (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Hard Drivin' (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1766,7 +1810,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Impossible Mission II (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | In 80 Days Around the World (Europe) (En,De) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Incredible Crash Dummies, The (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Indiana Jones and the Fate of Atlantis | TBD | Visual defect | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
+| Indiana Jones and the Fate of Atlantis | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
 | Indiana Jones and the Fate of Atlantis - A Graphic Adventure (Europe) (v1.06 10-12-92) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Indiana Jones and the Fate of Atlantis - A Graphic Adventure (France) (v1.0 3-2-93) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Indiana Jones and the Fate of Atlantis - Ein Grafik Adventure (Germany) (v1.0 1992-10-28) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2033,7 +2077,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Lemmings 2 - The Tribes (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Lemmings 2 - The Tribes (Europe) (Demo) (Promo - The Future Entertainment Show) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Lemmings 2 - The Tribes (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Lemmings (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| Lemmings (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Lemmings (Europe) (Amiga 500 Bundle - Cartoon Classics) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Lemmings (Europe) (Book Club) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Lemmings (Europe) (Compilation - Award Winners - Platinum Edition) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2394,8 +2438,8 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Oxford Softworks, The - Go Player (Europe) (En,Fr,De) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Oxxonian (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | P.O.W. (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| P.P. Hammer and His Pneumatic Weapon (1991)(Demonware)[cr CSL] | TBD | Operational (visual smoke) | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
-| P.P. Hammer and His Pneumatic Weapon (1991)(Demonware)[cr CSL][h PRX] | TBD | Visual defect | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
+| P.P. Hammer and His Pneumatic Weapon (1991)(Demonware)[cr CSL] | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| P.P. Hammer and His Pneumatic Weapon (1991)(Demonware)[cr CSL][h PRX] | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
 | P.P. Hammer and His Pneumatic Weapon (1992)(Global Software)[budget] | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | P.P. Hammer and His Pneumatic Weapon (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | P.P. Hammer and His Pneumatic Weapon (Europe) (Budget - Global Software) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2411,7 +2455,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Pandora (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pang-500-NTSC | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pang-500-NTSC.adf | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
-| Pang-AGA | TBD | Requirement/error prompt | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
+| Pang-AGA | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
 | Pang (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Panza Kick Boxing (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Panza Kick Boxing (France) (Compilation - Podium) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2460,7 +2504,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Pictionary (Europe) (v3.1a) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pierre le Chef Is... Out to Lunch (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pinball Dreams | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
-| Pinball Dreams (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| Pinball Dreams (Europe) | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
 | Pinball Dreams NTSC | TBD | Unsupported archive entries | TBD | TBD | TBD | Unsupported archive entries | Unsupported archive entries | TBD | TBD | TBD |
 | Pinball Fantasies (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Pinball Fantasies (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2479,7 +2523,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Pioneer Plague (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pipe Mania (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Piracy on the High Seas (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Pirates | TBD | Operational (visual smoke) | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
+| Pirates | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
 | Pirates! (Europe) (v832.02) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pirates! (Europe) (v832.04) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pit-Fighter (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
@@ -2550,7 +2594,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Primal Rage (Europe) (ECS) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Prime Mover (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Prince (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Prince of Persia | TBD | Operational (visual smoke) | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
+| Prince of Persia | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
 | Prince of Persia (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Prince of Persia (France) (Compilation - Super Heros) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Prince of Persia (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2623,64 +2667,64 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Railroad Tycoon (Europe) (v855.02) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Railroad Tycoon (Germany) (v855.01) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Railroad Tycoon (Germany) (v855.02) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rainbow Islands | TBD | Visual defect | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
+| Rainbow Islands | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
 | Rainbow Islands (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rainbow Islands (Europe) (Alt) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rainbow Islands (Europe) (Budget - The Hit Squad) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rally Championships (Europe) (En,Fr,De,Es,It,Nl,Pt,Pl) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rally Championships (Europe) (En,Fr,De,Es,It,Nl,Pt,Pl) (ECS) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rally Cross Challenge (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rambo III (Europe) (Budget - The Hit Squad) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Rambo III (USA) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Rampage (USA) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Rampart (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| RanX (France) (Compilation - 10 Megahits Vol. 3) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Reach for the Skies (Europe) (v1.1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Reach for the Stars - The Conquest of the Galaxy (Europe) (v3.01) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Reach for the Stars - The Conquest of the Galaxy (USA) (v3.0) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Real Ghostbusters, The (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Realm of the Trolls (Europe) (Compilation - 5th Anniversary) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Realms (Europe) (En,Fr,De) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Realms of Arkania - Blade of Destiny (Europe) (OCS, ECS) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Recognize Me (Europe) (En,Fr,De,Es,It) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Red Baron (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Red Baron (Europe) (Compilation - The Lords of Power) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Red Baron (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Red Heat (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Red Heat (Europe) (Budget - The Hit Squad) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Red Lightning (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Red Storm Rising (Europe) (v843.02) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Reeder, Der (Germany) (v1.00 24.08.1995) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Reeder, Der (Germany) (v1.12 - 1995-08-24) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Reederei (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Rambo III (Europe) (Budget - The Hit Squad) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Rambo III (USA) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rampage (USA) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Rampart (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| RanX (France) (Compilation - 10 Megahits Vol. 3) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Reach for the Skies (Europe) (v1.1) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Reach for the Stars - The Conquest of the Galaxy (Europe) (v3.01) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Reach for the Stars - The Conquest of the Galaxy (USA) (v3.0) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Real Ghostbusters, The (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Realm of the Trolls (Europe) (Compilation - 5th Anniversary) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| Realms (Europe) (En,Fr,De) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Realms of Arkania - Blade of Destiny (Europe) (OCS, ECS) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Recognize Me (Europe) (En,Fr,De,Es,It) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Red Baron (Europe) | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Red Baron (Europe) (Compilation - The Lords of Power) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Red Baron (Germany) | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Red Heat (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Red Heat (Europe) (Budget - The Hit Squad) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Red Lightning (USA) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Red Storm Rising (Europe) (v843.02) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Reeder, Der (Germany) (v1.00 24.08.1995) (AGA) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | TBD | TBD |
+| Reeder, Der (Germany) (v1.12 - 1995-08-24) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Reederei (Germany) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Reel | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Reel_1.adf | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Reel_2.adf | TBD | Prompt only | TBD | TBD | TBD | Prompt only | Prompt only | TBD | TBD | TBD |
-| Reise zum Mittelpunkt der Erde (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Renaissance (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Renegade (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Renegade (Europe) (Budget - The Hit Squad) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Renegade Legion - Interceptor (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Resolution 101 (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Retee! (Italy) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Return to Atlantis (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Reel_1.adf | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Reel_2.adf | TBD | Broken (prompt only) | TBD | TBD | TBD | Broken (prompt only) | Broken (prompt only) | TBD | TBD | TBD |
+| Reise zum Mittelpunkt der Erde (Germany) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Renaissance (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Renegade (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Renegade (Europe) (Budget - The Hit Squad) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Renegade Legion - Interceptor (Europe) | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Resolution 101 (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Retee! (Italy) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Return to Atlantis (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Reunion (Germany) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Reunion (Germany) (OCS, ECS) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Revelation! (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rick Dangerous 2 (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Rick Dangerous 2 (Europe) (Budget - Kixx) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Rick Dangerous (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| Revelation! (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Rick Dangerous 2 (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rick Dangerous 2 (Europe) (Budget - Kixx) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rick Dangerous (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
 | Rick Dangerous (Europe) (Amiga + PC) (Budget - Kixx) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Rick Dangerous (Europe) (Level Select) (Alt) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rick Dangerous (Europe) (Unlimited Lives) (Alt 2) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rick Davis's World Trophy Soccer (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Ringling Bros. and Barnum & Bailey Circus Games (Europe) (Compilation - Mega Pack II) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rings of Medusa (Europe) (v1.6) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rings of Medusa (Germany) (v1.02) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rings of Medusa (Germany) (v1.04) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rings of Medusa (Germany) (v1.6) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rings of Medusa II - The Return of Medusa (Germany) (v1.07C+ AUG 28 1991) (Coverdisk - Amiga Fun - Issue xx) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Ringside (Europe) (Compilation - Hyperaction) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Rick Dangerous (Europe) (Level Select) (Alt) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rick Dangerous (Europe) (Unlimited Lives) (Alt 2) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Rick Davis's World Trophy Soccer (Europe) | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Ringling Bros. and Barnum & Bailey Circus Games (Europe) (Compilation - Mega Pack II) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| Rings of Medusa (Europe) (v1.6) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rings of Medusa (Germany) (v1.02) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rings of Medusa (Germany) (v1.04) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rings of Medusa (Germany) (v1.6) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rings of Medusa II - The Return of Medusa (Germany) (v1.07C+ AUG 28 1991) (Coverdisk - Amiga Fun - Issue xx) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Ringside (Europe) (Compilation - Hyperaction) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
 | Rise of the Dragon (Europe) (v1.0) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rise of the Dragon (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rise Of The Robots - CD32 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2689,66 +2733,66 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Risk - The World Conquest Game (Europe) (v1.9) (Compilation - Board Genius) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Riskant! (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Risky Woods (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Road Blasters (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Road Blasters (Europe) (Budget - Kixx) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Road Rash (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Roadkill (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Road Blasters (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Road Blasters (Europe) (Budget - Kixx) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Road Rash (Europe) | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Roadkill (Europe) (AGA) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | TBD | TBD |
 | Roadwar 2000 | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
-| Roadwar Europa (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Roadwars (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Robbeary (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Robin Smith's International Cricket (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Robinson's Requiem (Europe) (En,Fr,De) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| RoboCop 2 (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| RoboCop 3 (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| RoboCop 3 (Europe) (En,Fr,De) (Dongle Protected) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| RoboCop 3D (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| RoboCop (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| RoboCop (Europe) (Budget - The Hit Squad) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| RoboCop (Europe) (Compilation - Hollywood Collection) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| RoboSport (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Robotnic (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Robozone (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rock-A-Doodle - The Computerized Coloring Book (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rock 'n Roll (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Rock 'n Roll (Europe) (Compilation - 5th Anniversary) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Rock Star Ate My Hamster (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rocket Ranger (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rocket Ranger (Europe) (Budget - Mirror Image) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rocket Ranger (Germany) (En) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rocket Ranger (Germany) (En) (Budget - Mirror Image) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rocky (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rodland (Europe) (v1.3) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Rodland (Europe) (v1.32) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Rody and Mastico (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rody et Mastico (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rody et Mastico II (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rody et Mastico III (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rody et Mastico IV - Rody Noel (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rody et Mastico V (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rody et Mastico VI (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rody und Mastico (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rogue Trooper (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Roller Coaster Rumbler (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rollerball (Europe) (Coverdisk - Amiga Special - Issue xx) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rolling Ronny (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rolling Ronny (Europe) (Coverdisk) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rolling Thunder (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rolling Thunder (Europe) (Budget - KlassiX) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Romantic Encounters at the Dome (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rome AD 92 - The Pathway to Power (Europe) (En,Fr,De,It) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rotor (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rotox (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Round the Bend! (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rubicon (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Ruesselsheim (Germany) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Ruff and Reddy in the Space Adventure (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Ruff 'n' Tumble (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Ruffian (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rugby Coach (Europe) (En,Fr,De,Es,It) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rugby League Coach (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rugby - The World Cup (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rugby - The World Cup (Europe) (With Demo Option) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Roadwar Europa (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Roadwars (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Robbeary (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Robin Smith's International Cricket (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| Robinson's Requiem (Europe) (En,Fr,De) (AGA) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | TBD | TBD |
+| RoboCop 2 (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| RoboCop 3 (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| RoboCop 3 (Europe) (En,Fr,De) (Dongle Protected) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| RoboCop 3D (USA) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| RoboCop (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| RoboCop (Europe) (Budget - The Hit Squad) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| RoboCop (Europe) (Compilation - Hollywood Collection) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| RoboSport (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Robotnic (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Robozone (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Rock-A-Doodle - The Computerized Coloring Book (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rock 'n Roll (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rock 'n Roll (Europe) (Compilation - 5th Anniversary) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rock Star Ate My Hamster (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Rocket Ranger (Europe) | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Rocket Ranger (Europe) (Budget - Mirror Image) | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Rocket Ranger (Germany) (En) | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Rocket Ranger (Germany) (En) (Budget - Mirror Image) | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Rocky (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Rodland (Europe) (v1.3) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Rodland (Europe) (v1.32) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Rody and Mastico (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Rody et Mastico (France) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rody et Mastico II (France) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Rody et Mastico III (France) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Rody et Mastico IV - Rody Noel (France) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Rody et Mastico V (France) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Rody et Mastico VI (France) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Rody und Mastico (Germany) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rogue Trooper (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Roller Coaster Rumbler (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Rollerball (Europe) (Coverdisk - Amiga Special - Issue xx) | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rolling Ronny (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rolling Ronny (Europe) (Coverdisk) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rolling Thunder (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Rolling Thunder (Europe) (Budget - KlassiX) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Romantic Encounters at the Dome (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rome AD 92 - The Pathway to Power (Europe) (En,Fr,De,It) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rotor (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rotox (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Round the Bend! (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Rubicon (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Ruesselsheim (Germany) (AGA) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | TBD | TBD | TBD |
+| Ruff and Reddy in the Space Adventure (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Ruff 'n' Tumble (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
+| Ruffian (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rugby Coach (Europe) (En,Fr,De,Es,It) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Rugby League Coach (Europe) | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Rugby - The World Cup (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| Rugby - The World Cup (Europe) (With Demo Option) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Rules of Engagement (Europe) (v1.06 11.26.91) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rules of Engagement (USA) (v1.03 10.14.91) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Run the Gauntlet (Europe) (Compilation - Party Time) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
@@ -3136,7 +3180,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Super Tetris (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Super Wonderboy - Wonderboy in Monsterland (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Super Zocker + Blackjack II (Germany) (Coverdisk) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Superfrog (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| Superfrog (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Superfrog (LHA) | TBD | Unsupported archive entries | TBD | TBD | TBD | Unsupported archive entries | Unsupported archive entries | TBD | TBD | TBD |
 | Superleague Soccer (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Superman - The Man of Steel (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -3628,6 +3672,50 @@ not committed.
 
 | Date | Evidence |
 | --- | --- |
+| 2026-07-02 | Post-DDF-fix A500 follow-up ran `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500` against `Red Baron (Europe)`, `Red Baron (Germany)`, `Red Lightning (USA)`, `Realms of Arkania - Blade of Destiny (Europe) (OCS, ECS)`, `Reederei (Germany)`, `Renegade Legion - Interceptor (Europe)`, `Rick Davis's World Trophy Soccer (Europe)`, and `Road Rash (Europe)`. All 8 launches passed mechanical smoke at 174-202 headless FPS with disk progress; visual review of `build/scratch/amiga-corpus/ddf-phase-followup-a500-contact.png` promotes Red Lightning, Realms of Arkania, and Reederei A500 to visual smoke, and reclassifies Red Baron Europe/Germany, Renegade Legion, Rick Davis Soccer, and Road Rash A500 from visual corruption to readable requirement/error prompts. |
+| 2026-07-02 | OCS high-resolution DDF phase fix reran A500 routes for `D:\emu\amiga\Romantic Encounters at the Dome (Europe).7z`, `D:\emu\amiga\Rollerball (Europe) (Coverdisk - Amiga Special - Issue xx).7z`, and `D:\emu\amiga\Rugby League Coach (Europe).7z` through `mnemos_player --system amiga500 --frames 4500`. The Romantic trace programs `DDFSTRT=0x0034`, `DDFSTOP=0x00D0`, four hires bitplanes, zero modulo, and plane bases spaced for an 84-byte row; the corrected DDF phase advances that route by 42 words/line. Screenshot `build/scratch/romantic-ddf-a500.png` shows the readable menu, so Romantic Encounters is promoted to visual smoke on A500. Screenshots `build/scratch/rollerball-ddf-a500.png` and `build/scratch/rugby-league-coach-ddf-a500.png` show readable AmigaDOS/error screens instead of diagonal high-resolution corruption, so those A500 rows move from `Broken (visual defect)` to `Broken (requirement/error prompt)`. |
+| 2026-07-02 | ECS `DIWHIGH`/wrapped-display-window fix reran `D:\emu\amiga\Romantic Encounters at the Dome (Europe).7z` manually through `mnemos_player --system amiga500plus/amiga600 --frames 4500` with `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`. Register dumps now show `DIWSTRT=0x2178`, `DIWSTOP=0x010A`, `DIWHIGH=0x0100`, `DDFSTRT=0x0030`, `DDFSTOP=0x00D8`; screenshots `build/scratch/romantic-diwhigh2-a500plus.png` and `build/scratch/romantic-diwhigh-a600.png` show the previously clipped right tower and centered menu text. Romantic Encounters is promoted to visual smoke on A500+/A600; the A500 route was still separate at this point and is superseded by the later OCS DDF phase fix above. |
+| 2026-07-02 | `Ruesselsheim (Germany) (AGA)` is marked `N/A` on the non-AGA A1000/A500/A2000/A3000/CDTV/A500+/A600 routes and left `TBD` on A1200/A4000/CD32 pending an AGA pass. With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Ruff and Reddy/Ruff n Tumble/Ruffian/Rugby World Cup/Rugby World Cup With Demo/Rugby Coach/Rugby League Coach root .7z slice>` completed screenshots for the runnable rows and failed only the standard Rugby World Cup IPF before emulation with `CAPSLockTrack ... cylinder 0 head 0: imgeGeneric (2)`, so that exact row is recorded as `Unsupported media (format pending)`. Visual review of `build/scratch/amiga-corpus/ruff-rugby-contact.png` promotes Ruff and Reddy plus Rugby World Cup With Demo to visual smoke on A500/A500+/A600, marks Ruff n Tumble A500 as `Broken (visual defect)` due a solid magenta frame, and marks Ruff n Tumble A500+/A600 as `Broken (requirement/error prompt)` due visible Software Failure output with severe corruption. Ruffian is marked `Broken (visual defect)` on A500 due a solid red frame and visual smoke on A500+/A600. Rugby Coach is marked `Broken (visual defect)` on all three routes due effectively black output with only a tiny artifact. Rugby League Coach is marked `Broken (visual defect)` on A500 due high-resolution corruption and visual smoke on A500+/A600 with a readable loader/credits screen. Follow-up forced-Kickstart probes in `build/scratch/amiga-corpus/rugby-league-coach-kickstart-comparison.png` show this is primarily a memory/route split rather than ECS rendering: A500+ and A600 render the loader under both default KS2.x and forced KS1.3, while A500 forced to KS2.0 reaches an insufficient-memory requester and A500 default KS1.3 remains visually corrupted. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Romantic Encounters/Rome AD 92 A600 HD bundle/Rome AD 92 standard/Rotor/Rotox/Round the Bend/Rubicon root .7z slice>` produced all 21 screenshots. The harness rejected the Rome AD 92 A600 HD bundle A500 route as a Kickstart 1.3 insert-disk prompt and all Round the Bend routes as all-black frames. Visual review of `build/scratch/amiga-corpus/romantic-rubicon-contact.png` marks Romantic Encounters as `Broken (visual defect)` on A500/A500+/A600 due severe or partial graphics corruption, marks the Rome AD 92 A600 HD bundle as `Broken (prompt only)` on A500 and visual smoke on A500+/A600, and promotes Rome AD 92 standard, Rotor, Rotox, and Rubicon to visual smoke on all three routes. Round the Bend is marked `Broken (visual defect)` on all three routes due black output despite disk progress. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Rogue Trooper/Roller Coaster Rumbler/Rollerball Coverdisk/Rolling Ronny/Rolling Ronny Coverdisk/Rolling Thunder/Rolling Thunder KlassiX root .7z slice>` produced all 21 screenshots; the harness rejected only the all-black Rogue Trooper A500 frame. Visual review of `build/scratch/amiga-corpus/rogue-rolling-contact.png` marks Rogue Trooper as `Broken (visual defect)` on A500/A500+/A600 due black or solid-color output, marks Roller Coaster Rumbler A500 as `Broken (visual defect)` due severe high-resolution corruption, and marks Roller Coaster Rumbler A500+/A600 as `Broken (requirement/error prompt)` because both routes stop at an AmigaDOS prompt instead of game content. Rollerball Coverdisk is marked `Broken (visual defect)` on A500 due the same high-resolution corruption and promoted to visual smoke on A500+/A600 with a stable credit/title screen. Rolling Ronny and its coverdisk are promoted to visual smoke on all three routes. Both Rolling Thunder rows are promoted to visual smoke on A500 and marked `Broken (visual defect)` on A500+/A600 due severe title-screen bitplane corruption. Follow-up forced-Kickstart probes in `build/scratch/amiga-corpus/rolling-thunder-kickstart-comparison.png` show the corruption follows the KS2.x route, not ECS hardware: A500 forced to Kickstart 2.0 reproduces the corrupted title screen, while A500+ and A600 forced to Kickstart 1.3 render the same title screen cleanly. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Rody and Mastico/Rody et Mastico I-VI/Rody und Mastico root .7z slice>` passed mechanical smoke for all 24 launches. Visual review of `build/scratch/amiga-corpus/rody-mastico-contact.png` promotes `Rody et Mastico (France)` and `Rody und Mastico (Germany)` to visual smoke on A500/A500+/A600 with readable title screens. `Rody and Mastico (Europe)` and `Rody et Mastico II` through `VI` are marked `Broken (visual defect)` on A500/A500+/A600 because the final frames are effectively black with only a tiny red artifact despite disk progress. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Rocket Ranger Europe/Rocket Ranger Europe Budget/Rocket Ranger Germany/Rocket Ranger Germany Budget/Rocky/Rodland v1.3/Rodland v1.32 root .7z slice>` mounted and ran all 21 launches; the harness rejected only Rodland A500+/A600 all-black frames. Visual review of `build/scratch/amiga-corpus/rocket-rocky-rodland-contact.png` marks all Rocket Ranger variants on A500/A500+/A600 as `Broken (requirement/error prompt)` because the visible prompt requests `RocketRanger2:`. Rocky is marked `Broken (visual defect)` on all three routes due severe A500 high-resolution corruption and blank gray A500+/A600 output. Both Rodland rows are marked `Broken (visual defect)` because A500 renders severe corruption and A500+/A600 render all-black frames. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <RoboCop 3D/RoboSport/Robotnic/Robozone/Rock-A-Doodle/Rock n Roll/Rock n Roll Compilation/Rock Star root .7z slice>` mounted and ran all 24 launches; the harness rejected only A500 black frames for RoboCop 3D and Robozone. Visual review of `build/scratch/amiga-corpus/robosport-rock-cluster-contact.png` promotes RoboSport A500+/A600, Robotnic A500/A500+/A600, Rock-A-Doodle A500+/A600, both Rock 'n Roll rows on A500/A500+/A600 to visual smoke. RoboCop 3D is marked `Broken (visual defect)` on all three routes due black/solid-red output; RoboSport A500, Robozone A500, Rock-A-Doodle A500, and Rock Star A500 are marked `Broken (visual defect)` due black output or severe high-resolution corruption; Robozone A500+/A600 and Rock Star A500+/A600 are marked `Broken (requirement/error prompt)` due Amiga `Software Failure` screens. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <RoboCop/RoboCop Budget/RoboCop Hollywood/RoboCop 2/RoboCop 3/RoboCop 3 Dongle root .7z slice>` mounted and ran all 18 launches; the harness failed only black-frame gates. Visual review of `build/scratch/amiga-corpus/robocop-cluster-contact.png` promotes RoboCop A500, RoboCop 2 A500/A500+/A600, and RoboCop 3 A500/A500+/A600 to visual smoke. RoboCop A500+/A600 and all RoboCop Budget routes are marked `Broken (visual defect)` due all-black output, RoboCop Hollywood A500 and RoboCop 3 Dongle A500 are marked `Broken (visual defect)` due severe corruption, and RoboCop Hollywood plus RoboCop 3 Dongle A500+/A600 are marked `Broken (requirement/error prompt)` due Amiga `Software Failure` screens. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Road Blasters/Road Rash/Roadwar Europa/Roadwars/Robbeary/Robin Smith root .7z slice>` completed 15 launch screenshots and failed Robin Smith's International Cricket before emulation with `CAPSLockTrack ... imgeGeneric (2)` against the archive-selected save-game disk, so that row is recorded as `Unsupported media (format pending)`. Visual review of `build/scratch/amiga-corpus/roadblasters-robbeary-contact.png` promotes Road Blasters A500, Road Rash A500+/A600, Roadwar Europa A500/A500+/A600, Roadwars A500/A500+/A600, and Robbeary A500 to visual smoke. Road Blasters A500+/A600 are marked `Broken (requirement/error prompt)` due Amiga `Software Failure` screens, Road Rash A500 is marked `Broken (visual defect)` due severe high-resolution corruption, and Robbeary A500+/A600 are marked `Broken (visual defect)` due solid green output. Roadkill AGA and Robinson's Requiem AGA are marked `N/A` on non-AGA hardware routes by applicability, with A1200/A4000/CD32 left `TBD`. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Rings of Medusa Germany/Rings of Medusa II/Ringside/Road Blasters Budget root .7z slice>` completed all 18 launches; the harness only flagged Ringside A500+/A600 for no disk-progress evidence. Visual review of `build/scratch/amiga-corpus/rings-roadblasters-contact.png` promotes all three German Rings of Medusa variants, Rings of Medusa II, Ringside A500, and Road Blasters Budget on A500/A500+/A600 to visual smoke where listed, and marks Ringside A500+/A600 as `Broken (requirement/error prompt)` due Amiga `Software Failure` screens. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Rick Dangerous/Rick Dangerous 2/Rick Davis/Ringling Bros/Rings of Medusa root .7z slice>` completed 15 launch screenshots and failed Ringling Bros before emulation with `CAPSLockTrack ... imgeGeneric (2)`, so Ringling is recorded as `Unsupported media (format pending)`. Visual review of `build/scratch/amiga-corpus/rick-dangerous-ring-medusa-contact.png` marks base Rick Dangerous A500/A500+/A600 as `Broken (visual defect)` due blank white output, promotes Rick Dangerous 2 Budget A500/A500+/A600 and Rick Dangerous 2 standard A500+/A600 to visual smoke, marks Rick Dangerous 2 standard A500 as `Broken (visual defect)` due all-black output, marks Rick Davis Soccer A500 as `Broken (visual defect)` due severe high-resolution corruption, and promotes Rick Davis Soccer A500+/A600 plus Rings of Medusa Europe A500/A500+/A600 to visual smoke. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Retee/Return to Atlantis/Revelation/Rick Dangerous Budget/Level Select/Unlimited Lives root .7z slice>` completed 15 launch screenshots and failed the Rick Dangerous Budget routes before emulation with `CAPSLockTrack ... imgeGeneric (2)`, so that row remains `Unsupported media (format pending)`. Visual review of `build/scratch/amiga-corpus/retee-return-rick-contact.png` promotes Retee A500/A500+/A600, Return to Atlantis A500+/A600, Rick Dangerous Level Select A500/A500+/A600, and Rick Dangerous Unlimited Lives A500 to visual smoke. Return to Atlantis A500 and all Revelation routes are marked `Broken (visual defect)`, while Rick Dangerous Unlimited Lives A500+/A600 are marked `Broken (requirement/error prompt)` due Amiga `Software Failure` screens. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Reise/Renaissance/Renegade/Renegade Budget/Renegade Legion/Resolution 101 root .7z slice>` completed all 18 launches, with the harness failing only the all-black Renegade routes. Visual review of `build/scratch/amiga-corpus/reise-renegade-resolution-contact.png` promotes Reise A500, Renaissance A500, Renegade Legion A500+/A600, and Resolution 101 A500/A500+/A600 to visual smoke. Reise A500+/A600 are marked `Broken (visual defect)` due border-only output, Renaissance A500+/A600 are marked `Broken (requirement/error prompt)` due Amiga `Software Failure` screens, both Renegade rows are marked `Broken (visual defect)` due all-black output, and Renegade Legion A500 is marked `Broken (visual defect)` due severe title-screen corruption. |
+| 2026-07-02 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom "D:\emu\amiga\adf\Reel_1.adf.zip","D:\emu\amiga\adf\Reel_2.adf.zip"` reran the exact Reel disk ZIP rows. Visual review of `build/scratch/amiga-corpus/reel-disks-contact.png` marks `Reel_1.adf` as `Broken (requirement/error prompt)` on A500 due a not-enough-memory dialog and on A500+/A600 due a title-owned request for `WINGS REEL2`. `Reel_2.adf` remains `Broken (prompt only)` as a standalone disk because it reaches Kickstart insert-disk prompts. The aggregate `Reel` row stays `TBD` pending a proper multi-disk/swap harness route. |
+| 2026-07-02 | Reeder, Der (Germany) (v1.00 24.08.1995) (AGA) is marked `N/A` on non-AGA routes and left `TBD` on A1200/A4000/CD32 pending an AGA-family compatibility pass. With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom "D:\emu\amiga\Reeder, Der (Germany) (v1.12 - 1995-08-24).7z","D:\emu\amiga\Reederei (Germany).7z"` passed mechanical smoke for all six target launches. Visual review of `build/scratch/amiga-corpus/reeder-reederei-contact.png` marks Reeder v1.12 as `Broken (visual defect)` on A500/A500+/A600, marks Reederei A500 as `Broken (visual defect)` due severe corruption, and promotes Reederei A500+/A600 to visual smoke on the readable player-selection screen. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom "D:\emu\amiga\Realm of the Trolls (Europe) (Compilation - 5th Anniversary).7z","D:\emu\amiga\Recognize Me (Europe) (En,Fr,De,Es,It).7z"` promoted Recognize Me to visual smoke on A500/A500+/A600 after manual review of `build/scratch/amiga-corpus/recognize-me-contact.png`. Realm of the Trolls failed before emulation on all three routes because CAPS returned `CAPSLockTrack failed ... cylinder 0 head 0: imgeGeneric (2)`, so the exact row is recorded as `Unsupported media (format pending)` rather than a machine compatibility failure. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom "D:\emu\amiga\Red Heat (Europe).7z","D:\emu\amiga\Red Heat (Europe) (Budget - The Hit Squad).7z","D:\emu\amiga\Red Lightning (USA).7z","D:\emu\amiga\Red Storm Rising (Europe) (v843.02).7z"` passed mechanical smoke for all 12 launches. Visual review of `build/scratch/amiga-corpus/red-heat-lightning-storm-contact.png` promotes both Red Heat rows and Red Storm Rising to visual smoke on A500/A500+/A600, marks Red Lightning A500 as `Broken (visual defect)` due corrupted blue high-resolution output, and promotes Red Lightning A500+/A600 to visual smoke on a readable Workbench-style disk screen. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom "D:\emu\amiga\Red Baron (Europe).7z","D:\emu\amiga\Red Baron (Europe) (Compilation - The Lords of Power).7z","D:\emu\amiga\Red Baron (Germany).7z"` passed mechanical smoke for all nine launches. Visual review of `build/scratch/amiga-corpus/red-baron-cluster-contact.png` marks standalone Europe/Germany A500 as `Broken (visual defect)` due corrupted blue high-resolution output, promotes standalone Europe/Germany A500+/A600 to visual smoke on readable Red Baron title screens, marks the compilation A500 as `Broken (visual defect)`, and marks the compilation A500+/A600 as `Broken (requirement/error prompt)` because the visible installer asks for original install disks and blank disks before useful execution. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom "D:\emu\amiga\Realms (Europe) (En,Fr,De).7z","D:\emu\amiga\Realms of Arkania - Blade of Destiny (Europe) (OCS, ECS).7z"` completed all six launches. `Realms` rendered all-black frames on A500/A500+/A600 with drive cylinder still 0, so those routes are `Broken (visual defect)`. `Realms of Arkania` reached drive cylinder 44 and rendered a Workbench-style disk screen; visual review of `build/scratch/amiga-corpus/realms-cluster-contact.png` marks A500 as `Broken (visual defect)` due severe high-resolution corruption, and promotes A500+/A600 to visual smoke on the readable disk desktop. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 9000 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom "D:\emu\amiga\Real Ghostbusters, The (Europe).7z"` reached drive cylinder 32 on all three routes but still rendered all-black frames after the longer run. The exact row is recorded as `Broken (visual defect)` on A500/A500+/A600; artifacts include `build/scratch/amiga-corpus/real-ghostbusters-europe-contact.png`. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom "D:\emu\amiga\Reach for the Skies (Europe) (v1.1).7z","D:\emu\amiga\Reach for the Stars - The Conquest of the Galaxy (Europe) (v3.01).7z","D:\emu\amiga\Reach for the Stars - The Conquest of the Galaxy (USA) (v3.0).7z"` ran all nine launches at 173+ headless FPS except the intentionally recorded failing route. The harness failed because Reach for the Skies A500 rendered an all-black frame after disk progress to cylinder 60; visual review of `build/scratch/amiga-corpus/reach-cluster-contact.png` marks that A500 route as `Broken (visual defect)`, marks Reach for the Skies A500+/A600 as `Broken (requirement/error prompt)` due Amiga `Software Failure` screens, and promotes both Reach for the Stars variants to visual smoke on A500/A500+/A600 with plausible space intro/loading visuals. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom "D:\emu\amiga\RanX (France) (Compilation - 10 Megahits Vol. 3).7z"` passed mechanical smoke at 162+ headless FPS and reached drive cylinder 26 on all three routes. Visual review of `build/scratch/amiga-corpus/ranx-france-contact.png` promotes A500 to visual smoke on the readable RanX credits screen, and marks A500+/A600 as `Broken (visual defect)` due severe horizontal corruption over the same screen. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom "D:\emu\amiga\Rampart (Europe).7z"` passed mechanical smoke at 158+ headless FPS on all three routes and reached drive cylinder 9/10. Visual review of `build/scratch/amiga-corpus/rampart-europe-contact.png` shows readable Rampart title art on A500/A500+/A600, so the exact row is promoted to visual smoke. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom "D:\emu\amiga\Rambo III (USA).7z","D:\emu\amiga\Rampage (USA).7z"` passed mechanical smoke for all six launches. Visual review of `build/scratch/amiga-corpus/rambo-usa-rampage-contact.png` promotes Rambo III USA to visual smoke on A500/A500+/A600, promotes Rampage USA to visual smoke on A500, and marks Rampage USA A500+/A600 as `Broken (requirement/error prompt)` because both reach an Amiga `Software Failure` prompt after boot. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom "D:\emu\amiga\Rambo III (Europe) (Budget - The Hit Squad).7z"` passed mechanical smoke for all three routes. Visual review of `build/scratch/amiga-corpus/rambo-iii-budget-contact.png` promotes A500 to visual smoke on the readable Rambo III title/high-score screen, and marks A500+/A600 as `Broken (requirement/error prompt)` because both reach an Amiga `Software Failure` prompt after boot. |
+| 2026-07-02 | Rainbow Islands ADF remains `Broken (visual defect)` on A500/A500+/A600 after the WORDSYNC latch regression fix. The current A500 trace (`build/scratch/rainbow-adf-wordsync-latch-trace300.stderr.txt`) shows the raw loader arming `DSKLEN=$9F40` with `DSKSYN` already latched and `wordsync=0`, so disk DMA starts instead of waiting for another sync. The CPU still polls `DSKBLK` at `$0012AC`: the active Copper list reaches `$00123A` and writes `DMACON=$397C`, clearing `DSKEN` before the long raw read completes. Final board state from `build/scratch/rainbow-adf-wordsync-latch.ppm.amiga_board.regs.txt` is `INTREQ=0x1020` (`DSKSYN`/`VERTB` but no `DSKBLK`), `DSKPTR=0x0015B6`, `DSKLEN=0x9E68`, `DSKDMA=0x00003CD0`, `DFMOTOR=1`, and `COPRUN=1`; the screenshot remains all black. This is recorded as a real hardware-accuracy defect, not a media/archive issue; no title-specific workaround is applied. |
+| 2026-07-02 | Continued the root-corpus IPF pass across A500/A500+/A600 for `3D Construction Kit`, `3D Construction Kit 2`, `3D Galax`, `3D Pool`, `3D World Boxing`, and `3D World Tennis`. All 18 launches failed before emulation with `CAPSImg library not found`, so those A500/A500+/A600 cells are recorded as `Unsupported media (format pending)` pending a local SPS CAPSImg library. |
+| 2026-07-02 | Next root-corpus romset pass ran six explicit `.7z` IPF sets across A500/A500+/A600: `10 out of 10 - Early Essentials`, `10 out of 10 - Essential Science`, `10 out of 10 - Maths Number`, `1869 - Erlebte Geschichte Teil I`, `1869 - Erlebte Geschichte Teil I (AGA)`, and `1st Division Manager`. All 18 launches failed before emulation with `CAPSImg library not found`; the affected A500/A500+/A600 cells are recorded as `Unsupported media (format pending)` rather than investigated as CPU/video failures. Logs are under `build/scratch/amiga-corpus/*10_out_of_10*`, `*1869*`, and `*1st_Division*`. |
+| 2026-07-02 | Compatibility status policy update: current-build failures with existing evidence are now recorded as `Broken (...)` with the observed reason kept in parentheses, rather than leaving prompt gates, Workbench/title errors, or visible corruption as independent quasi-success statuses. No new emulator behavior is implied by this row; it preserves the prior analysis while keeping the matrix actionable for the next romset pass. |
+| 2026-07-02 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 3000 -MinimumHeadlessFps 30 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Desert Strike-1/2/3 ZIP ADF set>` passed all three launches at 148+ headless FPS, reached drive cylinder 78, and produced readable trainer/menu screenshots at `build/scratch/amiga-corpus/amiga500-Desert_Strike.png`, `amiga500plus-Desert_Strike.png`, and `amiga600-Desert_Strike.png`; the aggregate Desert Strike row is promoted to visual smoke on A500/A500+/A600. |
+| 2026-07-02 | Fixed high-resolution DDF pitch handling for exact four-clock-aligned fetch windows. `mnemos_chips_video_agnus_test.exe` passed 78 Agnus test cases / 245 assertions, including the new `DDFSTRT=$40`/`DDFSTOP=$D0` 38-word KS2 prompt coverage. Manual review of `build/scratch/ks2-hres-fix/contact.png` confirmed the Kickstart 2.0 prompt is readable and Prince of Persia's `DDFSTRT=$3c`/`DDFSTOP=$d4` high-resolution trainer screen remains readable. |
+| 2026-07-02 | Exact resident Kickstart ZIP ROM sweep extracted local ROM archives under `build/scratch/kickstart-exact-route-sweep/roms` and ran 38 no-disk 400-frame launches through model-specific Kickstart environment variables. Manual review of `build/scratch/kickstart-exact-route-sweep/contact.png` and `build/scratch/kickstart-exact-route-sweep/contact-extra.png` promoted readable 1.0/1.1/1.2 33.180/1.4/2.04/2.05 37.299-37.350/3.1 40.063 prompt routes, kept 1.2 A1000 33.166, 3.1 A600 40.068, and 3.5 as visual defects where shown, and marked clearly incompatible model routes as `N/A`. |
+| 2026-07-02 | Compatibility inventory cleanup split boot-media evidence from hardware-route applicability for the requested A2000 bridgeboard/controller install disks. Earlier A500/A500+/A600 screenshots still prove those ADFs can start, but the matrix now marks non-A2000 base routes as `N/A` for A2088/A2286/A2090/A2232 rows, keeps A2091 A3000 as `TBD` pending explicit expansion-route policy, and marks the AGA-only Action Replay 4 BETA row `TBD` only on AGA-family routes. |
+| 2026-07-02 | After the high-resolution DDF fix, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 2400 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <ProTracker v1.0b/Workbench 1.3/Workbench 1.3.3 D/X-Copy v5.21>` passed all 12 launches. Manual review of `build/scratch/amiga-corpus/hres-apps-after-ddf-fix-contact.png` promoted Workbench 1.3, Workbench 1.3.3 D, and X-Copy v5.21 to visual smoke on A500/A500+/A600 while leaving ProTracker v1.0b as a default-KS2 visual defect on A500+/A600. |
+| 2026-07-02 | After the high-resolution DDF fix, no-disk firmware prompt reruns for Kickstart 2.0, Kickstart 2.05/A600 37.350, Kickstart 3.1, Kickstart 3.1/A600 40.063, and Kickstart 4.0 produced readable insert-disk prompts on the tested A500/A500+/A600/A2000 override routes. Manual review source: `build/scratch/kickstart-route-sweep-after-hres-fix/contact.png`. |
+| 2026-07-02 | After the high-resolution DDF fix, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1200 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500plus,amiga600 -Rom <19 requested A1942/A2024/A2088/A2090/A2091/A2232/Action Replay media>` produced 38 screenshots before the KS2 prompt-hash classifier was extended. Manual review of `build/scratch/amiga-corpus/requested-setup-action-a500p-a600-after-hres-fix.png` promoted readable A500+/A600 setup/action screens to visual smoke and reclassified clean insert-disk prompt rows as prompt-only. |
+| 2026-07-02 | The smoke harness prompt classifier was extended for stable Kickstart 2.0, 2.05, 3.1, and 4.0 insert-disk prompt hashes. A targeted `-RejectKickstartPrompt` check over A500+ A1942 plus A2024 now fails A1942 as `kickstart_2_0_insert_disk_prompt` while A2024 still advances to a booted setup screen. |
+| 2026-07-02 | Firmware route sweep with model-specific Kickstart environment variables ran 36 no-disk launches for Kickstart 1.0 NTSC, 1.1 NTSC/PAL, 1.2, 1.4 beta, 2.0, 2.05/A600 37.350, 3.0, 3.1, 3.1/A600 40.063, 3.5, and 4.0. All launched without process failure; manual review of `build/scratch/kickstart-route-sweep/kickstart-route-contact.png` plus `build/scratch/kickstart-route-sweep-extra/kickstart-extra-contact.png` is reflected in the BIOS/Firmware rows. |
+| 2026-07-02 | Pre-fix `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1200 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600,amiga2000 -Rom <19 requested A1942/A2024/A2088/A2090/A2091/A2232/Action Replay media>` produced 76 screenshots. Ten A500/A2000 KS1.3 routes correctly failed the prompt gate; manual review of `build/scratch/amiga-corpus/requested-setup-action-contact.png` promoted readable A500/A2000 setup screens and Action Replay 4 BETA to visual smoke. The A500+/A600 high-resolution corruption observed in this pass is superseded by the later DDF-fix rerun above. |
+| 2026-07-02 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 2400 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <ProTracker v1.0b ADF, Workbench 1.3.3 D Boot ZIP>` passed all 6 mechanical launches. Manual review of `build/scratch/amiga-corpus/protracker-wb133-contact.png` promoted A500 ProTracker v1.0b and A500 Workbench 1.3.3 D to visual smoke, and classified the A500+/A600 default-Kickstart routes as visual defects due severe high-resolution corruption. |
+| 2026-07-02 | Forced `D:\emu\amiga\bios\Kickstart 1.3.rom` through the model-specific Kickstart environment variables and booted Workbench 1.3 for 2400 frames with `mnemos_player --system amiga1000/amiga500/amiga500plus/amiga600/amiga2000`. All five routes exited 0, and `build/scratch/kickstart13-model-smoke/kickstart13-model-contact.png` shows readable Workbench 1.3 CLI output. This promotes the aggregate Kickstart 1.3 row to BIOS-smoke on those currently wired routes; A1000 is resident-ROM override evidence, and A500+/A600 are explicit ROM-override/downgrade evidence. |
+| 2026-07-02 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 2400 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600` passed for direct ADF apps X-Copy v5.21 and ProTracker v2.0a plus ZIP-contained ADF titles Workbench 1.3 Boot, Bubble Bobble, and P.P. Hammer. Visual review promoted ProTracker v2.0a to visual smoke on all three models, Workbench 1.3 to visual smoke on A500 and visual defect on A500+/A600, and X-Copy to visual defect on all three models. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -System amiga500` passed for Workbench 1.3 Boot ZIP, Turrican ZIP, AlienSyndrome ZIP, and X-Copy v5.21 direct ADF. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -System amiga500plus,amiga600` passed for Workbench 2.05 Boot ZIP, Turrican ZIP, and ProTracker v2.0a direct ADF. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 ... -System amiga500 -Rom D:\emu\amiga\adf\Turrican.zip -RequireRenderedAudio -AudioFrames 9000` passed with 3,949 frames containing rendered audio signal and peak absolute sample value 14,336. |
@@ -3651,7 +3739,7 @@ not committed.
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500` and the same command with `-System amiga500plus,amiga600` over the DM2/DUNEII/It Came from the Desert/Pirates/PowerMonger/Prince of Persia/P47/Rainbow-Islands/Reel slice disk-smoke-proved Dune II, It Came from the Desert, Pirates, and P47 Thunderbolt on A500/A500+/A600. Visual follow-up kept DM2 Skullkeep and Reel_2.adf as prompt-only media, and left PowerMonger, Rainbow Islands, Reel_1.adf, and Prince of Persia unpromoted due black frames, memory/error dialog, or corrupted output. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom "D:\emu\amiga\adf\Prince of Persia.zip"` passed mechanical disk-smoke gates but rendered persistent banded white-on-black corruption, so no compatibility cell was promoted. |
 | 2026-07-01 | After correcting high-resolution DDF fetch accounting, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom "D:\emu\amiga\adf\Prince of Persia.zip"` rendered a legible A500 trainer screen and promoted A500 to visual smoke. A500+/A600 still render horizontally corrupted high-resolution text, so those cells remain visual defects. |
-| 2026-07-01 | Controlled Prince of Persia reruns with explicit Kickstart overrides showed the text corruption follows Kickstart 2.0 rather than the ECS/1 MiB model: A500+ with Kickstart 1.3 renders the trainer cleanly, while A500 with Kickstart 2.0 renders the same horizontal corruption as default A500+/A600. Targeted CPU/RAM traces show the trainer scans Kickstart ROM for a KS1 font signature (`00 18 6C 6C`); under KS2 the scan wraps and finds the same byte pattern in the trainer code at `$027850`, so the program uses its own bytes as glyph data. Default KS2 cells stay `Visual defect`; this is classified as route-specific media compatibility rather than an Agnus high-resolution fetch defect. |
+| 2026-07-01 | Controlled Prince of Persia reruns with explicit Kickstart overrides showed the text corruption follows Kickstart 2.0 rather than the ECS/1 MiB model: A500+ with Kickstart 1.3 renders the trainer cleanly, while A500 with Kickstart 2.0 renders the same horizontal corruption as default A500+/A600. Targeted CPU/RAM traces show the trainer scans Kickstart ROM for a KS1 font signature (`00 18 6C 6C`); under KS2 the scan wraps and finds the same byte pattern in the trainer code at `$027850`, so the program uses its own bytes as glyph data. Default KS2 cells stay `Broken (visual defect)`; this is classified as route-specific media compatibility rather than an Agnus high-resolution fetch defect. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Arkanoid/Bubble Bobble/DungeonMaster/emeraldMine/Gauntlet II/Golden Axe/Pang/R-Type ADF ZIP slice>` passed 24 mechanical launches. Manual screenshot review promoted Bubble Bobble, Emerald Mine, and R-Type only on the visually plausible A500 route; kept Dungeon Master A500 as a 1 MiB requirement/error prompt; and marked Bubble Bobble, Emerald Mine, and R-Type on A500+/A600 as visual defects. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Arthur/Deep Core/Disk-O-Rogue/Golden Axe AGA/P.P. Hammer/PREY/Onescapee/Swords_of_Twilight_Disk1 ADF ZIP slice>` produced 15 successful mechanical launches and 9 unsupported archive-entry failures. Manual screenshot review promoted P.P. Hammer on A500/A500+/A600, Disk-O-Rogue on A500+/A600, and Swords of Twilight disk smoke on all three; Disk-O-Rogue A500 was marked as a visual defect. Deep Core, PREY, and Onescapee ZIPs contained CD image media rather than ADF/ADZ/IPF/HDF entries. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Alien Breed/Another World/Lemmings/Lotus Turbo Challenge 2/Pinball Dreams/Speedball 2/Superfrog root .7z slice>` failed with explicit IPF/CAPS messages; those rows are marked `Unsupported media (format pending)` on A500/A500+/A600. |
@@ -3666,6 +3754,7 @@ not committed.
 | 2026-07-02 | After high-resolution DDF start/stop quantization was added, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Bubble Bobble/R-Type ADF ZIP slice>` passed all 6 launches. Manual review of `build/scratch/amiga-corpus/ddf-quantization-contact.png` showed readable Bubble Bobble and R-Type trainer/crack screens on A500/A500+/A600, so those aggregate ADF rows are promoted to visual smoke. |
 | 2026-07-02 | Requested-title batch probe for Emerald Mine through Street Fighter resolved 97 user-requested names: 2 were skipped as non-A500/A500+/A600 targets (`CD32`, `Psygnosis`), and 89 selected root `.7z` media failed before emulation with explicit IPF/CAPS unsupported messages (`build/scratch/amiga-corpus/requested-root-format-probe.csv`). Separately, 13 ADF-backed launch sets from the same request were smoke-tested with `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <requested ADF ZIP slice>`. Manual review of `build/scratch/amiga-corpus/requested-adf-batch-contact.png` promoted Arthur and Cannon Fodder 2 PDX to visual smoke; kept P47, Pang-500-NTSC, Pinball Dreams, Bubble Bobble, R-Type, Cannon Fodder TRSI, and Emerald Mine per existing visual classifications; classified Alien Syndrome A500 as a readable Workbench error prompt and Alien Syndrome A500+/A600 as visual defects; kept Desert Strike and Rainbow Islands as visual defects; and reclassified Pirates as visual smoke only on A500, with A500+/A600 visual defects. |
 | 2026-07-02 | With `MNEMOS_CAPSIMG_DLL` pointing at a locally supplied SPS `CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom "D:\emu\amiga\Turrican (Europe).7z"` decoded the archive-contained `Turrican (Europe).ipf`, mounted it through the CAPS-to-raw-track path, and passed all three launches. Manual review of `build/scratch/amiga-corpus/amiga500-Turrican_Europe.png`, `amiga500plus-Turrican_Europe.png`, and `amiga600-Turrican_Europe.png` showed the Turrican title/high-score screen, so the exact IPF row is promoted to visual smoke on A500/A500+/A600. |
+| 2026-07-02 | With `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Final Blow/Final Fight/First Samurai/Flashback/Galaxy Force II/Gauntlet III/Ghosts'n Goblins/Ghouls 'n' Ghosts/Gobliiins/Gremlins 2/Guardian Angel/Guardian AGA/Hammer Boy root .7z slice>` ran all 39 IPF-backed launches. Summaries are preserved as `build/scratch/amiga-corpus/requested-games-batch1-summary.json` and `requested-games-batch2-summary.json`; manual review of `requested-games-batch1-contact.png` and `requested-games-batch2-contact.png` promoted readable cracktro/menu/protection screens for Final Blow A500+/A600, Gauntlet III A500/A500+/A600, Ghouls 'n' Ghosts A500+/A600, Gobliiins A500, and Gremlins 2 A500+/A600 to no-input visual smoke. Final Fight and Flashback A500+/A600, Gobliiins A500+/A600, Guardian Angel A500+/A600, Ghosts'n Goblins A500+/A600, and Hammer Boy A500+/A600 are recorded as requirement/error-prompt failures; Final Blow A500, First Samurai, Flashback A500, Galaxy Force II, Ghosts'n Goblins A500, Ghouls 'n' Ghosts A500, Gremlins 2 A500, Guardian Angel A500, and Hammer Boy A500 are recorded as visual defects. Guardian (Europe) (AGA) is marked `N/A` on non-AGA routes and left `TBD` for AGA-family routes. |
 
 ## Update Rules
 

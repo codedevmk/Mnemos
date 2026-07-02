@@ -101,14 +101,17 @@ namespace {
                 capture("MNEMOS_MSX2_LOGO_ROM");
             }
             if (saw_amiga) {
+                capture("MNEMOS_AMIGA1000_BIOS");
                 capture("MNEMOS_AMIGA500_BIOS");
                 capture("MNEMOS_AMIGA500PLUS_BIOS");
                 capture("MNEMOS_AMIGA600_BIOS");
                 capture("MNEMOS_AMIGA2000_BIOS");
+                capture("MNEMOS_AMIGA1000_KICKSTART_DIR");
                 capture("MNEMOS_AMIGA500_KICKSTART_DIR");
                 capture("MNEMOS_AMIGA500PLUS_KICKSTART_DIR");
                 capture("MNEMOS_AMIGA600_KICKSTART_DIR");
                 capture("MNEMOS_AMIGA2000_KICKSTART_DIR");
+                capture("MNEMOS_AMIGA1000_BIOS_DIR");
                 capture("MNEMOS_AMIGA500_BIOS_DIR");
                 capture("MNEMOS_AMIGA500PLUS_BIOS_DIR");
                 capture("MNEMOS_AMIGA600_BIOS_DIR");
@@ -1768,6 +1771,31 @@ TEST_CASE("player launch boots Amiga500 from Kickstart env without disk media",
     fs::remove_all(dir);
 }
 
+TEST_CASE("player launch boots Amiga1000 from its Kickstart 1.0 env without disk media",
+          "[apps][player][launch][amiga1000]") {
+    scoped_env env({"MNEMOS_AMIGA1000_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick10.rom";
+    write_image(rom_path, tiny_kickstart());
+    REQUIRE(set_env("MNEMOS_AMIGA1000_KICKSTART", rom_path.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system({.system_arg = std::string{"amiga1000"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(outcome.primary_media_path.empty());
+    CHECK(outcome.system->media_count() == 0U);
+    CHECK(has_spec(*outcome.system, "System", "Amiga 1000"));
+    CHECK(has_spec(*outcome.system, "Chip RAM", "256 KiB"));
+    CHECK(has_spec(*outcome.system, "Configuration", "OCS / 256 KiB base"));
+    CHECK(has_spec(*outcome.system, "BIOS", "kick10"));
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
+    REQUIRE(adapter != nullptr);
+    CHECK(adapter->system().chip_ram.size() == amiga_system::size_256k);
+
+    fs::remove_all(dir);
+}
+
 TEST_CASE("player launch boots Amiga500+ from its Kickstart env without disk media",
           "[apps][player][launch][amiga500plus]") {
     scoped_env env({"MNEMOS_AMIGA500PLUS_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
@@ -1810,6 +1838,28 @@ TEST_CASE("player launch boots Amiga600 from its Kickstart env without disk medi
     auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
     REQUIRE(adapter != nullptr);
     CHECK(adapter->system().chip_ram.size() == amiga_system::chip_ram_size_1m);
+
+    fs::remove_all(dir);
+}
+
+TEST_CASE("player launch discovers Amiga1000 Kickstart 1.0 from shared BIOS directory",
+          "[apps][player][launch][amiga1000][bios-dir]") {
+    scoped_env env({"MNEMOS_AMIGA1000_KICKSTART", "MNEMOS_AMIGA_BIOS_DIR",
+                    "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path bios_dir = dir / "bios";
+    const fs::path rom_path = bios_dir / "Kickstart 1.0.rom";
+    write_image(rom_path, tiny_kickstart());
+    REQUIRE(set_env("MNEMOS_AMIGA_BIOS_DIR", bios_dir.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system({.system_arg = std::string{"a1000"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(outcome.primary_media_path.empty());
+    CHECK(has_spec(*outcome.system, "BIOS", "Kickstart 1.0"));
+    CHECK(has_spec(*outcome.system, "System", "Amiga 1000"));
+    CHECK(has_spec(*outcome.system, "Chip RAM", "256 KiB"));
 
     fs::remove_all(dir);
 }

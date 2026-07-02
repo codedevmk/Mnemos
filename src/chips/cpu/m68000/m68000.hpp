@@ -257,6 +257,9 @@ namespace mnemos::chips::cpu {
         }
 
         // ---- instruction stream ----
+        void invalidate_prefetch() noexcept;
+        [[nodiscard]] std::uint16_t prefetch_word(std::uint32_t a) noexcept;
+        void refill_prefetch() noexcept;
         [[nodiscard]] std::uint16_t fetch16() noexcept;
         [[nodiscard]] std::uint32_t fetch32() noexcept;
 
@@ -345,6 +348,8 @@ namespace mnemos::chips::cpu {
         std::function<void(std::uint32_t)> trace_callback_{};
         std::function<void(std::uint32_t, std::uint16_t)> no_effect_opcode_callback_{};
         std::function<void(std::uint32_t, std::uint16_t)> unhandled_opcode_callback_{};
+        std::function<void(int, std::uint32_t, std::uint32_t, std::uint16_t, std::uint16_t)>
+            exception_callback_{};
         bool exception_raised_{};
         bool exception_entry_{};
         bool stopped_{};
@@ -373,6 +378,13 @@ namespace mnemos::chips::cpu {
         // delayed_irq_level_.
         int delayed_irq_level_{};
         int delayed_irq_counter_{};
+
+        // Functional MC68000 two-word prefetch queue. Cycle charging remains in
+        // fetch16/fetch32 for now; this queue models the visible stale
+        // instruction-stream semantics that self-modifying Amiga loaders rely on.
+        std::array<std::uint16_t, 2> prefetch_words_{};
+        std::uint32_t prefetch_pc_{};
+        bool prefetch_valid_{};
 
         // Cycle-source accumulator for the instruction in flight; snapshotted
         // to last_cycle_sources_ at the end of each step_instruction(). The

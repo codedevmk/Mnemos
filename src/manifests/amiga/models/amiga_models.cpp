@@ -8,7 +8,16 @@
 namespace mnemos::manifests::amiga {
 
     namespace {
-        constexpr std::array<amiga_model_descriptor, 5U> model_profiles{{
+        constexpr std::array<amiga_model_descriptor, 6U> model_profiles{{
+            amiga_model_descriptor{
+                .model = amiga_model::amiga1000,
+                .id = "amiga1000",
+                .display_name = "Amiga 1000",
+                .chipset = amiga_chipset::ocs,
+                .chip_ram_size = amiga_size_256k,
+                .zorro2_expansion_bus = false,
+                .fast_ram_configurable = false,
+            },
             amiga_model_descriptor{
                 .model = amiga_model::amiga500,
                 .id = "amiga500",
