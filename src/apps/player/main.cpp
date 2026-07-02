@@ -18,6 +18,7 @@
 #include "headless_commands.hpp"
 #include "player_audio.hpp"
 #include "player_system.hpp"
+#include "presentation_math.hpp"
 #include "region.hpp"
 #include "region_args.hpp"
 #include "state_file.hpp"
@@ -82,10 +83,6 @@ namespace {
     constexpr int kAudioMaxCatchupFrames = 3;
     constexpr int kAudioChannels = 2;
     constexpr int kAudioBytesPerSample = static_cast<int>(sizeof(std::int16_t));
-
-    struct dst_rect {
-        int x{}, y{}, w{}, h{};
-    };
 
     // Owns a cartridge's .srm battery save for the player's lifetime: loads the
     // saved bytes into the adapter's live SRAM on construction, and writes them
@@ -230,24 +227,25 @@ namespace {
     }
 #endif
 
-    dst_rect integer_letterbox(int window_w, int window_h, int src_w, int src_h) {
-        if (src_w <= 0 || src_h <= 0 || window_w <= 0 || window_h <= 0) {
-            return {0, 0, window_w, window_h};
+    struct window_pixel_metrics {
+        int logical_w{};
+        int logical_h{};
+        int pixel_w{};
+        int pixel_h{};
+    };
+
+    [[nodiscard]] window_pixel_metrics current_window_pixel_metrics(SDL_Window* window) noexcept {
+        window_pixel_metrics metrics{};
+        if (window == nullptr) {
+            return metrics;
         }
-        const int scale_w = window_w / src_w;
-        const int scale_h = window_h / src_h;
-        int scale = std::min(scale_w, scale_h);
-        if (scale < 1) {
-            scale = 1;
+        SDL_GetWindowSize(window, &metrics.logical_w, &metrics.logical_h);
+        if (!SDL_GetWindowSizeInPixels(window, &metrics.pixel_w, &metrics.pixel_h) ||
+            metrics.pixel_w <= 0 || metrics.pixel_h <= 0) {
+            metrics.pixel_w = metrics.logical_w;
+            metrics.pixel_h = metrics.logical_h;
         }
-        const int dst_w = src_w * scale;
-        const int dst_h = src_h * scale;
-        return {
-            .x = (window_w - dst_w) / 2,
-            .y = (window_h - dst_h) / 2,
-            .w = dst_w,
-            .h = dst_h,
-        };
+        return metrics;
     }
 
     // OR an SDL gamepad's current buttons + left stick into a controller_state (so a
@@ -340,18 +338,16 @@ namespace {
         if (window == nullptr || system == nullptr) {
             return false;
         }
-        int ww = 0;
-        int wh = 0;
-        SDL_GetWindowSize(window, &ww, &wh);
+        const auto metrics = current_window_pixel_metrics(window);
         const auto fb = system->current_frame();
-        if (fb.width == 0U || fb.height == 0U || ww <= 0 || wh <= 0) {
+        if (fb.width == 0U || fb.height == 0U || metrics.logical_w <= 0 ||
+            metrics.logical_h <= 0) {
             return false;
         }
-        const auto rect =
-            integer_letterbox(ww, wh, static_cast<int>(fb.width), static_cast<int>(fb.height));
-        return x >= static_cast<float>(rect.x) && y >= static_cast<float>(rect.y) &&
-               x < static_cast<float>(rect.x + rect.w) &&
-               y < static_cast<float>(rect.y + rect.h);
+        const auto point = mnemos::apps::player::project_window_point_to_frame(
+            x, y, metrics.logical_w, metrics.logical_h, metrics.pixel_w, metrics.pixel_h,
+            static_cast<int>(fb.width), static_cast<int>(fb.height));
+        return point.inside;
     }
 
     [[nodiscard]] std::int16_t clamp_mouse_delta(int delta) noexcept {
@@ -1066,48 +1062,52 @@ int main(int argc, char* argv[]) {
                 float mx = 0.0F;
                 float my = 0.0F;
                 const auto mouse = SDL_GetMouseState(&mx, &my);
-                int ww = 0;
-                int wh = 0;
-                SDL_GetWindowSize(window, &ww, &wh);
+                const auto metrics = current_window_pixel_metrics(window);
                 const auto fb = system->current_frame();
                 mnemos::frontend_sdk::controller_state pointer{};
                 pointer.trigger = (mouse & SDL_BUTTON_MASK(SDL_BUTTON_LEFT)) != 0U;
                 pointer.a = (mouse & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0U;
                 pointer.b = (mouse & SDL_BUTTON_MASK(SDL_BUTTON_MIDDLE)) != 0U;
-                if (fb.width != 0U && fb.height != 0U && ww > 0 && wh > 0) {
-                    const auto rect = integer_letterbox(ww, wh, static_cast<int>(fb.width),
-                                                        static_cast<int>(fb.height));
+                if (fb.width != 0U && fb.height != 0U && metrics.logical_w > 0 &&
+                    metrics.logical_h > 0) {
+                    const auto rect = mnemos::apps::player::integer_letterbox(
+                        metrics.pixel_w, metrics.pixel_h, static_cast<int>(fb.width),
+                        static_cast<int>(fb.height));
                     if (mouse_captured) {
                         if (rect.w > 0 && rect.h > 0) {
-                            const double scaled_x = pending_mouse_raw_dx *
-                                                    static_cast<double>(fb.width) /
-                                                    static_cast<double>(rect.w);
-                            const double scaled_y = pending_mouse_raw_dy *
-                                                    static_cast<double>(fb.height) /
-                                                    static_cast<double>(rect.h);
+                            const double scaled_x =
+                                mnemos::apps::player::window_delta_to_frame_delta(
+                                    pending_mouse_raw_dx, metrics.logical_w, metrics.pixel_w,
+                                    static_cast<int>(fb.width), rect.w);
+                            const double scaled_y =
+                                mnemos::apps::player::window_delta_to_frame_delta(
+                                    pending_mouse_raw_dy, metrics.logical_h, metrics.pixel_h,
+                                    static_cast<int>(fb.height), rect.h);
                             const int delta_x = static_cast<int>(scaled_x);
                             const int delta_y = static_cast<int>(scaled_y);
                             if (delta_x != 0) {
                                 pending_mouse_raw_dx -=
-                                    static_cast<double>(delta_x) *
-                                    static_cast<double>(rect.w) / static_cast<double>(fb.width);
+                                    mnemos::apps::player::frame_delta_to_window_delta(
+                                        delta_x, metrics.logical_w, metrics.pixel_w,
+                                        static_cast<int>(fb.width), rect.w);
                             }
                             if (delta_y != 0) {
                                 pending_mouse_raw_dy -=
-                                    static_cast<double>(delta_y) *
-                                    static_cast<double>(rect.h) / static_cast<double>(fb.height);
+                                    mnemos::apps::player::frame_delta_to_window_delta(
+                                        delta_y, metrics.logical_h, metrics.pixel_h,
+                                        static_cast<int>(fb.height), rect.h);
                             }
                             pointer.mouse_delta_x = clamp_mouse_delta(delta_x);
                             pointer.mouse_delta_y = clamp_mouse_delta(delta_y);
                         }
                     } else {
-                        const int rx = static_cast<int>(mx) - rect.x;
-                        const int ry = static_cast<int>(my) - rect.y;
-                        if (rx >= 0 && ry >= 0 && rx < rect.w && ry < rect.h) {
-                            pointer.aim_x = static_cast<std::int16_t>(
-                                rx * static_cast<int>(fb.width) / rect.w);
-                            pointer.aim_y = static_cast<std::int16_t>(
-                                ry * static_cast<int>(fb.height) / rect.h);
+                        const auto point = mnemos::apps::player::project_window_point_to_frame(
+                            mx, my, metrics.logical_w, metrics.logical_h, metrics.pixel_w,
+                            metrics.pixel_h, static_cast<int>(fb.width),
+                            static_cast<int>(fb.height));
+                        if (point.inside) {
+                            pointer.aim_x = static_cast<std::int16_t>(point.frame_x);
+                            pointer.aim_y = static_cast<std::int16_t>(point.frame_y);
                         }
                     }
                 }
@@ -1137,20 +1137,18 @@ int main(int argc, char* argv[]) {
             float mx = 0.0F;
             float my = 0.0F;
             const auto mouse = SDL_GetMouseState(&mx, &my);
-            int ww = 0;
-            int wh = 0;
-            SDL_GetWindowSize(window, &ww, &wh);
+            const auto metrics = current_window_pixel_metrics(window);
             const auto fb = system->current_frame();
             mnemos::frontend_sdk::controller_state gun{};
             gun.trigger = (mouse & SDL_BUTTON_MASK(SDL_BUTTON_LEFT)) != 0U;
-            if (fb.width != 0U && fb.height != 0U && ww > 0 && wh > 0) {
-                const auto rect = integer_letterbox(ww, wh, static_cast<int>(fb.width),
-                                                    static_cast<int>(fb.height));
-                const int rx = static_cast<int>(mx) - rect.x;
-                const int ry = static_cast<int>(my) - rect.y;
-                if (rx >= 0 && ry >= 0 && rx < rect.w && ry < rect.h) {
-                    gun_aim_x = rx * static_cast<int>(fb.width) / rect.w;
-                    gun_aim_y = ry * static_cast<int>(fb.height) / rect.h;
+            if (fb.width != 0U && fb.height != 0U && metrics.logical_w > 0 &&
+                metrics.logical_h > 0) {
+                const auto point = mnemos::apps::player::project_window_point_to_frame(
+                    mx, my, metrics.logical_w, metrics.logical_h, metrics.pixel_w,
+                    metrics.pixel_h, static_cast<int>(fb.width), static_cast<int>(fb.height));
+                if (point.inside) {
+                    gun_aim_x = point.frame_x;
+                    gun_aim_y = point.frame_y;
                     gun.aim_x = static_cast<std::int16_t>(gun_aim_x);
                     gun.aim_y = static_cast<std::int16_t>(gun_aim_y);
                 }
@@ -1398,8 +1396,9 @@ int main(int argc, char* argv[]) {
         }
 
         if (system && src_w > 0U && src_h > 0U) {
-            const auto rect = integer_letterbox(static_cast<int>(swap_w), static_cast<int>(swap_h),
-                                                static_cast<int>(src_w), static_cast<int>(src_h));
+            const auto rect = mnemos::apps::player::integer_letterbox(
+                static_cast<int>(swap_w), static_cast<int>(swap_h), static_cast<int>(src_w),
+                static_cast<int>(src_h));
             // Log on first frame + any dim change (V28 <-> V30 etc.).
             static std::uint32_t last_w = 0U;
             static std::uint32_t last_h = 0U;

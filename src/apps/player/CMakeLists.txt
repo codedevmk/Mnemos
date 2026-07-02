@@ -59,6 +59,14 @@ target_include_directories(
 )
 mnemos_apply_common_target_options(mnemos_apps_player_text_overlay PUBLIC)
 
+add_library(mnemos_apps_player_presentation_math STATIC presentation_math.cpp)
+add_library(mnemos::apps::player::presentation_math ALIAS mnemos_apps_player_presentation_math)
+target_include_directories(
+    mnemos_apps_player_presentation_math PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+)
+mnemos_apply_common_target_options(mnemos_apps_player_presentation_math PUBLIC)
+
 add_library(
     mnemos_apps_player_core STATIC
     adapter_link.cpp
@@ -140,6 +148,7 @@ target_link_libraries(
     PRIVATE
         SDL3::SDL3-static
         mnemos::apps::player::core
+        mnemos::apps::player::presentation_math
         mnemos::apps::player::text_overlay
 )
 
@@ -157,6 +166,11 @@ if(BUILD_TESTING)
         mnemos_apps_player_text_overlay_test
         SOURCES tests/text_overlay_test.cpp
         LIBRARIES mnemos::apps::player::text_overlay
+    )
+    mnemos_add_test(
+        mnemos_apps_player_presentation_math_test
+        SOURCES tests/presentation_math_test.cpp
+        LIBRARIES mnemos::apps::player::presentation_math
     )
     mnemos_add_test(
         mnemos_apps_player_audio_test
