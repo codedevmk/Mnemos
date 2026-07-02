@@ -24,6 +24,9 @@ param(
     [int]$MaxSets = 0,
     [string]$StartAfter = "",
     [double]$MinimumHeadlessFps = 0.0,
+    [switch]$RejectFlatFrame,
+    [int]$MinimumUniqueColors = 0,
+    [double]$MaximumDominantColorRatio = 0.0,
     [switch]$RequireDiskProgress,
     [int]$MinimumDiskCylinder = -1,
     [switch]$RejectKickstartPrompt,
@@ -596,9 +599,22 @@ function Get-PpmStats {
     }
 
     $nonBlack = 0
+    $colorCounts = @{}
+    $dominantColor = 0
+    $dominantColorPixels = 0
     for ($i = $offset.Value; $i -lt $needed; $i += 3) {
         if ($bytes[$i] -ne 0 -or $bytes[$i + 1] -ne 0 -or $bytes[$i + 2] -ne 0) {
             ++$nonBlack
+        }
+        $color = ($bytes[$i] -shl 16) -bor ($bytes[$i + 1] -shl 8) -bor $bytes[$i + 2]
+        if ($colorCounts.ContainsKey($color)) {
+            $colorCounts[$color] = [int]$colorCounts[$color] + 1
+        } else {
+            $colorCounts[$color] = 1
+        }
+        if ([int]$colorCounts[$color] -gt $dominantColorPixels) {
+            $dominantColor = $color
+            $dominantColorPixels = [int]$colorCounts[$color]
         }
     }
 
@@ -607,6 +623,10 @@ function Get-PpmStats {
         Height = $height
         Pixels = $pixels
         NonBlackPixels = $nonBlack
+        UniqueColors = $colorCounts.Count
+        DominantColor = ("#{0:X6}" -f $dominantColor)
+        DominantColorPixels = $dominantColorPixels
+        DominantColorRatio = if ($pixels -gt 0) { [double]$dominantColorPixels / [double]$pixels } else { 0.0 }
         Sha256 = Get-FileSha256 -Path $Path
     }
 }
@@ -717,6 +737,12 @@ if (-not [string]::IsNullOrWhiteSpace($StartAfter) -and $MaxSets -eq 0) {
 }
 if ($MinimumHeadlessFps -lt 0.0) {
     throw "-MinimumHeadlessFps cannot be negative."
+}
+if ($MinimumUniqueColors -lt 0) {
+    throw "-MinimumUniqueColors cannot be negative."
+}
+if ($MaximumDominantColorRatio -lt 0.0 -or $MaximumDominantColorRatio -gt 1.0) {
+    throw "-MaximumDominantColorRatio must be between 0.0 and 1.0."
 }
 if ($MinimumDiskCylinder -lt -1) {
     throw "-MinimumDiskCylinder cannot be below -1."
@@ -882,6 +908,18 @@ try {
                     if ($stats.NonBlackPixels -eq 0) {
                         $failures.Add("$systemName produced an all-black frame for '$mediaDisplay'. See $screenshot")
                     }
+                    if ($RejectFlatFrame -and $stats.UniqueColors -le 1) {
+                        $failures.Add("$systemName produced a flat $($stats.DominantColor) frame for '$mediaDisplay'. See $screenshot")
+                    }
+                    if ($MinimumUniqueColors -gt 0 -and $stats.UniqueColors -lt $MinimumUniqueColors) {
+                        $failures.Add("$systemName produced $($stats.UniqueColors) unique color(s) for '$mediaDisplay', below -MinimumUniqueColors $MinimumUniqueColors. See $screenshot")
+                    }
+                    if ($MaximumDominantColorRatio -gt 0.0 -and
+                        $stats.DominantColorRatio -gt $MaximumDominantColorRatio) {
+                        $dominantText = $stats.DominantColorRatio.ToString("P2", [System.Globalization.CultureInfo]::InvariantCulture)
+                        $maximumText = $MaximumDominantColorRatio.ToString("P2", [System.Globalization.CultureInfo]::InvariantCulture)
+                        $failures.Add("$systemName dominant color $($stats.DominantColor) covers $dominantText of '$mediaDisplay', above -MaximumDominantColorRatio $maximumText. See $screenshot")
+                    }
                     $displayClassification = Get-AmigaDisplayClassification -Stats $stats
                     if ($RejectKickstartPrompt -and
                         $displayClassification -like "kickstart_*_insert_disk_prompt") {
@@ -951,6 +989,10 @@ try {
                         Width = $stats.Width
                         Height = $stats.Height
                         NonBlackPixels = $stats.NonBlackPixels
+                        UniqueColors = $stats.UniqueColors
+                        DominantColor = $stats.DominantColor
+                        DominantColorPixels = $stats.DominantColorPixels
+                        DominantColorRatio = [Math]::Round($stats.DominantColorRatio, 4)
                         ScreenshotSha256 = $stats.Sha256
                         DisplayClassification = $displayClassification
                         DiskPointer = if ($null -ne $boardStats) { $boardStats.DiskPointer } else { $null }
@@ -992,7 +1034,7 @@ if (-not [string]::IsNullOrWhiteSpace($ExpectedSummary)) {
         -Failures $failures
 }
 
-$results | Format-Table -AutoSize System, Frames, HeadlessFps, Width, Height, NonBlackPixels, DriveCylinder, AudioFramesWithSignal, AudioPeakAbs, Media
+$results | Format-Table -AutoSize System, Frames, HeadlessFps, Width, Height, NonBlackPixels, UniqueColors, DominantColorRatio, DriveCylinder, AudioFramesWithSignal, AudioPeakAbs, Media
 
 if ($failures.Count -gt 0) {
     throw "Amiga corpus smoke failed:`n$($failures -join "`n")"
