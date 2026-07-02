@@ -1110,7 +1110,9 @@ namespace mnemos::apps::player {
                     primary_path_is_amiga_disk_media = true;
                 }
                 std::vector<adapters::loaded_rom> floppy_disks;
+                std::vector<adapters::loaded_rom> unsupported_archive_adfs;
                 std::vector<std::string> floppy_kinds;
+                const bool archive_source = amiga_path_requires_supported_media_entry(path);
                 for (auto& media : *media_entries) {
                     const amiga_loaded_media_kind media_kind = classify_amiga_loaded_media(media);
                     if (media_kind == amiga_loaded_media_kind::hard_disk) {
@@ -1135,7 +1137,25 @@ namespace mnemos::apps::player {
                     } else {
                         floppy_kinds.emplace_back("amiga.floppy.adf");
                     }
+                    if (!mnemos::manifests::amiga::amiga_system::supported_floppy_image(
+                            media.bytes)) {
+                        if (archive_source && media_kind == amiga_loaded_media_kind::floppy_adf) {
+                            unsupported_archive_adfs.push_back(std::move(media));
+                            floppy_kinds.pop_back();
+                            continue;
+                        }
+                        std::vector<adapters::loaded_rom> unsupported;
+                        unsupported.push_back(std::move(media));
+                        (void)validate_amiga_adf_images(unsupported, path);
+                        outcome.exit_code = 1;
+                        return outcome;
+                    }
                     floppy_disks.push_back(std::move(media));
+                }
+                if (floppy_disks.empty() && !unsupported_archive_adfs.empty()) {
+                    (void)validate_amiga_adf_images(unsupported_archive_adfs, path);
+                    outcome.exit_code = 1;
+                    return outcome;
                 }
                 if (!validate_amiga_adf_images(floppy_disks, path)) {
                     outcome.exit_code = 1;

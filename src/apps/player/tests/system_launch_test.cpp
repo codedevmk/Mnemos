@@ -2415,6 +2415,37 @@ TEST_CASE("player launch ignores macOS AppleDouble Amiga ADF sidecars in ZIP arc
     fs::remove_all(dir);
 }
 
+TEST_CASE("player launch ignores unsupported-size Amiga ADF sidecars in ZIP archives",
+          "[apps][player][launch][amiga500][zip]") {
+    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path rom_path = dir / "kick13.rom";
+    const fs::path disk_path = dir / "mixed-adf-sidecars.zip";
+    write_image(rom_path, tiny_kickstart());
+    const std::vector<std::uint8_t> disk = tiny_adf(0x6EU);
+    write_image(disk_path,
+                make_stored_zip({{"Recovered Transfer Stub.adf",
+                                  std::vector<std::uint8_t>(341U, 0xA5U)},
+                                 {"Game.adf", disk}}));
+    REQUIRE(set_env("MNEMOS_AMIGA500_KICKSTART", rom_path.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system(
+        {.rom_paths = {disk_path.string()}, .system_arg = std::string{"amiga500"}});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(outcome.primary_media_path == disk_path.string());
+    CHECK(outcome.system->media_count() == 1U);
+    CHECK(has_spec(*outcome.system, "Disk", "Game"));
+    auto* adapter = dynamic_cast<amiga_adapter*>(outcome.system.get());
+    REQUIRE(adapter != nullptr);
+    REQUIRE(adapter->system().floppy_loaded());
+    REQUIRE(adapter->system().floppy_drives[0].image.size() > 2U);
+    CHECK(adapter->system().floppy_drives[0].image[2U] == 0x6EU);
+
+    fs::remove_all(dir);
+}
+
 TEST_CASE("player launch aggregates Amiga ADFs from multiple supplied archive paths",
           "[apps][player][launch][amiga500][zip][tar]") {
     scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
