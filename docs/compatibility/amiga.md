@@ -44,6 +44,12 @@ headless floor against selected IPF archives. Exact rows below are promoted
 only where the resulting screenshots showed a plausible title/protection screen
 or a clear prompt/defect.
 
+2026-07-02 IPF/CAPS missing-library evidence: exact IPF-only archives for Pang
+(Europe), Emerald Mine (Europe), Elite (Europe), Double Dragon (Europe), Chuck
+Rock (Europe), and Agony (USA) were launch-probed on A500 and failed before
+emulation with `CAPSImg library not found`; affected still-unknown rows below
+are marked as unsupported media rather than left as untested.
+
 2026-07-02 ADF/ZIP smoke evidence: A500, A500+, and A600 were run for 2400
 frames with `-RequireDiskProgress`, `-RejectKickstartPrompt`, and a 50 FPS
 headless floor against direct ADF apps and ZIP-contained ADF titles. Exact rows
@@ -493,7 +499,7 @@ the OCS/ECS model family are marked `N/A`.
 | Afterburner (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Afterburner (USA) (Budget - The Hit Squad) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Agony (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Agony (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Agony (USA) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Aigle d'Or, L' - Le Retour (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Air Bucks (Europe) (v1.2) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Air Bucks (Europe) (v1.2) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1349,7 +1355,7 @@ the OCS/ECS model family are marked `N/A`.
 | Emerald Mine | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
 | Emerald Mine 3 - Professional (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Emerald Mine 3 - Professional (Europe) (Alt) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Emerald Mine (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Emerald Mine (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Emerald Mine II (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | EmeraldMinesCD32CUE | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Emlyn Hughes International Soccer (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2462,7 +2468,7 @@ the OCS/ECS model family are marked `N/A`.
 | Pang-500-NTSC | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pang-500-NTSC.adf | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
 | Pang-AGA | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
-| Pang (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Pang (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Panza Kick Boxing (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Panza Kick Boxing (France) (Compilation - Podium) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Paperboy 2 (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
