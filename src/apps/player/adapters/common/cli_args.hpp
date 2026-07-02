@@ -81,6 +81,11 @@ namespace mnemos::apps::player::adapters {
     // fast-ram=<size> adds a CPU-visible expansion RAM window.
     [[nodiscard]] std::optional<std::string> parse_amiga_model_arg(int argc, char* argv[]);
 
+    // Select the exact Amiga Kickstart ROM path for this launch
+    // (`--amiga-kickstart <path>`). Missing, empty, or option-shaped values
+    // leave the model/env/default BIOS discovery path in place.
+    [[nodiscard]] std::optional<std::string> parse_amiga_kickstart_arg(int argc, char* argv[]);
+
     struct screenshot_request final {
         std::string path;
         std::uint64_t frames{};

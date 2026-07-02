@@ -602,6 +602,7 @@ Optional hardware:
   --fm                  FM expansion (SMS YM2413 / MSX-MUSIC / FM-PAC)
   --rtc                 Battery-backed RTC where present (MSX RP-5C01)
   --msx2                Select MSX2-class video hardware (V9938)
+  --amiga-kickstart <path>  Exact Kickstart ROM for Amiga launches
   --light-gun           Plug a light gun into the gun port
   --four-score          NES Four Score 4-player multitap
 
@@ -646,6 +647,7 @@ int main(int argc, char* argv[]) {
     install_debug_fatal_handlers();
 
     using mnemos::apps::player::adapters::parse_animation_record_args;
+    using mnemos::apps::player::adapters::parse_amiga_kickstart_arg;
     using mnemos::apps::player::adapters::parse_amiga_model_arg;
     using mnemos::apps::player::adapters::parse_capabilities_arg;
     using mnemos::apps::player::adapters::parse_dip_arg;
@@ -698,6 +700,7 @@ int main(int argc, char* argv[]) {
     const auto dip_arg = parse_dip_arg(argc, argv);
     const auto keyboard_layout_arg = parse_keyboard_layout_arg(argc, argv);
     const auto amiga_model_arg = parse_amiga_model_arg(argc, argv);
+    const auto amiga_kickstart_arg = parse_amiga_kickstart_arg(argc, argv);
     const mnemos::apps::player::headless_requests headless{
         .screenshot = parse_screenshot_args(argc, argv),
         .save_state = parse_save_state_args(argc, argv),
@@ -723,7 +726,8 @@ int main(int argc, char* argv[]) {
                                              .msx2 = msx2,
                                              .dip_override = dip_arg,
                                              .keyboard_layout_override = keyboard_layout_arg,
-                                             .amiga_model_override = amiga_model_arg});
+                                             .amiga_model_override = amiga_model_arg,
+                                             .amiga_kickstart_override = amiga_kickstart_arg});
     if (launch.exit_code != 0) {
         return launch.exit_code;
     }

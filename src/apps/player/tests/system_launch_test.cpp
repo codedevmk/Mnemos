@@ -1937,6 +1937,31 @@ TEST_CASE("player launch prefers explicit Amiga Kickstart env over shared BIOS d
     fs::remove_all(dir);
 }
 
+TEST_CASE("player launch prefers Amiga Kickstart option over env and shared BIOS directory",
+          "[apps][player][launch][amiga500][bios-dir]") {
+    scoped_env env(
+        {"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA_BIOS_DIR", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    const fs::path dir = unique_test_dir();
+    const fs::path bios_dir = dir / "bios";
+    const fs::path directory_rom = bios_dir / "Kickstart 1.3.rom";
+    const fs::path env_rom = dir / "env.rom";
+    const fs::path option_rom = dir / "cli.rom";
+    write_image(directory_rom, tiny_kickstart());
+    write_image(env_rom, tiny_kickstart());
+    write_image(option_rom, tiny_kickstart());
+    REQUIRE(set_env("MNEMOS_AMIGA_BIOS_DIR", bios_dir.string()) == 0);
+    REQUIRE(set_env("MNEMOS_AMIGA500_KICKSTART", env_rom.string()) == 0);
+
+    auto outcome = mnemos::apps::player::launch_system(
+        {.system_arg = std::string{"amiga500"}, .amiga_kickstart_override = option_rom.string()});
+
+    REQUIRE(outcome.exit_code == 0);
+    REQUIRE(outcome.system != nullptr);
+    CHECK(has_spec(*outcome.system, "BIOS", "cli"));
+
+    fs::remove_all(dir);
+}
+
 TEST_CASE("player launch boots Amiga2000 from its Kickstart env without disk media",
           "[apps][player][launch][amiga2000]") {
     scoped_env env({"MNEMOS_AMIGA2000_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});

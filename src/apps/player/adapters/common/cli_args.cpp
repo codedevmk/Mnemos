@@ -97,6 +97,19 @@ namespace mnemos::apps::player::adapters {
         return std::nullopt;
     }
 
+    std::optional<std::string> parse_amiga_kickstart_arg(int argc, char* argv[]) {
+        for (int i = 1; i < argc - 1; ++i) {
+            if (std::string_view{argv[i]} == "--amiga-kickstart") {
+                const std::string_view value{argv[i + 1]};
+                if (!value.empty() && !value.starts_with("--")) {
+                    return std::string{value};
+                }
+                return std::nullopt;
+            }
+        }
+        return std::nullopt;
+    }
+
     bool parse_fm_unit_arg(int argc, char* argv[]) {
         for (int i = 1; i < argc; ++i) {
             if (std::string_view{argv[i]} == "--fm") {

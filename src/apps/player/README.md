@@ -48,7 +48,10 @@ Currently wired:
   `en-gb`, `es`, `it`, `sv`, `fi`, `dk`, and `nb-no`.
   `MNEMOS_AMIGA500_KEYBOARD_LAYOUT` remains the fallback when the CLI option is
   absent.
-- Amiga Kickstart ROMs can be supplied explicitly with
+- Amiga Kickstart ROMs can be supplied explicitly per launch with
+  `--amiga-kickstart <path>`. This option overrides environment variables and
+  shared BIOS directory discovery, which is useful when a compatibility probe
+  needs a non-default Kickstart for a given model. Without the CLI option, set
   `MNEMOS_AMIGA1000_KICKSTART`, `MNEMOS_AMIGA500_KICKSTART`,
   `MNEMOS_AMIGA500PLUS_KICKSTART`, `MNEMOS_AMIGA600_KICKSTART`, or
   `MNEMOS_AMIGA2000_KICKSTART`. The player also accepts matching `*_BIOS`

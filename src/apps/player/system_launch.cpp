@@ -566,7 +566,12 @@ namespace {
     }
 
     [[nodiscard]] std::optional<std::string>
-    amiga_kickstart_path(mnemos::apps::player::adapters::system_family family) {
+    amiga_kickstart_path(
+        mnemos::apps::player::adapters::system_family family,
+        const std::optional<std::string>& explicit_override = std::nullopt) {
+        if (explicit_override.has_value() && !explicit_override->empty()) {
+            return *explicit_override;
+        }
         if (const char* kickstart_env = getenv_nonempty(amiga_kickstart_env_var(family));
             kickstart_env != nullptr) {
             return std::string{kickstart_env};
@@ -591,8 +596,9 @@ namespace {
     void print_missing_amiga_kickstart(mnemos::apps::player::adapters::system_family family,
                                        std::string_view media_kind) {
         std::fprintf(stderr,
-                     "[mnemos_player] %.*s %s needs %s (or %s) set to a Kickstart ROM, "
-                     "or MNEMOS_AMIGA_BIOS_DIR containing a model-appropriate Kickstart ROM\n",
+                     "[mnemos_player] %.*s %s needs --amiga-kickstart <path>, %s (or %s) "
+                     "set to a Kickstart ROM, or MNEMOS_AMIGA_BIOS_DIR containing a "
+                     "model-appropriate Kickstart ROM\n",
                      static_cast<int>(media_kind.size()), media_kind.data(),
                      mnemos::apps::player::adapters::family_label(family),
                      amiga_kickstart_env_var(family), amiga_bios_env_var(family));
@@ -677,7 +683,7 @@ namespace mnemos::apps::player {
             }
 
             const system_family family = *family_opt;
-            auto kickstart_path = amiga_kickstart_path(family);
+            auto kickstart_path = amiga_kickstart_path(family, options.amiga_kickstart_override);
             if (!kickstart_path) {
                 print_missing_amiga_kickstart(family, "BIOS-only launch for");
                 outcome.exit_code = 1;
@@ -1169,7 +1175,7 @@ namespace mnemos::apps::player {
                                               std::make_move_iterator(floppy_kinds.end()));
             }
             if (!amiga_disks.empty()) {
-                auto kickstart_path = amiga_kickstart_path(family);
+                auto kickstart_path = amiga_kickstart_path(family, options.amiga_kickstart_override);
                 if (kickstart_path) {
                     auto kickstart = load_rom(*kickstart_path);
                     if (!kickstart || kickstart->bytes.empty()) {
