@@ -52,6 +52,120 @@ namespace mnemos::apps::player::adapters::amiga {
 
         [[nodiscard]] std::uint64_t bool_value(bool value) noexcept { return value ? 1U : 0U; }
 
+        void put_u16_be(std::span<std::uint8_t> out, std::size_t offset,
+                        std::uint16_t value) noexcept {
+            if (offset + 1U >= out.size()) {
+                return;
+            }
+            out[offset] = static_cast<std::uint8_t>(value >> 8U);
+            out[offset + 1U] = static_cast<std::uint8_t>(value);
+        }
+
+        void put_u32_be(std::span<std::uint8_t> out, std::size_t offset,
+                        std::uint32_t value) noexcept {
+            if (offset + 3U >= out.size()) {
+                return;
+            }
+            out[offset] = static_cast<std::uint8_t>(value >> 24U);
+            out[offset + 1U] = static_cast<std::uint8_t>(value >> 16U);
+            out[offset + 2U] = static_cast<std::uint8_t>(value >> 8U);
+            out[offset + 3U] = static_cast<std::uint8_t>(value);
+        }
+
+        class board_snapshot_memory_view final : public instrumentation::memory_view {
+          public:
+            enum class kind : std::uint8_t {
+                bitplane_pointers,
+                sprite_registers,
+                disk_state,
+            };
+
+            board_snapshot_memory_view(std::string_view name, manifests::amiga::amiga_system& sys,
+                                       kind view_kind) noexcept
+                : name_(name), sys_(&sys), kind_(view_kind) {}
+
+            [[nodiscard]] std::string_view name() const noexcept override { return name_; }
+
+            [[nodiscard]] std::span<const std::uint8_t> bytes() const noexcept override {
+                bytes_.fill(0U);
+                switch (kind_) {
+                case kind::bitplane_pointers:
+                    return bitplane_pointer_bytes();
+                case kind::sprite_registers:
+                    return sprite_register_bytes();
+                case kind::disk_state:
+                    return disk_state_bytes();
+                }
+                return {};
+            }
+
+          private:
+            static constexpr std::size_t bitplane_pointer_bytes_size =
+                chips::video::agnus::max_bitplanes * 4U;
+            static constexpr std::size_t sprite_register_bytes_size =
+                chips::video::agnus::max_sprites * 12U;
+            static constexpr std::size_t disk_state_bytes_size = 32U;
+            static constexpr std::size_t max_snapshot_bytes = sprite_register_bytes_size;
+
+            [[nodiscard]] std::span<const std::uint8_t> bitplane_pointer_bytes() const noexcept {
+                const auto out =
+                    std::span<std::uint8_t>(bytes_.data(), bitplane_pointer_bytes_size);
+                for (std::uint32_t plane = 0U; plane < chips::video::agnus::max_bitplanes;
+                     ++plane) {
+                    put_u32_be(out, static_cast<std::size_t>(plane) * 4U,
+                               sys_->agnus.bitplane_pointer(plane));
+                }
+                return out;
+            }
+
+            [[nodiscard]] std::span<const std::uint8_t> sprite_register_bytes() const noexcept {
+                const auto out = std::span<std::uint8_t>(bytes_.data(), sprite_register_bytes_size);
+                for (std::uint32_t sprite = 0U; sprite < chips::video::agnus::max_sprites;
+                     ++sprite) {
+                    const std::size_t base = static_cast<std::size_t>(sprite) * 12U;
+                    put_u32_be(out, base + 0U, sys_->agnus.sprite_pointer(sprite));
+                    put_u16_be(out, base + 4U, sys_->agnus.sprite_pos(sprite));
+                    put_u16_be(out, base + 6U, sys_->agnus.sprite_ctl(sprite));
+                    put_u16_be(out, base + 8U, sys_->agnus.sprite_data_a(sprite));
+                    put_u16_be(out, base + 10U, sys_->agnus.sprite_data_b(sprite));
+                }
+                return out;
+            }
+
+            [[nodiscard]] std::span<const std::uint8_t> disk_state_bytes() const noexcept {
+                const auto out = std::span<std::uint8_t>(bytes_.data(), disk_state_bytes_size);
+                put_u32_be(out, 0U, sys_->disk_pointer);
+                put_u16_be(out, 4U, sys_->disk_length);
+                put_u16_be(out, 6U, sys_->disk_sync);
+                put_u16_be(out, 8U, sys_->disk_adkcon);
+                put_u16_be(out, 10U, sys_->disk_data);
+                put_u16_be(out, 12U, sys_->disk_shift);
+                put_u32_be(out, 14U, sys_->disk_dma_bytes_remaining);
+                put_u16_be(out, 18U, sys_->disk_last_length_write);
+                out[20U] = sys_->floppy_selected_mask;
+                out[21U] = sys_->floppy_active_drive;
+                out[22U] = sys_->floppy_side_pos;
+                out[23U] = sys_->floppy_motor_on ? 1U : 0U;
+                out[24U] = sys_->floppy_selected ? 1U : 0U;
+                out[25U] = sys_->floppy_step_line ? 1U : 0U;
+                out[26U] = sys_->floppy_direction_inward ? 1U : 0U;
+                if (sys_->floppy_active_drive < sys_->floppy_drives.size()) {
+                    const auto& drive = sys_->floppy_drives[sys_->floppy_active_drive];
+                    out[27U] = drive.connected ? 1U : 0U;
+                    out[28U] = drive.image.empty() ? 0U : 1U;
+                    out[29U] = drive.change_latch ? 1U : 0U;
+                    out[30U] = drive.write_protected ? 1U : 0U;
+                    out[31U] = drive.cylinder_pos;
+                }
+                return out;
+            }
+
+            std::string_view name_;
+            manifests::amiga::amiga_system* sys_;
+            kind kind_{};
+            mutable std::array<std::uint8_t, max_snapshot_bytes> bytes_{};
+        };
+
         class board_registers final : public instrumentation::register_view {
           public:
             explicit board_registers(manifests::amiga::amiga_system& sys) noexcept : sys_(&sys) {}
@@ -215,7 +329,20 @@ namespace mnemos::apps::player::adapters::amiga {
         class board_introspection final : public instrumentation::ichip_introspection {
           public:
             explicit board_introspection(manifests::amiga::amiga_system& sys) noexcept
-                : registers_(sys) {}
+                : registers_(sys), color_regs_("color_regs", sys.palette_bytes),
+                  bitplane_pointers_("bitplane_pointers", sys,
+                                     board_snapshot_memory_view::kind::bitplane_pointers),
+                  sprite_registers_("sprite_registers", sys,
+                                    board_snapshot_memory_view::kind::sprite_registers),
+                  disk_state_("disk_state", sys, board_snapshot_memory_view::kind::disk_state) {}
+
+            [[nodiscard]] std::span<instrumentation::memory_view* const> memory_views() override {
+                memory_views_[0] = &color_regs_;
+                memory_views_[1] = &bitplane_pointers_;
+                memory_views_[2] = &sprite_registers_;
+                memory_views_[3] = &disk_state_;
+                return memory_views_;
+            }
 
             [[nodiscard]] instrumentation::register_view* registers() override {
                 return &registers_;
@@ -223,6 +350,11 @@ namespace mnemos::apps::player::adapters::amiga {
 
           private:
             board_registers registers_;
+            instrumentation::span_memory_view color_regs_;
+            board_snapshot_memory_view bitplane_pointers_;
+            board_snapshot_memory_view sprite_registers_;
+            board_snapshot_memory_view disk_state_;
+            std::array<instrumentation::memory_view*, 4> memory_views_{};
         };
 
         std::vector<runtime::scheduled_chip> build_schedule(manifests::amiga::amiga_system& sys) {
@@ -1500,10 +1632,9 @@ namespace mnemos::apps::player::adapters::amiga {
                                  pc & 0x00FFFFFFU, opcode, sys_->agnus.beam_line(),
                                  sys_->agnus.beam_clock(),
                                  static_cast<unsigned long long>(sys_->frame_index), regs.sr,
-                                 regs.d[0], regs.d[1], regs.d[2], regs.d[3], regs.d[4],
-                                 regs.d[5], regs.d[6], regs.d[7], regs.a[0], regs.a[1],
-                                 regs.a[2], regs.a[3], regs.a[4], regs.a[5], regs.a[6],
-                                 regs.a[7]);
+                                 regs.d[0], regs.d[1], regs.d[2], regs.d[3], regs.d[4], regs.d[5],
+                                 regs.d[6], regs.d[7], regs.a[0], regs.a[1], regs.a[2], regs.a[3],
+                                 regs.a[4], regs.a[5], regs.a[6], regs.a[7]);
                 });
         }
         if (trace_cpu_unhandled_opcodes()) {
@@ -1519,10 +1650,9 @@ namespace mnemos::apps::player::adapters::amiga {
                                  pc & 0x00FFFFFFU, opcode, sys_->agnus.beam_line(),
                                  sys_->agnus.beam_clock(),
                                  static_cast<unsigned long long>(sys_->frame_index), regs.sr,
-                                 regs.d[0], regs.d[1], regs.d[2], regs.d[3], regs.d[4],
-                                 regs.d[5], regs.d[6], regs.d[7], regs.a[0], regs.a[1],
-                                 regs.a[2], regs.a[3], regs.a[4], regs.a[5], regs.a[6],
-                                 regs.a[7]);
+                                 regs.d[0], regs.d[1], regs.d[2], regs.d[3], regs.d[4], regs.d[5],
+                                 regs.d[6], regs.d[7], regs.a[0], regs.a[1], regs.a[2], regs.a[3],
+                                 regs.a[4], regs.a[5], regs.a[6], regs.a[7]);
                 });
         }
         if (trace_cpu_exceptions()) {
@@ -1537,12 +1667,12 @@ namespace mnemos::apps::player::adapters::amiga {
                                  "d4=%08X d5=%08X d6=%08X d7=%08X "
                                  "a0=%08X a1=%08X a2=%08X a3=%08X "
                                  "a4=%08X a5=%08X a6=%08X a7=%08X\n",
-                                 vector, stacked_pc & 0x00FFFFFFU, handler_pc & 0x00FFFFFFU,
-                                 opcode, sr, sys_->agnus.beam_line(), sys_->agnus.beam_clock(),
+                                 vector, stacked_pc & 0x00FFFFFFU, handler_pc & 0x00FFFFFFU, opcode,
+                                 sr, sys_->agnus.beam_line(), sys_->agnus.beam_clock(),
                                  static_cast<unsigned long long>(sys_->frame_index), regs.d[0],
-                                 regs.d[1], regs.d[2], regs.d[3], regs.d[4], regs.d[5],
-                                 regs.d[6], regs.d[7], regs.a[0], regs.a[1], regs.a[2],
-                                 regs.a[3], regs.a[4], regs.a[5], regs.a[6], regs.a[7]);
+                                 regs.d[1], regs.d[2], regs.d[3], regs.d[4], regs.d[5], regs.d[6],
+                                 regs.d[7], regs.a[0], regs.a[1], regs.a[2], regs.a[3], regs.a[4],
+                                 regs.a[5], regs.a[6], regs.a[7]);
                 });
         }
         if (!cpu_trace_ranges.empty()) {
@@ -1614,9 +1744,8 @@ namespace mnemos::apps::player::adapters::amiga {
                                  sys_->cpu.current_instruction_addr(), sys_->agnus.beam_line(),
                                  sys_->agnus.beam_clock(), ev.write ? 'W' : 'R',
                                  ev.address & 0x00FFFFFFU, ev.value, regs.d[0], regs.d[1],
-                                 regs.d[2], regs.d[3], regs.d[4], regs.d[5], regs.d[6],
-                                 regs.d[7], regs.a[0], regs.a[1], regs.a[3], regs.a[5],
-                                 regs.a[6]);
+                                 regs.d[2], regs.d[3], regs.d[4], regs.d[5], regs.d[6], regs.d[7],
+                                 regs.a[0], regs.a[1], regs.a[3], regs.a[5], regs.a[6]);
                 }
                 if (!trace_enabled || !traced_amiga_register(ev.address, ev.write)) {
                     return;
@@ -1685,29 +1814,28 @@ namespace mnemos::apps::player::adapters::amiga {
                 }
                 if (custom_reg && traced_blitter_register(reg, ev.write)) {
                     const auto regs = sys_->cpu.cpu_registers();
-                    std::fprintf(stderr,
-                                 "[amiga-blit] pc=%06X beam=%03u:%03u W %06X %02X "
-                                 "bltcon0=%04X bltcon1=%04X afwm=%04X alwm=%04X "
-                                 "a=%06X b=%06X c=%06X d=%06X "
-                                 "am=%04X bm=%04X cm=%04X dm=%04X "
-                                 "adat=%04X bdat=%04X cdat=%04X ddat=%04X "
-                                 "bltcyc=%llu dmacon=%04X dmaconr=%04X "
-                                 "intreq=%04X d0=%08X d1=%08X a0=%08X a1=%08X a6=%08X\n",
-                                 sys_->cpu.current_instruction_addr(), sys_->agnus.beam_line(),
-                                 sys_->agnus.beam_clock(), ev.address, ev.value, sys_->bltcon0,
-                                 sys_->bltcon1, sys_->bltafwm, sys_->bltalwm,
-                                 sys_->blitter_pointer[0], sys_->blitter_pointer[1],
-                                 sys_->blitter_pointer[2], sys_->blitter_pointer[3],
-                                 static_cast<std::uint16_t>(sys_->blitter_modulo[0]),
-                                 static_cast<std::uint16_t>(sys_->blitter_modulo[1]),
-                                 static_cast<std::uint16_t>(sys_->blitter_modulo[2]),
-                                 static_cast<std::uint16_t>(sys_->blitter_modulo[3]),
-                                 sys_->blitter_data[0], sys_->blitter_data[1],
-                                 sys_->blitter_data[2], sys_->blitter_data[3],
-                                 static_cast<unsigned long long>(sys_->blitter_cycles_remaining),
-                                 sys_->agnus.dmacon(), sys_->agnus.read_dmaconr(),
-                                 sys_->visible_intreq(), regs.d[0], regs.d[1], regs.a[0],
-                                 regs.a[1], regs.a[6]);
+                    std::fprintf(
+                        stderr,
+                        "[amiga-blit] pc=%06X beam=%03u:%03u W %06X %02X "
+                        "bltcon0=%04X bltcon1=%04X afwm=%04X alwm=%04X "
+                        "a=%06X b=%06X c=%06X d=%06X "
+                        "am=%04X bm=%04X cm=%04X dm=%04X "
+                        "adat=%04X bdat=%04X cdat=%04X ddat=%04X "
+                        "bltcyc=%llu dmacon=%04X dmaconr=%04X "
+                        "intreq=%04X d0=%08X d1=%08X a0=%08X a1=%08X a6=%08X\n",
+                        sys_->cpu.current_instruction_addr(), sys_->agnus.beam_line(),
+                        sys_->agnus.beam_clock(), ev.address, ev.value, sys_->bltcon0,
+                        sys_->bltcon1, sys_->bltafwm, sys_->bltalwm, sys_->blitter_pointer[0],
+                        sys_->blitter_pointer[1], sys_->blitter_pointer[2],
+                        sys_->blitter_pointer[3],
+                        static_cast<std::uint16_t>(sys_->blitter_modulo[0]),
+                        static_cast<std::uint16_t>(sys_->blitter_modulo[1]),
+                        static_cast<std::uint16_t>(sys_->blitter_modulo[2]),
+                        static_cast<std::uint16_t>(sys_->blitter_modulo[3]), sys_->blitter_data[0],
+                        sys_->blitter_data[1], sys_->blitter_data[2], sys_->blitter_data[3],
+                        static_cast<unsigned long long>(sys_->blitter_cycles_remaining),
+                        sys_->agnus.dmacon(), sys_->agnus.read_dmaconr(), sys_->visible_intreq(),
+                        regs.d[0], regs.d[1], regs.a[0], regs.a[1], regs.a[6]);
                     return;
                 }
                 if (custom_reg && traced_sprite_register(reg, ev.write)) {
@@ -1732,25 +1860,23 @@ namespace mnemos::apps::player::adapters::amiga {
                     const auto regs = sys_->cpu.cpu_registers();
                     const bool audio_dma = sys_->agnus.dma_audio(0) || sys_->agnus.dma_audio(1) ||
                                            sys_->agnus.dma_audio(2) || sys_->agnus.dma_audio(3);
-                    std::fprintf(stderr,
-                                 "[amiga-dma] pc=%06X beam=%03u:%03u %c %06X %02X "
-                                 "dmacon=%04X dmaconr=%04X disk=%u copper=%u blitter=%u "
-                                 "bpl=%u sprite=%u audio=%u intena=%04X intreq=%04X "
-                                 "d0=%08X a0=%08X a1=%08X a6=%08X\n",
-                                 sys_->cpu.current_instruction_addr(), sys_->agnus.beam_line(),
-                                 sys_->agnus.beam_clock(), ev.write ? 'W' : 'R', ev.address,
-                                 ev.value, sys_->agnus.dmacon(), sys_->agnus.read_dmaconr(),
-                                 sys_->agnus.dma_disk() ? 1U : 0U,
-                                 sys_->agnus.dma_copper() ? 1U : 0U,
-                                 sys_->agnus.dma_blitter() ? 1U : 0U,
-                                 sys_->agnus.dma_bitplane() ? 1U : 0U,
-                                 sys_->agnus.dma_sprite() ? 1U : 0U, audio_dma ? 1U : 0U,
-                                 sys_->intena, sys_->visible_intreq(), regs.d[0], regs.a[0],
-                                 regs.a[1], regs.a[6]);
+                    std::fprintf(
+                        stderr,
+                        "[amiga-dma] pc=%06X beam=%03u:%03u %c %06X %02X "
+                        "dmacon=%04X dmaconr=%04X disk=%u copper=%u blitter=%u "
+                        "bpl=%u sprite=%u audio=%u intena=%04X intreq=%04X "
+                        "d0=%08X a0=%08X a1=%08X a6=%08X\n",
+                        sys_->cpu.current_instruction_addr(), sys_->agnus.beam_line(),
+                        sys_->agnus.beam_clock(), ev.write ? 'W' : 'R', ev.address, ev.value,
+                        sys_->agnus.dmacon(), sys_->agnus.read_dmaconr(),
+                        sys_->agnus.dma_disk() ? 1U : 0U, sys_->agnus.dma_copper() ? 1U : 0U,
+                        sys_->agnus.dma_blitter() ? 1U : 0U, sys_->agnus.dma_bitplane() ? 1U : 0U,
+                        sys_->agnus.dma_sprite() ? 1U : 0U, audio_dma ? 1U : 0U, sys_->intena,
+                        sys_->visible_intreq(), regs.d[0], regs.a[0], regs.a[1], regs.a[6]);
                     return;
                 }
-                if (custom_reg && (reg == 0x00DFF09AU || reg == 0x00DFF09CU ||
-                                   reg == 0x00DFF01CU || reg == 0x00DFF01EU)) {
+                if (custom_reg && (reg == 0x00DFF09AU || reg == 0x00DFF09CU || reg == 0x00DFF01CU ||
+                                   reg == 0x00DFF01EU)) {
                     std::fprintf(stderr,
                                  "[amiga-cia] pc=%06X beam=%03u:%03u %c %06X %02X "
                                  "intena=%04X "

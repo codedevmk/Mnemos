@@ -12,6 +12,7 @@
 #include <fstream>
 #include <iterator>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -182,6 +183,37 @@ namespace {
         return static_cast<std::uint8_t>((inverted << 1U) | (inverted >> 7U));
     }
 
+    [[nodiscard]] std::uint16_t read_u16_be(std::span<const std::uint8_t> bytes,
+                                            std::size_t offset) noexcept {
+        if (offset + 1U >= bytes.size()) {
+            return 0U;
+        }
+        return static_cast<std::uint16_t>((static_cast<std::uint16_t>(bytes[offset]) << 8U) |
+                                          bytes[offset + 1U]);
+    }
+
+    [[nodiscard]] std::uint32_t read_u32_be(std::span<const std::uint8_t> bytes,
+                                            std::size_t offset) noexcept {
+        if (offset + 3U >= bytes.size()) {
+            return 0U;
+        }
+        return (static_cast<std::uint32_t>(bytes[offset]) << 24U) |
+               (static_cast<std::uint32_t>(bytes[offset + 1U]) << 16U) |
+               (static_cast<std::uint32_t>(bytes[offset + 2U]) << 8U) |
+               static_cast<std::uint32_t>(bytes[offset + 3U]);
+    }
+
+    [[nodiscard]] mnemos::instrumentation::memory_view*
+    find_memory_view(std::span<mnemos::instrumentation::memory_view* const> views,
+                     std::string_view name) noexcept {
+        for (mnemos::instrumentation::memory_view* view : views) {
+            if (view != nullptr && view->name() == name) {
+                return view;
+            }
+        }
+        return nullptr;
+    }
+
     void acknowledge_keyboard(amiga_system& sys) {
         sys.cia_a.write(0x04U, 0x01U); // Timer A latch = 1 for a short SP pulse.
         sys.cia_a.write(0x05U, 0x00U);
@@ -218,10 +250,8 @@ namespace {
         sys.cia_b.write(0x01U, 0x6DU);
     }
 
-    void run_real_kickstart_adf_boot_gate(const char* kickstart_env,
-                                          const char* adf_env,
-                                          amiga_config config,
-                                          const char* frames_env,
+    void run_real_kickstart_adf_boot_gate(const char* kickstart_env, const char* adf_env,
+                                          amiga_config config, const char* frames_env,
                                           std::uint64_t fallback_frames) {
         const auto kickstart_path = get_env(kickstart_env);
         const auto adf_path = get_env(adf_env);
@@ -241,8 +271,8 @@ namespace {
 
         std::vector<std::vector<std::uint8_t>> disks;
         disks.push_back(std::move(*adf));
-        amiga_adapter adapter(std::move(*kickstart), config, fs::path(*adf_path).filename().string(),
-                              std::move(disks));
+        amiga_adapter adapter(std::move(*kickstart), config,
+                              fs::path(*adf_path).filename().string(), std::move(disks));
 
         REQUIRE(adapter.system().floppy_loaded());
         CHECK(adapter.system().floppy_size() == amiga_system::floppy_dd_size);
@@ -299,6 +329,70 @@ TEST_CASE("amiga adapter constructs and steps frames", "[apps][player][amiga500]
 
     adapter.step_one_frame();
     CHECK(adapter.current_frame().pixels != nullptr);
+}
+
+TEST_CASE("amiga board debug chip exposes sidecar memory views",
+          "[apps][player][amiga500][debug]") {
+    std::vector<std::vector<std::uint8_t>> disks;
+    disks.push_back(tiny_adf(0xA5U));
+    amiga_adapter adapter(tiny_kickstart(), {}, "Tiny ADF", std::move(disks));
+    auto& sys = adapter.system();
+
+    sys.write_custom_word(0x180U, 0x0123U); // COLOR00.
+    sys.write_custom_word(0x0E0U, 0x0001U); // BPL1PTH.
+    sys.write_custom_word(0x0E2U, 0x2344U); // BPL1PTL.
+    sys.write_custom_word(0x120U, 0x0002U); // SPR0PTH.
+    sys.write_custom_word(0x122U, 0x0400U); // SPR0PTL.
+    sys.write_custom_word(0x140U, 0x2C40U); // SPR0POS.
+    sys.write_custom_word(0x142U, 0x2E00U); // SPR0CTL.
+    sys.write_custom_word(0x144U, 0xAAAAU); // SPR0DATA.
+    sys.write_custom_word(0x146U, 0x5555U); // SPR0DATB.
+    sys.write_custom_word(0x020U, 0x0000U); // DSKPTH.
+    sys.write_custom_word(0x022U, 0x1800U); // DSKPTL.
+    sys.write_custom_word(0x024U, 0x4000U); // DSKLEN disarm.
+    sys.write_custom_word(0x07EU, 0x4489U); // DSKSYNC.
+    sys.write_custom_word(0x09EU, 0x1100U); // ADKCON.
+    select_df0(sys);
+
+    auto* board = adapter.chips()[6];
+    REQUIRE(board->metadata().part_number == "amiga_board");
+    auto views = board->introspection().memory_views();
+    REQUIRE(views.size() == 4U);
+
+    auto* color_regs = find_memory_view(views, "color_regs");
+    REQUIRE(color_regs != nullptr);
+    auto colors = color_regs->bytes();
+    REQUIRE(colors.size() == 64U);
+    CHECK(read_u16_be(colors, 0U) == 0x0123U);
+
+    auto* bitplane_pointers = find_memory_view(views, "bitplane_pointers");
+    REQUIRE(bitplane_pointers != nullptr);
+    auto bitplanes = bitplane_pointers->bytes();
+    REQUIRE(bitplanes.size() == 24U);
+    CHECK(read_u32_be(bitplanes, 0U) == sys.agnus.bitplane_pointer(0U));
+
+    auto* sprite_registers = find_memory_view(views, "sprite_registers");
+    REQUIRE(sprite_registers != nullptr);
+    auto sprites = sprite_registers->bytes();
+    REQUIRE(sprites.size() == 96U);
+    CHECK(read_u32_be(sprites, 0U) == sys.agnus.sprite_pointer(0U));
+    CHECK(read_u16_be(sprites, 4U) == 0x2C40U);
+    CHECK(read_u16_be(sprites, 6U) == 0x2E00U);
+    CHECK(read_u16_be(sprites, 8U) == 0xAAAAU);
+    CHECK(read_u16_be(sprites, 10U) == 0x5555U);
+
+    auto* disk_state = find_memory_view(views, "disk_state");
+    REQUIRE(disk_state != nullptr);
+    auto disk = disk_state->bytes();
+    REQUIRE(disk.size() == 32U);
+    CHECK(read_u32_be(disk, 0U) == sys.disk_pointer);
+    CHECK(read_u16_be(disk, 4U) == sys.disk_length);
+    CHECK(read_u16_be(disk, 6U) == sys.disk_sync);
+    CHECK(read_u16_be(disk, 8U) == sys.disk_adkcon);
+    CHECK(disk[20U] == sys.floppy_selected_mask);
+    CHECK(disk[21U] == sys.floppy_active_drive);
+    CHECK(disk[27U] == 1U);
+    CHECK(disk[28U] == 1U);
 }
 
 TEST_CASE("amiga adapter publishes session and media metadata", "[apps][player][amiga500]") {
@@ -1400,8 +1494,8 @@ TEST_CASE("amiga adapter renders the real Kickstart insert-disk prompt",
 
 TEST_CASE("amiga adapter boots real Kickstart with an ADF disk when data is supplied",
           "[apps][player][amiga500][data]") {
-    run_real_kickstart_adf_boot_gate("MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_ADF",
-                                     {}, "MNEMOS_AMIGA500_BOOT_FRAMES", 300U);
+    run_real_kickstart_adf_boot_gate("MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_ADF", {},
+                                     "MNEMOS_AMIGA500_BOOT_FRAMES", 300U);
 }
 
 TEST_CASE("amiga adapter boots real Amiga 500+ Kickstart with an ADF disk when data is supplied",
@@ -1409,9 +1503,8 @@ TEST_CASE("amiga adapter boots real Amiga 500+ Kickstart with an ADF disk when d
     const amiga_config config{.video_region = mnemos::video_region::pal,
                               .keyboard_layout = amiga_keyboard_layout::us,
                               .model = amiga_model::amiga500_plus};
-    run_real_kickstart_adf_boot_gate("MNEMOS_AMIGA500PLUS_KICKSTART",
-                                     "MNEMOS_AMIGA500PLUS_ADF", config,
-                                     "MNEMOS_AMIGA500PLUS_BOOT_FRAMES", 300U);
+    run_real_kickstart_adf_boot_gate("MNEMOS_AMIGA500PLUS_KICKSTART", "MNEMOS_AMIGA500PLUS_ADF",
+                                     config, "MNEMOS_AMIGA500PLUS_BOOT_FRAMES", 300U);
 }
 
 TEST_CASE("amiga adapter boots real Amiga 600 Kickstart with an ADF disk when data is supplied",
@@ -1419,6 +1512,6 @@ TEST_CASE("amiga adapter boots real Amiga 600 Kickstart with an ADF disk when da
     const amiga_config config{.video_region = mnemos::video_region::pal,
                               .keyboard_layout = amiga_keyboard_layout::us,
                               .model = amiga_model::amiga600};
-    run_real_kickstart_adf_boot_gate("MNEMOS_AMIGA600_KICKSTART", "MNEMOS_AMIGA600_ADF",
-                                     config, "MNEMOS_AMIGA600_BOOT_FRAMES", 300U);
+    run_real_kickstart_adf_boot_gate("MNEMOS_AMIGA600_KICKSTART", "MNEMOS_AMIGA600_ADF", config,
+                                     "MNEMOS_AMIGA600_BOOT_FRAMES", 300U);
 }
