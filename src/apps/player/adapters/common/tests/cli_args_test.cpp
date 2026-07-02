@@ -517,6 +517,22 @@ TEST_CASE("cli_args: input_for_frame exposes arcade service and test events") {
     CHECK_FALSE(input_for_frame(ev, 9U).test);
 }
 
+TEST_CASE("cli_args: input_for_frame exposes trigger and fire aliases") {
+    auto a = make_argv({"player", "--press", "trigger@5+2", "--press", "p2:fire@6+3"});
+    const auto ev = parse_press_events(a.argc(), a.argv.data());
+    REQUIRE(ev.size() == 2U);
+
+    CHECK(input_for_frame(ev, 5U).trigger);
+    CHECK_FALSE(input_for_frame(ev, 4U).trigger);
+
+    const auto at6p1 = input_for_frame(ev, 6U);
+    CHECK(at6p1.trigger);
+
+    const auto at6p2 = input_for_frame(ev, 6U, 1U);
+    CHECK(at6p2.trigger);
+    CHECK_FALSE(input_for_frame(ev, 9U, 1U).trigger);
+}
+
 TEST_CASE("cli_args: input_for_frame exposes analog paddle events") {
     auto a = make_argv({"player", "--press", "paddle=0x123@4+2", "--press", "dial=42@7"});
     const auto ev = parse_press_events(a.argc(), a.argv.data());

@@ -39,6 +39,8 @@ Currently wired:
   animations, asset extraction, and rendered-audio exports.
 - `--press pN:<button>@<frame>[+duration]` targets a specific 1-based input
   port, e.g. `--press p2:select@120+4` for player-2 coin on arcade boards.
+- Button names include dpad directions, `start`, `select`, `trigger`/`fire`,
+  `a`/`b`/`c`, `x`/`y`/`z`, `mode`, `service`, and `test`.
 
 ## Computer Keyboard Layouts
 

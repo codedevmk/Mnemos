@@ -1,7 +1,8 @@
 #!/usr/bin/env pwsh
 # Data-gated Amiga ADF/ADZ/IPF/HDF/archive player smoke runner.
 # Use -ContentProbeFrames with comma-separated frame counts to capture multiple
-# screenshot candidates and keep the most useful one in the summary.
+# screenshot candidates and keep the most useful one in the summary. Use -Press
+# to pass scripted input through every screenshot candidate run.
 #
 # Kickstart ROMs and Amiga software are never committed. Point this at one or
 # more disk or hard-drive images with -Rom, or at local corpus directories with -RomDir,
@@ -24,6 +25,7 @@ param(
     [string]$KickstartDir = $env:MNEMOS_AMIGA_KICKSTART_DIR,
     [int]$Frames = 120,
     [string[]]$ContentProbeFrames = @(),
+    [string[]]$Press = @(),
     [int]$MaxSets = 0,
     [string]$StartAfter = "",
     [double]$MinimumHeadlessFps = 0.0,
@@ -852,6 +854,28 @@ function Get-ContentProbeFrameList {
     return @($frames | Sort-Object)
 }
 
+function Get-FlatArgumentList {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [string[]]$Values
+    )
+
+    $flat = [System.Collections.Generic.List[string]]::new()
+    foreach ($value in $Values) {
+        if ([string]::IsNullOrWhiteSpace($value)) {
+            continue
+        }
+        foreach ($token in $value.Split(",", [System.StringSplitOptions]::RemoveEmptyEntries)) {
+            $trimmed = $token.Trim()
+            if (-not [string]::IsNullOrWhiteSpace($trimmed)) {
+                $flat.Add($trimmed)
+            }
+        }
+    }
+    return $flat.ToArray()
+}
+
 function Get-AmigaContentProbeScore {
     param(
         [Parameter(Mandatory = $true)]$Stats,
@@ -915,6 +939,9 @@ if ($MinimumAudioFramesWithSignal -lt 0) {
 if ($MinimumAudioPeakAbs -lt 0) {
     throw "-MinimumAudioPeakAbs cannot be negative."
 }
+
+$pressArgs = @(Get-FlatArgumentList -Values $Press)
+$audioPressArgs = @(Get-FlatArgumentList -Values $AudioPress)
 
 $media = [System.Collections.Generic.List[string]]::new()
 foreach ($path in $Rom) {
@@ -1063,6 +1090,9 @@ try {
                     for ($mediaIndex = 1; $mediaIndex -lt $paths.Count; ++$mediaIndex) {
                         $args += @("--disk", $paths[$mediaIndex])
                     }
+                    foreach ($press in $pressArgs) {
+                        $args += @("--press", $press)
+                    }
 
                     $run = Invoke-Player -Player $player -LogPath $log -Arguments $args
                     $headlessFps = 0.0
@@ -1206,7 +1236,7 @@ try {
                         for ($mediaIndex = 1; $mediaIndex -lt $paths.Count; ++$mediaIndex) {
                             $audioArgs += @("--disk", $paths[$mediaIndex])
                         }
-                        foreach ($press in $AudioPress) {
+                        foreach ($press in $audioPressArgs) {
                             $audioArgs += @("--press", $press)
                         }
 
@@ -1239,6 +1269,8 @@ try {
                         RequestedFrames = $Frames
                         ContentProbeFrames = if ($useContentProbe) { ($contentProbeFrameList -join ",") } else { "" }
                         ContentProbeScore = if ($useContentProbe) { $selectedProbe.Score } else { $null }
+                        Press = if ($pressArgs.Count -gt 0) { ($pressArgs -join ",") } else { "" }
+                        AudioPress = if ($audioPressArgs.Count -gt 0) { ($audioPressArgs -join ",") } else { "" }
                         ElapsedSeconds = [Math]::Round($run.ElapsedSeconds, 3)
                         HeadlessFps = [Math]::Round($headlessFps, 2)
                         Width = $stats.Width

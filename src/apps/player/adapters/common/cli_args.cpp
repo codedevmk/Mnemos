@@ -381,6 +381,8 @@ namespace mnemos::apps::player::adapters {
                 s.start = true;
             } else if (b == "select") {
                 s.select = true;
+            } else if (b == "trigger" || b == "fire") {
+                s.trigger = true;
             } else if (b == "a") {
                 s.a = true;
             } else if (b == "b") {
