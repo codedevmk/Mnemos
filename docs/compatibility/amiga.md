@@ -3137,7 +3137,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Super Wonderboy - Wonderboy in Monsterland (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Super Zocker + Blackjack II (Germany) (Coverdisk) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Superfrog (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Superfrog (LHA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Superfrog (LHA) | TBD | Unsupported archive entries | TBD | TBD | TBD | Unsupported archive entries | Unsupported archive entries | TBD | TBD | TBD |
 | Superleague Soccer (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Superman - The Man of Steel (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Superstar Ice Hockey (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -3160,12 +3160,12 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Swords of Twilight | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Swords of Twilight (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Swords of Twilight (LHA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Syndicate | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Syndicate (1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Syndicate | TBD | Unsupported archive entries | TBD | TBD | TBD | Unsupported archive entries | Unsupported archive entries | TBD | TBD | TBD |
+| Syndicate (1) | TBD | Unsupported archive entries | TBD | TBD | TBD | Unsupported archive entries | Unsupported archive entries | TBD | TBD | TBD |
 | Syndicate (Europe) (En,Fr,It) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Syndicate (Europe) (En,Fr,It) (Compilation - Chaos Pack) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Syndicate (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Syndicate (LHA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Syndicate (LHA) | TBD | Unsupported archive entries | TBD | TBD | TBD | Unsupported archive entries | Unsupported archive entries | TBD | TBD | TBD |
 | Table Tennis Simulation (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Tactical Manager 2 (Europe) (v2.43) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Tactical Manager 94-95 Season (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -3659,6 +3659,7 @@ not committed.
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Indiana Jones and the Fate of Atlantis 11-disk set/Swords of Twilight 2-disk set/Black Crypt 3-disk set>` passed all 9 mechanical launches. Manual screenshot review promoted Black Crypt and Swords of Twilight to visual smoke on A500/A500+/A600, while Indiana Jones and the Fate of Atlantis stayed visual-defect-only on all three. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <P.P. Hammer 1992 budget ZIP/Cannon Fodder TRSI 3-disk ZIP set>` passed all 6 launches. Manual screenshot review kept P.P. Hammer budget as visual smoke and promoted Cannon Fodder TRSI to visual smoke on A500/A500+/A600. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Superfrog/Chaos Engine/Risky Woods/Gods/Syndicate/Fire & Ice/Lemmings/Dogs of War/Project-X/DuckTales root .7z set>` failed before emulation because every selected archive contained IPF entries; those rows are marked `Unsupported media (format pending)` for A500/A500+/A600 until IPF/CAPS flux decoding lands. |
+| 2026-07-01 | Reran the requested batch after the Prince route classification. `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <P.P. Hammer 1992 budget ZIP/Cannon Fodder TRSI 3-disk ZIP set>` passed all 6 launches; visual review of `build/scratch/amiga-corpus/requested-adf-smoke-4500-contact.png` showed readable P.P. Hammer loader/prod screens and stable Cannon Fodder TRSI intro screens. The same root `.7z` set for Superfrog, Chaos Engine, Risky Woods, Gods, Syndicate, Fire & Ice, Lemmings, Dogs of War, Project-X, and DuckTales still fails before emulation with explicit IPF/CAPS unsupported messages. `Superfrog.lha`, `Syndicate.lha`, and `Syndicate (1).lha` fail with no supported ADF/ADZ/IPF/HDF media entries, so those LHA rows are classified as unsupported archive entries pending hard-drive/package mounting support. |
 
 ## Update Rules
 
