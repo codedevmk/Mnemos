@@ -74,11 +74,6 @@ function Get-FileSha256 {
     return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash
 }
 
-function Get-SummaryRowKey {
-    param([Parameter(Mandatory = $true)]$Row)
-    return "{0}|{1}|{2}|{3}" -f $Row.System, $Row.MediaLabel, $Row.MediaCount, $Row.Frames
-}
-
 function Get-OptionalText {
     param(
         [Parameter(Mandatory = $true)]$Object,
@@ -89,6 +84,18 @@ function Get-OptionalText {
         return ""
     }
     return [string]$property.Value
+}
+
+function Get-SummaryRowKey {
+    param([Parameter(Mandatory = $true)]$Row)
+    $kickstart = Get-OptionalText -Object $Row -Name "KickstartPath"
+    if ([string]::IsNullOrWhiteSpace($kickstart)) {
+        $kickstart = Get-OptionalText -Object $Row -Name "Kickstart"
+    }
+    if ([string]::IsNullOrWhiteSpace($kickstart)) {
+        $kickstart = "<unspecified-kickstart>"
+    }
+    return "{0}|{1}|{2}|{3}|{4}" -f $Row.System, $Row.MediaLabel, $Row.MediaCount, $kickstart, $Row.Frames
 }
 
 function Read-ExpectedSummaryRows {

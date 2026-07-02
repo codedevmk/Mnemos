@@ -108,8 +108,9 @@ Currently wired:
   screenshot color-diversity metrics, and audio artifact hashes are written to
   `build/scratch/amiga-corpus/summary.csv`. Use
   `-ExpectedSummary <csv-or-json>` to compare current screenshot/audio hashes
-  against a prior or reference summary; add `-RequireExpectedRows` when every
-  current row must have a baseline.
+  against a prior or reference summary. Summary matching includes the resolved
+  Kickstart route when present; add `-RequireExpectedRows` when every current
+  row must have a baseline.
 - Amiga 1000 defaults to an OCS/256 KiB NTSC profile suitable for resident
   Kickstart 1.0 testing; use `--region pal` for PAL hardware routes.
 - Amiga 2000 defaults to the base OCS/512 KiB profile. Use
