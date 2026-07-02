@@ -25,6 +25,7 @@ param(
     [string]$StartAfter = "",
     [double]$MinimumHeadlessFps = 0.0,
     [switch]$RejectFlatFrame,
+    [switch]$AllowBlackFrame,
     [int]$MinimumUniqueColors = 0,
     [double]$MaximumDominantColorRatio = 0.0,
     [switch]$RequireDiskProgress,
@@ -905,7 +906,7 @@ try {
 
                 try {
                     $stats = Get-PpmStats -Path $screenshot
-                    if ($stats.NonBlackPixels -eq 0) {
+                    if (-not $AllowBlackFrame -and $stats.NonBlackPixels -eq 0) {
                         $failures.Add("$systemName produced an all-black frame for '$mediaDisplay'. See $screenshot")
                     }
                     if ($RejectFlatFrame -and $stats.UniqueColors -le 1) {

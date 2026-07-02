@@ -95,7 +95,8 @@ Currently wired:
   `-RejectKickstartPrompt` when promoting compatibility rows so known insert-disk
   prompt frames do not count as operational software. Add `-RejectFlatFrame`,
   `-MinimumUniqueColors`, or `-MaximumDominantColorRatio` to keep black, white,
-  or otherwise flat loading frames from being mistaken for visual proof. Add
+  or otherwise flat loading frames from being mistaken for visual proof. Use
+  `-AllowBlackFrame` only for non-visual probes such as audio-only gates. Add
   `-RequireRenderedAudio`
   with optional `-AudioFrames`, `-AudioPress`,
   `-MinimumAudioFramesWithSignal`, and `-MinimumAudioPeakAbs` to gate titles

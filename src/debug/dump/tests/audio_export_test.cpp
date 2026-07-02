@@ -451,6 +451,7 @@ TEST_CASE("export_rendered_audio captures the drained mix to a WAV", "[audio_exp
     CHECK(json.find("\"captured_frames\": 10") != std::string::npos);
     CHECK(json.find("\"audio_frames\": 2") != std::string::npos);
     CHECK(json.find("\"peak_abs\": 400") != std::string::npos);
+    CHECK(json.find("\"name\": \"ENV\"") != std::string::npos);
     CHECK(json.find("\"name\": \"ADPCMA_ACTIVE\"") != std::string::npos);
     CHECK(json.find("\"value\": 33") != std::string::npos);
     CHECK(json.find("\"part_number\": \"TC0140SYT\"") != std::string::npos);

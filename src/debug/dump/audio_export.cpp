@@ -30,12 +30,6 @@ namespace mnemos::debug {
             std::vector<runtime_reg_write> events{};
         };
 
-        [[nodiscard]] bool is_runtime_audio_register(std::string_view name) noexcept {
-            return name.starts_with("ADPCM") || name == "STATUS" || name == "IRQ" ||
-                   name == "TIMERA_FLAG" || name == "TIMERB_FLAG" ||
-                   name == "TIMERA_IRQ_EN" || name == "TIMERB_IRQ_EN";
-        }
-
         [[nodiscard]] bool is_sound_comm_chip(const chips::ichip& chip) noexcept {
             return chip.metadata().klass == chips::chip_class::bus_controller &&
                    chip.metadata().part_number == "TC0140SYT";
@@ -80,10 +74,10 @@ namespace mnemos::debug {
                 if (regs == nullptr) {
                     continue;
                 }
+                const bool audio_synth = chip->metadata().klass == chips::chip_class::audio_synth;
                 const bool sound_comm = is_sound_comm_chip(*chip);
                 const bool sound_cpu = is_runtime_sound_cpu_chip(*chip);
-                if (chip->metadata().klass != chips::chip_class::audio_synth &&
-                    !sound_comm && !sound_cpu) {
+                if (!audio_synth && !sound_comm && !sound_cpu) {
                     continue;
                 }
                 const std::span<const chips::register_descriptor> descriptors =
@@ -91,10 +85,9 @@ namespace mnemos::debug {
                 bool has_runtime_audio = false;
                 for (const chips::register_descriptor& d : descriptors) {
                     has_runtime_audio =
-                        has_runtime_audio ||
+                        has_runtime_audio || audio_synth ||
                         (sound_comm ? is_runtime_sound_comm_register(d.name)
-                                    : sound_cpu ? is_runtime_sound_cpu_register(d.name)
-                                                : is_runtime_audio_register(d.name));
+                                    : is_runtime_sound_cpu_register(d.name));
                 }
                 if (!has_runtime_audio) {
                     continue;
@@ -107,9 +100,9 @@ namespace mnemos::debug {
                         ", \"registers\": [";
                 bool first_register = true;
                 for (const chips::register_descriptor& d : descriptors) {
-                    if (sound_comm ? !is_runtime_sound_comm_register(d.name)
-                                   : sound_cpu ? !is_runtime_sound_cpu_register(d.name)
-                                               : !is_runtime_audio_register(d.name)) {
+                    if (!audio_synth &&
+                        (sound_comm ? !is_runtime_sound_comm_register(d.name)
+                                    : !is_runtime_sound_cpu_register(d.name))) {
                         continue;
                     }
                     json += first_register ? "" : ", ";
