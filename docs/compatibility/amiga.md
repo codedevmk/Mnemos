@@ -465,18 +465,18 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Alien Breed 3D - CD32 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien Breed 3D (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien Breed (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Alien Breed II - The Horror Continues (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Alien Breed II - The Horror Continues (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Alien Breed II - The Horror Continues (Europe) (AGA) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Alien Breed - Special Edition 92 (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien Breed Special Edition & Quak - CD32 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien Breed Special Edition & Quak - CD32 (alt) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien Breed - Tower Assault (Europe) (OCS, AGA) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Alien Breed - Tower Assault (Europe) (v1.1) (OCS, AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Alien Breed - Tower Assault (Europe) (v1.1) (OCS, AGA) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Alien Drug Lords - The Chyropian Connection (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien Fires 2199 AD (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien Legion (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien Storm (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Alien Syndrome | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
+| Alien Syndrome | TBD | Visual defect | TBD | TBD | TBD | Requirement/error prompt | Requirement/error prompt | TBD | TBD | TBD |
 | Alien Syndrome (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien Syndrome (USA) (Budget - Mindscape) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Alien World (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -512,7 +512,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | APB (Europe) (Compilation - Tengen Arcade Hits) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | APB + Xybots (Europe) (Compilation - TNT) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Apidya - CD32 | TBD | Unsupported archive entries | TBD | TBD | TBD | Unsupported archive entries | Unsupported archive entries | TBD | TBD | TBD |
-| Apidya (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Apidya (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Apidya (Germany) (En) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Apocalypse (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Apprentice (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -619,7 +619,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Banshee - CD32 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Banshee (Europe) (En,Fr,De,Da) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bar Games (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Barbarian (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Barbarian (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Barbarian (Europe) (Alt) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Barbarian II (Europe) (Demo, Promo) (Psygnosis) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Barbarian II (Europe) (En,Fr,De,It) (Psygnosis) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -751,7 +751,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Bobo (Europe) (Compilation - European Dreams) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bodo Illgner's Super Soccer (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Body Blows (Europe) (AGA) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Body Blows (Europe) (v2.0) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Body Blows (Europe) (v2.0) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Body Blows Galactic (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Body Blows Galactic (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bomb Jack (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
@@ -798,7 +798,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Bubble And Squeak - CD32 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bubble and Squeak (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bubble and Squeak (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Bubble Bobble | TBD | Operational (visual smoke) | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
+| Bubble Bobble | TBD | Visual defect | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
 | Bubble Bobble (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bubble Bobble (Europe) (Budget - The Hit Squad) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bubble Bobble (Europe) (Compilation - Jatte Hits) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -838,7 +838,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Cabal (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Cadaver + Cadaver - The Payoff (Europe) (En,Fr,De) (v1.03) (Budget - Kixx) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Cadaver (Europe) (En,Fr,De) (v0.01) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Cadaver (Europe) (En,Fr,De) (v1.03) (Compilation - The Bitmap Brothers - Volume 1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Cadaver (Europe) (En,Fr,De) (v1.03) (Compilation - The Bitmap Brothers - Volume 1) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Cadaver - The Payoff (Europe) (En,Fr,De) (Addon) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Caesar (Europe) (En,Fr,De) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Calculation (Europe) (v1.1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -852,7 +852,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Cannon Fodder (1993)(Virgin)(DE)[cr TRSI] | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Cannon Fodder 2 1994 Virgin cr PDX | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | Cannon Fodder 2 (1994)(Virgin)[cr PDX] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Cannon Fodder 2 (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Cannon Fodder 2 (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Cannon Fodder 2 (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Cannon Fodder 2 (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Cannon Fodder - CD32 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1153,7 +1153,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Dennis (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Dennis (Europe) (AGA) (Amiga 1200 Bundle - Desktop Dynamite) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Denver Presente - Je Decouvre les Couleurs (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Desert Strike | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
+| Desert Strike | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Desert Strike-3 (1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Desert Strike - Return to the Gulf (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Destroyer (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1193,10 +1193,10 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Donk! - The Samurai Duck! (Europe) (OCS, AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Doodlebug (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Doofus (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Double Dragon (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Double Dragon (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Double Dragon (Europe) (v2.16) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Double Dragon II - The Revenge (Europe) (v3.84) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Double Dragon II - The Revenge (Europe) (v4.01) (OCS, ECS) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Double Dragon II - The Revenge (Europe) (v4.01) (OCS, ECS) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Double Dragon II - The Revenge (USA) (v4.16ecs) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Double Dragon III - The Rosetta Stone (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Down at the Trolls (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -1233,7 +1233,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | DreamWeb (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | DreamWeb (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Driller (Europe) (Budget - Kixx) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Driller (Europe) (En,Fr,De,It) (v1.0) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Driller (Europe) (En,Fr,De,It) (v1.0) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Driller + Total Eclipse (Europe) (Compilation - Virtual Worlds) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Drivin' Force (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Drivin' Force (Europe) (1504) (Alt) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2087,7 +2087,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Lost Vikings, The (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Lothar Matthaus - Die Interaktive Fussballsimulation (Germany) (En) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Lothar Matthaus Super Soccer (Germany) (v2.1 24.10.1994) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Lotus Esprit Turbo Challenge (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Lotus Esprit Turbo Challenge (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Lotus Esprit Turbo Challenge (Europe) (Compilation - Chart Attack) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Lotus Esprit Turbo Challenge (Europe) (Promo) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Lotus III - The Ultimate Challenge (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2400,7 +2400,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | P.P. Hammer and His Pneumatic Weapon (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | P.P. Hammer and His Pneumatic Weapon (Europe) (Budget - Global Software) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | P.P. Hammer and His Pneumatic Weapon (PPHammer.lha) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| P47 Thunderbolt (1990)(Firebird)[cr MAD] | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
+| P47 Thunderbolt (1990)(Firebird)[cr MAD] | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | P47 Thunderbolt (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | P47 Thunderbolt (Europe) (Compilation - Air-Sea Supremacy) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pac-Land (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2410,7 +2410,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Paladin II (Europe) (En,Fr,De) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pandora (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pang-500-NTSC | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Pang-500-NTSC.adf | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
+| Pang-500-NTSC.adf | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Pang-AGA | TBD | Requirement/error prompt | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
 | Pang (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Panza Kick Boxing (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2459,7 +2459,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Pick'n Pile (Europe) (Compilation - Le 2eme Sens) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pictionary (Europe) (v3.1a) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pierre le Chef Is... Out to Lunch (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Pinball Dreams | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
+| Pinball Dreams | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Pinball Dreams (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Pinball Dreams NTSC | TBD | Unsupported archive entries | TBD | TBD | TBD | Unsupported archive entries | Unsupported archive entries | TBD | TBD | TBD |
 | Pinball Fantasies (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
@@ -2468,7 +2468,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Pinball Illusions (Europe) (AGA) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Pinball Magic (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pinball Magic (Europe) (Alt) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Pinball Mania (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Pinball Mania (Europe) (AGA) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Pinball Mania (Europe) (AGA) (Amiga 1200 Bundle - Amiga Magic) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Pinball Prelude (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pinball Prelude (Europe) (OCS, ECS) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2479,7 +2479,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Pioneer Plague (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pipe Mania (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Piracy on the High Seas (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Pirates | TBD | Operational (disk smoke) | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
+| Pirates | TBD | Visual defect | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Pirates! (Europe) (v832.02) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pirates! (Europe) (v832.04) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pit-Fighter (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
@@ -2539,7 +2539,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Preis ist heiss, Der (Germany) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Premier Manager 2 - The New Season (Europe) (En,De) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Premier Manager 3 Deluxe (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Premier Manager 3 (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Premier Manager 3 (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Premier Manager 3 (Europe) (AGA) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Premier Manager (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Premier Manager Multi-Edit System (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2614,7 +2614,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | R.B.I. Two Baseball (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | R.B.I. Two Baseball (Europe) (Budget - The Hit Squad) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | R-C Aerochopper (USA) (v1.1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| R-Type | TBD | Operational (visual smoke) | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
+| R-Type | TBD | Visual defect | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
 | R-Type (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | R-Type II (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Raffles (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2623,7 +2623,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Railroad Tycoon (Europe) (v855.02) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Railroad Tycoon (Germany) (v855.01) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Railroad Tycoon (Germany) (v855.02) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rainbow Islands | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Rainbow Islands | TBD | Visual defect | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
 | Rainbow Islands (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rainbow Islands (Europe) (Alt) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rainbow Islands (Europe) (Budget - The Hit Squad) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2631,7 +2631,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Rally Championships (Europe) (En,Fr,De,Es,It,Nl,Pt,Pl) (ECS) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rally Cross Challenge (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rambo III (Europe) (Budget - The Hit Squad) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Rambo III (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Rambo III (USA) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Rampage (USA) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Rampart (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | RanX (France) (Compilation - 10 Megahits Vol. 3) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2667,9 +2667,9 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Reunion (Germany) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Reunion (Germany) (OCS, ECS) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Revelation! (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rick Dangerous 2 (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Rick Dangerous 2 (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Rick Dangerous 2 (Europe) (Budget - Kixx) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Rick Dangerous (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Rick Dangerous (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Rick Dangerous (Europe) (Amiga + PC) (Budget - Kixx) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Rick Dangerous (Europe) (Level Select) (Alt) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rick Dangerous (Europe) (Unlimited Lives) (Alt 2) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2700,17 +2700,17 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Robin Smith's International Cricket (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Robinson's Requiem (Europe) (En,Fr,De) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | RoboCop 2 (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| RoboCop 3 (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| RoboCop 3 (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | RoboCop 3 (Europe) (En,Fr,De) (Dongle Protected) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | RoboCop 3D (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| RoboCop (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| RoboCop (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | RoboCop (Europe) (Budget - The Hit Squad) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | RoboCop (Europe) (Compilation - Hollywood Collection) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | RoboSport (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Robotnic (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Robozone (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rock-A-Doodle - The Computerized Coloring Book (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Rock 'n Roll (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Rock 'n Roll (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Rock 'n Roll (Europe) (Compilation - 5th Anniversary) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Rock Star Ate My Hamster (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rocket Ranger (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2719,7 +2719,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Rocket Ranger (Germany) (En) (Budget - Mirror Image) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rocky (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rodland (Europe) (v1.3) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Rodland (Europe) (v1.32) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Rodland (Europe) (v1.32) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Rody and Mastico (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rody et Mastico (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rody et Mastico II (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2752,7 +2752,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Rules of Engagement (Europe) (v1.06 11.26.91) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Rules of Engagement (USA) (v1.03 10.14.91) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Run the Gauntlet (Europe) (Compilation - Party Time) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Run the Gauntlet (Europe) (Compilation - Sports Collection) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Run the Gauntlet (Europe) (Compilation - Sports Collection) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Running Man, The (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | RVF Honda (Europe) (Compilation - Magnum) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Ryder Cup - Johnnie Walker (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2783,7 +2783,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Scrabble Deluxe (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Scramble Spirits (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Screaming Wings (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| SDI (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| SDI (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | SeaHaven Towers (Europe) (v1.2) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Seastalker (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Second Samurai (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2860,7 +2860,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Silent Service II (USA) (v1.01) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Silent Service - The Submarine Simulation (Europe) (v825.03) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Silicon Dreams (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Silkworm (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Silkworm (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Silkworm (Europe) (Alt) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Silly Putty (Europe) (ECS) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | SimAnt (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2870,7 +2870,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | SimCity 2000 (Germany) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | SimCity - Architecture 1 - Future Cities (USA) (v1.00) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | SimCity - Architecture 2 - Ancient Cities (USA) (v1.00) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| SimCity (Europe) (512KB) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| SimCity (Europe) (512KB) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | SimCity (Europe) (512KB) (Alt) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | SimCity (Europe) (512KB) (Alt 2) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | SimCity (Europe) (v1.2) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
@@ -2879,7 +2879,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | SimCity (USA) (v1.2) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | SimEarth - The Living Planet (Europe) (v1.0 1992-07-08) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | SimEarth - The Living Planet (France) (v1.0 1992-07-08) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| SimLife (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| SimLife (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | SimLife (Europe) (AGA) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | SimLife (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | SimLife (France) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2920,11 +2920,11 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Skyfox (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Skyfox (USA) (HLS) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Slamtilt (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Slayer (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Slayer (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Slayer (Europe) (Budget - The 16 Bit Pocket Power Collection) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Slaygon (USA) (v1.1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Sleeping Gods Lie (Europe) (En,Fr,De,It) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Sleepwalker (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Sleepwalker (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Sleepwalker (Europe) (A1200 Bundle - Comic Relief Pack) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Sleepwalker (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Sleepwalker (Europe) (AGA) (A1200 Bundle - Comic Relief Pack) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -3072,7 +3072,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Stormball (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Stormlord (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Strange New World (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Street Fighter (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Street Fighter (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Street Fighter (Europe) (Amiga + PC) (Budget - Kixx) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Street Fighter II - The World Warrior (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Street Fighter II - The World Warrior (Europe) (Alt) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -3662,6 +3662,7 @@ not committed.
 | 2026-07-01 | Reran the requested batch after the Prince route classification. `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <P.P. Hammer 1992 budget ZIP/Cannon Fodder TRSI 3-disk ZIP set>` passed all 6 launches; visual review of `build/scratch/amiga-corpus/requested-adf-smoke-4500-contact.png` showed readable P.P. Hammer loader/prod screens and stable Cannon Fodder TRSI intro screens. The same root `.7z` set for Superfrog, Chaos Engine, Risky Woods, Gods, Syndicate, Fire & Ice, Lemmings, Dogs of War, Project-X, and DuckTales still fails before emulation with explicit IPF/CAPS unsupported messages. `Superfrog.lha`, `Syndicate.lha`, and `Syndicate (1).lha` fail with no supported ADF/ADZ/IPF/HDF media entries, so those LHA rows are classified as unsupported archive entries pending hard-drive/package mounting support. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 3000 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Roadwar 2000/Workbench 2.04 Boot/Workbench 2.1 Boot/ProTracker v3.62 AGA/ProTracker v4.0 Beta 2 AGA/Quik The Thunder Rabbit RAR>` passed 15 mechanical launches and failed Quik before emulation due no supported media entries. Screenshot contact sheet `build/scratch/amiga-corpus/latest-smoke-contact.png` promoted Roadwar 2000 on all three models and Workbench 2.04/2.1 on A500+/A600, kept Workbench 2.04 A500 and both ProTracker A500 routes as visual defects, classified Workbench 2.1 A500 as prompt-only, and classified both ProTracker A500+/A600 routes as error prompts. |
 | 2026-07-01 | Chunked requested-title smoke runs across A500/A500+/A600 with `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <82 exact local media paths>` found 80 IPF-backed root `.7z` routes that fail before emulation with explicit `IPF/CAPS flux decoding is not implemented yet` messages, plus `Apidya - CD32.zip` and `psygnosis_demos_cdtv.rar` archives with no supported ADF/ADZ/IPF/HDF entries. Existing ADF-proven rows from the request list were not downgraded. |
+| 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Emerald Mine/Desert Strike/Cannon Fodder/Bubble Bobble/Arthur/Alien Syndrome/P47/Pang/Pinball Dreams/Pirates/R-Type/Rainbow Islands ADF ZIP slice>` produced 33 successful disk-smoke launches and 3 black-frame Rainbow Islands failures. Manual review of `build/scratch/amiga-corpus/requested-batch-1500-contact.png` promoted Desert Strike, P47, Pang-500-NTSC, and Pinball Dreams to visual smoke; kept Cannon Fodder and Emerald Mine as previously classified; reclassified Bubble Bobble, R-Type, Rainbow Islands, and Pirates A500 as visual defects; and classified Alien Syndrome A500 as a visual defect plus Alien Syndrome A500+/A600 as Workbench error prompts. The same request batch inspected additional root `.7z` media and marked the remaining exact IPF-backed rows as `Unsupported media (format pending)`. |
 
 ## Update Rules
 
