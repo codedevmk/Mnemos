@@ -30,6 +30,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -246,6 +247,95 @@ namespace {
             metrics.pixel_h = metrics.logical_h;
         }
         return metrics;
+    }
+
+    [[nodiscard]] const char* present_mode_name(SDL_GPUPresentMode mode) noexcept {
+        switch (mode) {
+        case SDL_GPU_PRESENTMODE_VSYNC:
+            return "vsync";
+        case SDL_GPU_PRESENTMODE_IMMEDIATE:
+            return "immediate";
+        case SDL_GPU_PRESENTMODE_MAILBOX:
+            return "mailbox";
+        default:
+            return "unknown";
+        }
+    }
+
+    [[nodiscard]] bool ascii_iequals(std::string_view a, std::string_view b) noexcept {
+        if (a.size() != b.size()) {
+            return false;
+        }
+        for (std::size_t i = 0; i < a.size(); ++i) {
+            const auto ca = static_cast<unsigned char>(a[i]);
+            const auto cb = static_cast<unsigned char>(b[i]);
+            if (std::tolower(ca) != std::tolower(cb)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    [[nodiscard]] std::optional<SDL_GPUPresentMode>
+    parse_present_mode(std::string_view value) noexcept {
+        if (ascii_iequals(value, "vsync")) {
+            return SDL_GPU_PRESENTMODE_VSYNC;
+        }
+        if (ascii_iequals(value, "immediate")) {
+            return SDL_GPU_PRESENTMODE_IMMEDIATE;
+        }
+        if (ascii_iequals(value, "mailbox")) {
+            return SDL_GPU_PRESENTMODE_MAILBOX;
+        }
+        return std::nullopt;
+    }
+
+    [[nodiscard]] std::string environment_value(const char* name) {
+#if defined(_MSC_VER)
+        char* raw = nullptr;
+        std::size_t size = 0;
+        if (_dupenv_s(&raw, &size, name) != 0 || raw == nullptr) {
+            return {};
+        }
+        std::string value{raw};
+        std::free(raw);
+        return value;
+#else
+        if (const char* value = std::getenv(name); value != nullptr) {
+            return value;
+        }
+        return {};
+#endif
+    }
+
+    [[nodiscard]] SDL_GPUPresentMode choose_present_mode(SDL_GPUDevice* device,
+                                                         SDL_Window* window) {
+        const std::string requested = environment_value("MNEMOS_PLAYER_PRESENT_MODE");
+        if (!requested.empty()) {
+            if (const auto mode = parse_present_mode(requested)) {
+                if (SDL_WindowSupportsGPUPresentMode(device, window, *mode)) {
+                    return *mode;
+                }
+                std::fprintf(stderr,
+                             "[mnemos_player] present mode '%s' is unsupported; falling back\n",
+                             requested.c_str());
+                std::fflush(stderr);
+            } else {
+                std::fprintf(stderr,
+                             "[mnemos_player] unknown present mode '%s'; expected vsync, "
+                             "mailbox, or immediate\n",
+                             requested.c_str());
+                std::fflush(stderr);
+            }
+        }
+
+        if (SDL_WindowSupportsGPUPresentMode(device, window, SDL_GPU_PRESENTMODE_MAILBOX)) {
+            return SDL_GPU_PRESENTMODE_MAILBOX;
+        }
+        if (SDL_WindowSupportsGPUPresentMode(device, window, SDL_GPU_PRESENTMODE_IMMEDIATE)) {
+            return SDL_GPU_PRESENTMODE_IMMEDIATE;
+        }
+        return SDL_GPU_PRESENTMODE_VSYNC;
     }
 
     // OR an SDL gamepad's current buttons + left stick into a controller_state (so a
@@ -717,6 +807,16 @@ int main(int argc, char* argv[]) {
         SDL_DestroyWindow(window);
         SDL_Quit();
         return 1;
+    }
+    const SDL_GPUPresentMode present_mode = choose_present_mode(device, window);
+    if (!SDL_SetGPUSwapchainParameters(device, window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
+                                       present_mode)) {
+        std::fprintf(stderr, "[mnemos_player] could not set %s present mode: %s\n",
+                     present_mode_name(present_mode), SDL_GetError());
+        std::fflush(stderr);
+    } else {
+        std::fprintf(stderr, "[mnemos_player] present mode: %s\n",
+                     present_mode_name(present_mode));
     }
 
     // Adapter framebuffers are 0x00RRGGBB little-endian -> BGRA8 byte order.
