@@ -919,6 +919,30 @@ function Get-AmigaSystemList {
     return $systems.ToArray()
 }
 
+function Expand-MediaPathArguments {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [string[]]$Values
+    )
+
+    $paths = [System.Collections.Generic.List[string]]::new()
+    foreach ($value in $Values) {
+        if ([string]::IsNullOrWhiteSpace($value)) {
+            continue
+        }
+        $resolved = Resolve-RepoPath $value
+        if (Test-Path -LiteralPath $resolved -PathType Leaf) {
+            $paths.Add($value)
+            continue
+        }
+        foreach ($token in (Get-FlatArgumentList -Values @($value))) {
+            $paths.Add($token)
+        }
+    }
+    return $paths.ToArray()
+}
+
 function Get-AmigaContentProbeScore {
     param(
         [Parameter(Mandatory = $true)]$Stats,
@@ -989,7 +1013,7 @@ $audioPressArgs = @(Get-FlatArgumentList -Values $AudioPress)
 $systemList = @(Get-AmigaSystemList -Values $System)
 
 $media = [System.Collections.Generic.List[string]]::new()
-foreach ($path in $Rom) {
+foreach ($path in (Expand-MediaPathArguments -Values $Rom)) {
     Add-MediaPath -Paths $media -Path $path
 }
 foreach ($path in Split-PathList $env:MNEMOS_AMIGA_ROM) {

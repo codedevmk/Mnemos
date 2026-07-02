@@ -62,6 +62,14 @@ All three routes left the intro but reached Software Failure/Guru-style error
 screens before useful gameplay, so the aggregate Bubble Bobble row is demoted
 from visual smoke to broken pending root-cause analysis.
 
+2026-07-02 Pirates follow-up evidence: the two-disk ZIP-contained ADF set was
+run for 6000 frames on A500, A500+, and A600 with `-RequireDiskProgress`,
+`-RejectKickstartPrompt`, and `-RejectSoftwareFailure`. Manual review of
+`build/scratch/amiga-corpus/amiga500-Pirates.f6000.png`,
+`amiga500plus-Pirates.f6000.png`, and `amiga600-Pirates.f6000.png` shows a
+readable Workbench desktop with the Pirates disk icon on all three routes, so
+the A500+/A600 cells are promoted from visual defect to visual smoke.
+
 2026-07-02 Kickstart 1.3 route evidence: forcing
 `D:\emu\amiga\bios\Kickstart 1.3.rom` booted Workbench 1.3 for 2400 frames on
 the currently wired A1000, A500, A500+, A600, and A2000 routes. A1000 is
@@ -2535,7 +2543,7 @@ the OCS/ECS model family are marked `N/A`.
 | Pioneer Plague (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pipe Mania (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Piracy on the High Seas (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Pirates | TBD | Operational (visual smoke) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Pirates | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Pirates! (Europe) (v832.02) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pirates! (Europe) (v832.04) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Pit-Fighter (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
