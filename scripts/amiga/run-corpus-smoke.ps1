@@ -499,6 +499,90 @@ function Get-KickstartConfig {
     }
 }
 
+function Get-KickstartCandidateNames {
+    param([Parameter(Mandatory = $true)][string]$SystemName)
+    switch ($SystemName) {
+        "amiga1000" {
+            return @(
+                "Kickstart 1.0.rom",
+                "Kickstart 1.0 (NTSC) (A1000) (Commodore) (1985).rom",
+                "kick10.rom",
+                "kickstart10.rom",
+                "kickstart1.0.rom"
+            )
+        }
+        "amiga500plus" {
+            return @(
+                "Kickstart 2.0.rom",
+                "Kickstart 2.04.rom",
+                "Kickstart 2.05.rom",
+                "kick20.rom",
+                "kick204.rom",
+                "kick205.rom",
+                "kickstart20.rom",
+                "kickstart2.0.rom"
+            )
+        }
+        "amiga600" {
+            return @(
+                "Kickstart 2.0.rom",
+                "Kickstart 2.05.rom",
+                "Kickstart 3.1.rom",
+                "kick20.rom",
+                "kick205.rom",
+                "kick31.rom",
+                "kickstart20.rom",
+                "kickstart2.0.rom",
+                "kickstart31.rom"
+            )
+        }
+        default {
+            return @(
+                "Kickstart 1.3.rom",
+                "Kickstart 1.2.rom",
+                "kick13.rom",
+                "kick12.rom",
+                "kickstart13.rom",
+                "kickstart12.rom",
+                "kickstart1.3.rom",
+                "kickstart1.2.rom"
+            )
+        }
+    }
+}
+
+function Resolve-KickstartPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$SystemName,
+        [Parameter(Mandatory = $true)]$Kickstart
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($Kickstart.Path)) {
+        return (Resolve-Path -LiteralPath $Kickstart.Path).Path
+    }
+
+    $dirs = @(
+        [Environment]::GetEnvironmentVariable(($Kickstart.EnvVar -replace "_KICKSTART$", "_KICKSTART_DIR")),
+        [Environment]::GetEnvironmentVariable(($Kickstart.EnvVar -replace "_KICKSTART$", "_BIOS_DIR")),
+        [Environment]::GetEnvironmentVariable("MNEMOS_AMIGA_KICKSTART_DIR"),
+        [Environment]::GetEnvironmentVariable("MNEMOS_AMIGA_BIOS_DIR")
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+    foreach ($dir in $dirs) {
+        if (-not (Test-Path -LiteralPath $dir -PathType Container)) {
+            continue
+        }
+        foreach ($name in (Get-KickstartCandidateNames -SystemName $SystemName)) {
+            $candidate = Join-Path $dir $name
+            if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                return (Resolve-Path -LiteralPath $candidate).Path
+            }
+        }
+    }
+
+    return ""
+}
+
 function Invoke-Player {
     param(
         [Parameter(Mandatory = $true)][string]$Player,
@@ -870,6 +954,12 @@ try {
         } else {
             [Environment]::SetEnvironmentVariable($kickstart.EnvVar, $null, "Process")
         }
+        $effectiveKickstartPath = Resolve-KickstartPath -SystemName $systemName -Kickstart $kickstart
+        $effectiveKickstartLabel = if ([string]::IsNullOrWhiteSpace($effectiveKickstartPath)) {
+            ""
+        } else {
+            [System.IO.Path]::GetFileNameWithoutExtension($effectiveKickstartPath)
+        }
         try {
             foreach ($mediaSet in $launchSets) {
                 $paths = [string[]]$mediaSet.Paths
@@ -885,6 +975,9 @@ try {
                     "--frames", $Frames.ToString([System.Globalization.CultureInfo]::InvariantCulture),
                     "--screenshot", $screenshot
                 )
+                if (-not [string]::IsNullOrWhiteSpace($effectiveKickstartPath)) {
+                    $args += @("--amiga-kickstart", $effectiveKickstartPath)
+                }
                 for ($mediaIndex = 1; $mediaIndex -lt $paths.Count; ++$mediaIndex) {
                     $args += @("--disk", $paths[$mediaIndex])
                 }
@@ -954,6 +1047,9 @@ try {
                             "--extract-audio", $audioBase,
                             "--extract-frames", $audioFrameCount.ToString([System.Globalization.CultureInfo]::InvariantCulture)
                         )
+                        if (-not [string]::IsNullOrWhiteSpace($effectiveKickstartPath)) {
+                            $audioArgs += @("--amiga-kickstart", $effectiveKickstartPath)
+                        }
                         for ($mediaIndex = 1; $mediaIndex -lt $paths.Count; ++$mediaIndex) {
                             $audioArgs += @("--disk", $paths[$mediaIndex])
                         }
@@ -984,6 +1080,8 @@ try {
                         Media = $mediaDisplay
                         MediaLabel = $mediaLabel
                         MediaCount = $paths.Count
+                        Kickstart = $effectiveKickstartLabel
+                        KickstartPath = $effectiveKickstartPath
                         Frames = $Frames
                         ElapsedSeconds = [Math]::Round($run.ElapsedSeconds, 3)
                         HeadlessFps = [Math]::Round($headlessFps, 2)

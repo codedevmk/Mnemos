@@ -104,8 +104,8 @@ Currently wired:
   with optional `-AudioFrames`, `-AudioPress`,
   `-MinimumAudioFramesWithSignal`, and `-MinimumAudioPeakAbs` to gate titles
   that should produce Paula output after scripted input. Per-run timing and
-  optional rendered-audio metrics, screenshot hashes, screenshot color-diversity
-  metrics, and audio artifact hashes are written to
+  Kickstart identity, optional rendered-audio metrics, screenshot hashes,
+  screenshot color-diversity metrics, and audio artifact hashes are written to
   `build/scratch/amiga-corpus/summary.csv`. Use
   `-ExpectedSummary <csv-or-json>` to compare current screenshot/audio hashes
   against a prior or reference summary; add `-RequireExpectedRows` when every
