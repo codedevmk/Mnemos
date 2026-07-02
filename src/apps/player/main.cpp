@@ -376,7 +376,9 @@ namespace {
         float discard_x = 0.0F;
         float discard_y = 0.0F;
         (void)SDL_GetRelativeMouseState(&discard_x, &discard_y);
-        if (!captured) {
+        if (captured) {
+            SDL_HideCursor();
+        } else {
             SDL_ShowCursor();
         }
         std::fprintf(stderr, "[mnemos_player] mouse %s\n", captured ? "captured" : "released");
@@ -533,7 +535,8 @@ Other:
 
 Window hotkeys:
   ESC quit   P pause   F5 quick-save   F9 quick-load
-  F6 swap disk   F11 fullscreen   F12 dump PPM frame
+  F6 swap disk   Ctrl+M capture/release mouse   F11 fullscreen   F12 dump PPM frame
+  Captured mouse mode hides the host pointer; press ESC once to release it.
 
 Keyboard as pad:
   arrows = D-pad   Z/X/C = A/B/C   A/S/D = X/Y/Z (Genesis 6-button extras)
