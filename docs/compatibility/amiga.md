@@ -216,9 +216,9 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | ProTracker v2.0a | TBD | TBD | TBD | TBD | TBD | Operational (disk smoke) | Operational (disk smoke) | TBD | TBD | TBD |
 | ProTracker v2.0a (1991-02)(Amiga Freelancers - 17-Bit Software)(PD) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | ProTracker v3.62 AGA | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| ProTracker v3.62 (AGA)(Y2K fixed)(Cryptoburners - RD10)(PD)(m TITAN) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| ProTracker v3.62 (AGA)(Y2K fixed)(Cryptoburners - RD10)(PD)(m TITAN) | TBD | Visual defect | TBD | TBD | TBD | Requirement/error prompt | Requirement/error prompt | TBD | TBD | TBD |
 | ProTracker v4.0 Beta 2 AGA | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| ProTracker v4.0 Beta 2 (AGA)(Cryptoburners - RD10)(PD)(m TITAN) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| ProTracker v4.0 Beta 2 (AGA)(Cryptoburners - RD10)(PD)(m TITAN) | TBD | Visual defect | TBD | TBD | TBD | Requirement/error prompt | Requirement/error prompt | TBD | TBD | TBD |
 | Rome AD 92 - The Pathway to Power (Europe) (Amiga 600 HD Bundles - Epic + Language Lab) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Strip Poker II+ Data Disk 1 (Europe) (Addon) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Trivial Pursuit - The Language Laboratory Edition + Amiga Text (Europe) (ECS) (Amiga 600 HD Bundles - Epic + Language Lab) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -275,7 +275,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Workbench 2.0 (36.68) - Boot (Commodore) (1991) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 2.0 (36.68) - Extras (Commodore) (1991) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 2.0 (36.68) - Fonts (Commodore) (1991) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Workbench 2.04 (37.67) - Boot (Commodore) (1992) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Workbench 2.04 (37.67) - Boot (Commodore) (1992) | TBD | Visual defect | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Workbench 2.04 (37.67) - Boot (Commodore) (1992) (International) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 2.04 (37.67) - Boot (Commodore) (1992) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 2.04 (37.67) - Extras (Commodore) (1992) (International) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -303,7 +303,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Workbench 2.1 (38.35) - Install (Commodore) (1992) (International) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 2.1 (38.35) - Locale (Commodore) (1992) (International) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 2.1 (38.35) - Locale (Commodore) (1992) (International) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Workbench 2.1 (38.36) - Boot (Commodore) (1992) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Workbench 2.1 (38.36) - Boot (Commodore) (1992) | TBD | Prompt only | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Workbench 2.1 (38.36) - Extras (Commodore) (1992) [m] | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 2.1 (38.36) - Fonts (Commodore) (1992) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Workbench 2.1 (38.36) - Fonts (Commodore) (1992) (1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2608,7 +2608,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Questron II (Europe) (v1.0) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Quete de l'Oiseau du Temps, La (France) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Quik - The Thunder Rabbit (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Quik The Thunder Rabbit (RAR) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Quik The Thunder Rabbit (RAR) | TBD | Unsupported archive entries | TBD | TBD | TBD | Unsupported archive entries | Unsupported archive entries | TBD | TBD | TBD |
 | Quintette (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Qwak (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | R.B.I. Two Baseball (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2693,7 +2693,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Road Blasters (Europe) (Budget - Kixx) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Road Rash (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Roadkill (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Roadwar 2000 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| Roadwar 2000 | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Roadwar Europa (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Roadwars (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Robbeary (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -3660,6 +3660,7 @@ not committed.
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <P.P. Hammer 1992 budget ZIP/Cannon Fodder TRSI 3-disk ZIP set>` passed all 6 launches. Manual screenshot review kept P.P. Hammer budget as visual smoke and promoted Cannon Fodder TRSI to visual smoke on A500/A500+/A600. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Superfrog/Chaos Engine/Risky Woods/Gods/Syndicate/Fire & Ice/Lemmings/Dogs of War/Project-X/DuckTales root .7z set>` failed before emulation because every selected archive contained IPF entries; those rows are marked `Unsupported media (format pending)` for A500/A500+/A600 until IPF/CAPS flux decoding lands. |
 | 2026-07-01 | Reran the requested batch after the Prince route classification. `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <P.P. Hammer 1992 budget ZIP/Cannon Fodder TRSI 3-disk ZIP set>` passed all 6 launches; visual review of `build/scratch/amiga-corpus/requested-adf-smoke-4500-contact.png` showed readable P.P. Hammer loader/prod screens and stable Cannon Fodder TRSI intro screens. The same root `.7z` set for Superfrog, Chaos Engine, Risky Woods, Gods, Syndicate, Fire & Ice, Lemmings, Dogs of War, Project-X, and DuckTales still fails before emulation with explicit IPF/CAPS unsupported messages. `Superfrog.lha`, `Syndicate.lha`, and `Syndicate (1).lha` fail with no supported ADF/ADZ/IPF/HDF media entries, so those LHA rows are classified as unsupported archive entries pending hard-drive/package mounting support. |
+| 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 3000 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Roadwar 2000/Workbench 2.04 Boot/Workbench 2.1 Boot/ProTracker v3.62 AGA/ProTracker v4.0 Beta 2 AGA/Quik The Thunder Rabbit RAR>` passed 15 mechanical launches and failed Quik before emulation due no supported media entries. Screenshot contact sheet `build/scratch/amiga-corpus/latest-smoke-contact.png` promoted Roadwar 2000 on all three models and Workbench 2.04/2.1 on A500+/A600, kept Workbench 2.04 A500 and both ProTracker A500 routes as visual defects, classified Workbench 2.1 A500 as prompt-only, and classified both ProTracker A500+/A600 routes as error prompts. |
 
 ## Update Rules
 
