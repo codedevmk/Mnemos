@@ -1120,8 +1120,8 @@ the OCS/ECS model family are marked `N/A`.
 | Cybercon III (Europe) (8.6.91) (Budget - Kixx XL) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Cybercop (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Cybernauts (Europe) (Compilation - Powerbox) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Cybernoid II - The Revenge (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
-| Cybernoid - The Fighting Machine (Europe) (Compilation - Action Amiga) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| Cybernoid II - The Revenge (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
+| Cybernoid - The Fighting Machine (Europe) (Compilation - Action Amiga) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
 | Cyberpunks (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Cycles, The - International Grand Prix Racing (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Cytron (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2551,8 +2551,8 @@ the OCS/ECS model family are marked `N/A`.
 | Pool (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Populous (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Populous (Europe) (v2.7) (1989-03-17) (Budget) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Populous II - The Challenge Games (Europe) (Addon) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Populous II - Trials of the Olympian Gods (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| Populous II - The Challenge Games (Europe) (Addon) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Populous II - Trials of the Olympian Gods (Europe) | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Populous - The Promised Lands (Europe) (Addon) (Budget - The Hit Squad) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Populous - The Promised Lands (Europe) (Amiga + ST) (Addon) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Populous (USA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2660,7 +2660,7 @@ the OCS/ECS model family are marked `N/A`.
 | R-C Aerochopper (USA) (v1.1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | R-Type | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | R-Type (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| R-Type II (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
+| R-Type II (Europe) | TBD | Broken (visual defect) | TBD | TBD | TBD | Broken (visual defect) | Broken (visual defect) | TBD | TBD | TBD |
 | Raffles (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Raider (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Railroad Tycoon (Europe) (v855.01) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -3672,6 +3672,7 @@ not committed.
 
 | Date | Evidence |
 | --- | --- |
+| 2026-07-02 | Requested-name gap pass for `Cybernoid I`, `Cybernoid II`, `Populous 2`, and `R-Type 2`: with `MNEMOS_CAPSIMG_DLL=build/scratch/caps/devlib/CAPSImg_x64.dll`, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Cybernoid/Cybernoid II/Populous II Challenge/Populous II Trials/R-Type II root .7z slice>` ran all 15 IPF-backed launches. Visual review of `build/scratch/amiga-corpus/requested-gap-ipf-contact.png` promotes both Populous II rows to visual smoke on A500/A500+/A600. Cybernoid and Cybernoid II remain broken visual defects due black/blank output on all three routes. R-Type II is marked broken visual defect due black A500 output and solid-green A500+/A600 output. |
 | 2026-07-02 | Superseding Pang-500-NTSC ADF audit: the earlier disk-progress visual-smoke promotion is demoted. Direct `D:\emu\amiga\adf\Pang-500-NTSC.adf.zip` reruns on A500/A500+/A600 reach late disk progress but end in flat frames rather than useful game output. A focused A500 trace shows the loader completing a raw `DSKLEN=$9960` read into `$07C000..$07F2C0`, then spinning in its MFM sync scan at `$0700B0/$0700B4` as `A0` walks out of the track buffer. PAL and forced NTSC both fail, so this is recorded as a raw-read/layout compatibility defect, not a region-only issue. |
 | 2026-07-02 | The Amiga corpus smoke harness now records screenshot `UniqueColors`, `DominantColor`, `DominantColorPixels`, and `DominantColorRatio`, and adds `-RejectFlatFrame`, `-MinimumUniqueColors`, and `-MaximumDominantColorRatio` gates so flat loading frames are not promoted as visual proof. A 600-frame P.P. Hammer 1992 budget ZIP probe failed the new flat-frame gate on A500/A500+/A600, while the longer documented 4500-frame route passed on all three models, so the compatibility row remains visual-smoke but short smoke windows are no longer accepted for that title. |
 | 2026-07-02 | Post-DDF-fix A500 follow-up ran `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build\windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 4500 -MinimumHeadlessFps 10 -RequireDiskProgress -RejectKickstartPrompt -System amiga500` against `Red Baron (Europe)`, `Red Baron (Germany)`, `Red Lightning (USA)`, `Realms of Arkania - Blade of Destiny (Europe) (OCS, ECS)`, `Reederei (Germany)`, `Renegade Legion - Interceptor (Europe)`, `Rick Davis's World Trophy Soccer (Europe)`, and `Road Rash (Europe)`. All 8 launches passed mechanical smoke at 174-202 headless FPS with disk progress; visual review of `build/scratch/amiga-corpus/ddf-phase-followup-a500-contact.png` promotes Red Lightning, Realms of Arkania, and Reederei A500 to visual smoke, and reclassifies Red Baron Europe/Germany, Renegade Legion, Rick Davis Soccer, and Road Rash A500 from visual corruption to readable requirement/error prompts. |
