@@ -51,6 +51,8 @@ namespace mnemos::manifests::amiga {
             amiga_floppy_sectors_per_track;
         static constexpr std::size_t floppy_sector_size = amiga_floppy_sector_size;
         static constexpr std::size_t floppy_dd_size = amiga_floppy_dd_size;
+        static constexpr std::size_t floppy_standard_raw_track_bytes =
+            amiga_floppy_standard_raw_track_bytes;
         static constexpr std::size_t floppy_drive_count = amiga_floppy_drive_count;
         static constexpr std::uint8_t no_floppy_drive = amiga_no_floppy_drive;
         static constexpr std::uint32_t floppy_index_pulses_per_second =

@@ -1518,7 +1518,7 @@ namespace mnemos::manifests::amiga {
         df.index_line_accumulator = 0U;
         floppy_side_pos = 0U;
         disk_dma_bytes_remaining = 0U;
-        df.track_stream.reserve(floppy_sectors_per_track * 1100U);
+        df.track_stream.reserve(floppy_standard_raw_track_bytes);
         update_floppy_track_stream(drive);
         return true;
     }
@@ -1883,6 +1883,9 @@ namespace mnemos::manifests::amiga {
                 track, sector);
         }
         for (std::size_t i = 0U; i < 32U; ++i) {
+            append_be16(df.track_stream, 0xAAAAU);
+        }
+        while (df.track_stream.size() < floppy_standard_raw_track_bytes) {
             append_be16(df.track_stream, 0xAAAAU);
         }
         if (track_index < df.weak_bit_cache.size() && !df.weak_bit_cache[track_index].empty() &&

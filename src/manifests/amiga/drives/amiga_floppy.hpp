@@ -16,6 +16,8 @@ namespace mnemos::manifests::amiga {
     inline constexpr std::size_t amiga_floppy_dd_size =
         amiga_floppy_cylinders * amiga_floppy_heads * amiga_floppy_sectors_per_track *
         amiga_floppy_sector_size;
+    // Nominal raw MFM bytes per 300 RPM DD revolution for synthesized AmigaDOS tracks.
+    inline constexpr std::size_t amiga_floppy_standard_raw_track_bytes = 12668U;
     inline constexpr std::size_t amiga_floppy_drive_count = 4U;
     inline constexpr std::uint8_t amiga_no_floppy_drive = 0xFFU;
     inline constexpr std::uint32_t amiga_floppy_index_pulses_per_second = 5U;

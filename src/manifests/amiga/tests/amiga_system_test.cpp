@@ -478,6 +478,7 @@ TEST_CASE("amiga floppy drive profile preserves public DD geometry", "[manifests
     CHECK(amiga_system::floppy_sectors_per_track == amiga_floppy_sectors_per_track);
     CHECK(amiga_system::floppy_sector_size == amiga_floppy_sector_size);
     CHECK(amiga_system::floppy_dd_size == amiga_floppy_dd_size);
+    CHECK(amiga_system::floppy_standard_raw_track_bytes == 12668U);
     CHECK(amiga_system::floppy_drive_count == amiga_floppy_drive_count);
 }
 
@@ -1513,6 +1514,7 @@ TEST_CASE("amiga500 mounted ADF sectors use AmigaDOS odd-even block layout",
     constexpr std::size_t second_sector = first_sector + sector_slot_bytes;
 
     const auto& track = sys->floppy_drives[0].track_stream;
+    CHECK(track.size() == amiga_system::floppy_standard_raw_track_bytes);
     REQUIRE(track.size() >= second_sector + sector_bytes);
     CHECK(read_track_long(track, 0U) == 0xAAAAAAAAU);
     CHECK(read_track_long(track, first_sector) == 0xAAAAAAAAU);
