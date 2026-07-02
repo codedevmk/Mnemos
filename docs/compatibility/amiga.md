@@ -50,6 +50,12 @@ headless floor against direct ADF apps and ZIP-contained ADF titles. Exact rows
 below are promoted only where the resulting screenshots showed a plausible app,
 loader, Workbench screen, or a clear visual defect.
 
+2026-07-02 Bubble Bobble input-gated smoke evidence: A500, A500+, and A600 were
+run for 6000 frames with `-Press p4:trigger@1000+30` to continue past the intro.
+All three routes left the intro but reached Software Failure/Guru-style error
+screens before useful gameplay, so the aggregate Bubble Bobble row is demoted
+from visual smoke to broken pending root-cause analysis.
+
 2026-07-02 Kickstart 1.3 route evidence: forcing
 `D:\emu\amiga\bios\Kickstart 1.3.rom` booted Workbench 1.3 for 2400 frames on
 the currently wired A1000, A500, A500+, A600, and A2000 routes. A1000 is
@@ -842,7 +848,7 @@ the OCS/ECS model family are marked `N/A`.
 | Bubble And Squeak - CD32 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bubble and Squeak (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bubble and Squeak (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Bubble Bobble | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
+| Bubble Bobble | TBD | Broken (requirement/error prompt) | TBD | TBD | TBD | Broken (requirement/error prompt) | Broken (requirement/error prompt) | TBD | TBD | TBD |
 | Bubble Bobble (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bubble Bobble (Europe) (Budget - The Hit Squad) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bubble Bobble (Europe) (Compilation - Jatte Hits) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
