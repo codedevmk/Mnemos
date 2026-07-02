@@ -393,6 +393,7 @@ namespace mnemos::chips::video {
         void begin_frame_render() noexcept;
         void capture_sprite_render_pointers() noexcept;
         void commit_dma_sprite_pointers() noexcept;
+        void render_scanline_after_display_fetch() noexcept;
         void render_scanline(std::uint32_t beam_line) noexcept;
         void render_sprites(std::uint32_t height) noexcept;
         void render_dma_sprite_line(std::uint32_t sprite, std::uint32_t base_pointer,
@@ -453,6 +454,7 @@ namespace mnemos::chips::video {
         std::uint32_t frame_width_{visible_width_lores};
         bool vblank_active_{};
         bool hblank_active_{};
+        bool scanline_rendered_{};
 
         // Display registers.
         std::array<std::uint32_t, max_bitplanes> bitplane_pointer_{};

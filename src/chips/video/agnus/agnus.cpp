@@ -217,6 +217,7 @@ namespace mnemos::chips::video {
         frame_width_ = visible_width_lores;
         vblank_active_ = false;
         hblank_active_ = false;
+        scanline_rendered_ = false;
         bitplane_pointer_.fill(0U);
         modulo_even_ = 0;
         modulo_odd_ = 0;
@@ -259,6 +260,7 @@ namespace mnemos::chips::video {
         const std::uint32_t max_line = is_pal_ ? scanlines_pal : scanlines_ntsc;
         for (std::uint64_t i = 0; i < cycles; ++i) {
             if (color_clock_ == 0U) {
+                scanline_rendered_ = false;
                 if (scanline_ == 0U) {
                     begin_frame_render();
                 }
@@ -295,8 +297,12 @@ namespace mnemos::chips::video {
             if (cycle_cb_) {
                 cycle_cb_();
             }
+            render_scanline_after_display_fetch();
             if (++color_clock_ == color_clocks_per_line) {
-                render_scanline(scanline_);
+                if (!scanline_rendered_) {
+                    render_scanline(scanline_);
+                    scanline_rendered_ = true;
+                }
                 color_clock_ = 0U;
                 if (++scanline_ == max_line) {
                     scanline_ = 0U;
@@ -558,6 +564,22 @@ namespace mnemos::chips::video {
             sprite_[sprite].pointer = byte_address & chip_address_mask;
             ++sprite_pointer_generation_[sprite];
         }
+    }
+
+    void agnus::render_scanline_after_display_fetch() noexcept {
+        if (scanline_rendered_) {
+            return;
+        }
+        const display_dma_slot slot = display_dma_slot_at_beam(scanline_, color_clock_);
+        if (!slot.active) {
+            return;
+        }
+        const std::uint32_t next_clock = color_clock_ + 1U;
+        if (next_clock < slot.fetch_end && next_clock < color_clocks_per_line) {
+            return;
+        }
+        render_scanline(scanline_);
+        scanline_rendered_ = true;
     }
 
     std::uint32_t agnus::sprite_pointer(std::uint32_t sprite) const noexcept {

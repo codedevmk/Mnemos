@@ -584,6 +584,35 @@ TEST_CASE("agnus bitplane DMA pointers advance and require a field rewrite", "[a
     CHECK(chip.framebuffer().pixels[0] == 0x00FF0000U);
 }
 
+TEST_CASE("agnus renders a scanline before post-DDF pointer rewrites affect the next line",
+          "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    const auto palette = make_palette(1U, 0x0F00U);
+
+    write_word(chip_ram, 0U, 0x8000U);
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    program_full_window(chip);
+    chip.set_bitplane_pointer(0U, 0U);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    constexpr std::uint64_t first_visible_line_ticks =
+        static_cast<std::uint64_t>(agnus::display_line_origin) * agnus::color_clocks_per_line;
+    constexpr std::uint64_t lowres_fetch_end_clock = 0x38U + 20U * 8U;
+    chip.tick(first_visible_line_ticks + lowres_fetch_end_clock);
+
+    // The display DMA fetch for visible line 0 has completed. A pointer rewrite
+    // here must target the next line, not retroactively change line 0.
+    chip.set_bitplane_pointer(0U, 0x100U);
+    chip.tick(frame_ticks - first_visible_line_ticks - lowres_fetch_end_clock);
+
+    const auto frame = chip.framebuffer();
+    CHECK(frame.pixels[0] == 0x00FF0000U);
+    CHECK(frame.pixels[agnus::framebuffer_stride] == 0x00000000U);
+}
+
 TEST_CASE("agnus renders extra-half-brite colours from the sixth bitplane", "[agnus]") {
     agnus chip;
     std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);

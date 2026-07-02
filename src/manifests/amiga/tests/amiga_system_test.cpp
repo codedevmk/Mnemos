@@ -1201,7 +1201,7 @@ TEST_CASE("amiga500 BPLCON0 HIRES custom register exposes 640-pixel OCS rows",
     sys->write_custom_word(0x08EU, 0x2C81U);
     sys->write_custom_word(0x090U, 0xF4C1U);
     sys->write_custom_word(0x092U, 0x003CU);
-    sys->write_custom_word(0x094U, 0x00D0U);
+    sys->write_custom_word(0x094U, 0x00D4U);
     sys->write_custom_word(0x0E0U, 0x0000U); // BPL1PTH
     sys->write_custom_word(0x0E2U, 0x0000U); // BPL1PTL
     sys->write_custom_word(0x096U,
@@ -3116,7 +3116,7 @@ TEST_CASE("amiga500 display DMA stalls blitter busy countdown",
     sys->write_custom_word(0x08EU, 0x2C81U);
     sys->write_custom_word(0x090U, 0xF4C1U);
     sys->write_custom_word(0x092U, 0x003CU);
-    sys->write_custom_word(0x094U, 0x00D0U);
+    sys->write_custom_word(0x094U, 0x00D4U);
     sys->write_custom_word(
         0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit | agnus::dmacon_dmaen |
                                            agnus::dmacon_bplen | agnus::dmacon_blten));
@@ -3273,7 +3273,7 @@ TEST_CASE("amiga500 high-resolution display DMA stalls CPU chip-RAM bus cycles d
         sys->write_custom_word(0x08EU, 0x2C81U);
         sys->write_custom_word(0x090U, 0xF4C1U);
         sys->write_custom_word(0x092U, 0x003CU);
-        sys->write_custom_word(0x094U, 0x00D0U);
+        sys->write_custom_word(0x094U, 0x00D4U);
         sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                                   agnus::dmacon_dmaen |
                                                                   agnus::dmacon_bplen));
@@ -3347,7 +3347,7 @@ TEST_CASE("amiga500 high-resolution display DMA charges one lockout across longw
         sys->write_custom_word(0x08EU, 0x2C81U);
         sys->write_custom_word(0x090U, 0xF4C1U);
         sys->write_custom_word(0x092U, 0x003CU);
-        sys->write_custom_word(0x094U, 0x00D0U);
+        sys->write_custom_word(0x094U, 0x00D4U);
         sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                                   agnus::dmacon_dmaen |
                                                                   agnus::dmacon_bplen));
@@ -3400,7 +3400,7 @@ TEST_CASE("amiga500 display DMA wait is already residual after prior instruction
     sys->write_custom_word(0x08EU, 0x2C81U);
     sys->write_custom_word(0x090U, 0xF4C1U);
     sys->write_custom_word(0x092U, 0x003CU);
-    sys->write_custom_word(0x094U, 0x00D0U);
+    sys->write_custom_word(0x094U, 0x00D4U);
     sys->write_custom_word(0x096U,
                            static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_bplen));
@@ -3579,7 +3579,7 @@ TEST_CASE("amiga500 three-plane high-resolution display DMA steals CPU-open slot
         sys->write_custom_word(0x08EU, 0x2C81U);
         sys->write_custom_word(0x090U, 0xF4C1U);
         sys->write_custom_word(0x092U, 0x003CU);
-        sys->write_custom_word(0x094U, 0x00D0U);
+        sys->write_custom_word(0x094U, 0x00D4U);
         sys->write_custom_word(0x096U, static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                                   agnus::dmacon_dmaen |
                                                                   agnus::dmacon_bplen));
