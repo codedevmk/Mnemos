@@ -14,7 +14,6 @@ param(
     [string]$BuildDir = "build/windows-msvc-debug",
     [string[]]$Rom = @(),
     [string[]]$RomDir = @(),
-    [ValidateSet("amiga1000", "amiga500", "amiga500plus", "amiga600", "amiga2000")]
     [string[]]$System = @("amiga500"),
     [string]$Kickstart1000 = $env:MNEMOS_AMIGA1000_KICKSTART,
     [string]$Kickstart500 = $env:MNEMOS_AMIGA500_KICKSTART,
@@ -895,6 +894,31 @@ function Get-FlatArgumentList {
     return $flat.ToArray()
 }
 
+function Get-AmigaSystemList {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [string[]]$Values
+    )
+
+    $validSystems = @("amiga1000", "amiga500", "amiga500plus", "amiga600", "amiga2000")
+    $validLookup = [System.Collections.Generic.HashSet[string]]::new(
+        [string[]]$validSystems,
+        [System.StringComparer]::OrdinalIgnoreCase)
+    $systems = [System.Collections.Generic.List[string]]::new()
+    foreach ($token in (Get-FlatArgumentList -Values $Values)) {
+        $systemName = $token.ToLowerInvariant()
+        if (-not $validLookup.Contains($systemName)) {
+            throw "-System contains unsupported Amiga model '$token'. Valid values: $($validSystems -join ', ')."
+        }
+        $systems.Add($systemName)
+    }
+    if ($systems.Count -eq 0) {
+        throw "-System must include at least one Amiga model."
+    }
+    return $systems.ToArray()
+}
+
 function Get-AmigaContentProbeScore {
     param(
         [Parameter(Mandatory = $true)]$Stats,
@@ -962,6 +986,7 @@ if ($MinimumAudioPeakAbs -lt 0) {
 
 $pressArgs = @(Get-FlatArgumentList -Values $Press)
 $audioPressArgs = @(Get-FlatArgumentList -Values $AudioPress)
+$systemList = @(Get-AmigaSystemList -Values $System)
 
 $media = [System.Collections.Generic.List[string]]::new()
 foreach ($path in $Rom) {
@@ -1056,7 +1081,7 @@ if (-not [string]::IsNullOrWhiteSpace($KickstartDir)) {
 }
 
 try {
-    foreach ($systemName in $System) {
+    foreach ($systemName in $systemList) {
         $kickstart = Get-KickstartConfig -SystemName $systemName
         $hasSharedKickstartDir =
             -not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable("MNEMOS_AMIGA_BIOS_DIR")) -or

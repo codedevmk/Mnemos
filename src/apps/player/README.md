@@ -85,7 +85,9 @@ Currently wired:
   files and supported archives that expose direct ADF/ADZ entries or supported
   nested ZIP candidates. Complete filename-marked disk sets such as
   `(Disk 1 of 3)` / `(Disk 2 of 3)` / `(Disk 3 of 3)` are launched together.
-  The runner also infers complete contiguous sequences such as
+  `-System` accepts either repeated values or comma-separated model lists such
+  as `amiga500,amiga500plus,amiga600`. The runner also infers complete
+  contiguous sequences such as
   `Game_disk1` / `Game_disk2` or `Game_1` / `Game_2` when every disk from 1
   through the highest number is present with no duplicates, so directory
   scans exercise the same multi-disk path as repeated `--rom`/`--disk`
