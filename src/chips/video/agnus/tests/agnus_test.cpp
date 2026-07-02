@@ -2084,6 +2084,30 @@ TEST_CASE("agnus copper Kickstart zero-mask terminal WAIT parks the list", "[agn
     CHECK(chip.copper_pc() == list + 4U);
 }
 
+TEST_CASE("agnus copper late-frame sentinel WAIT parks the list", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+
+    constexpr std::uint32_t list = 0x100U;
+    write_word(chip_ram, list + 0U, 0x0096U); // MOVE DMACON: set BPLEN.
+    write_word(chip_ram, list + 2U,
+               static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_bplen));
+    write_word(chip_ram, list + 4U, 0xFF7FU); // Commercial-list end marker.
+    write_word(chip_ram, list + 6U, 0xFF7EU);
+    write_word(chip_ram, list + 8U, 0x0096U); // Would clear BPLEN if the WAIT fell through.
+    write_word(chip_ram, list + 10U, agnus::dmacon_bplen);
+
+    chip.attach_chip_ram(chip_ram);
+    chip.write_cop1lc(list);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_copen));
+
+    chip.tick(static_cast<std::uint64_t>(agnus::color_clocks_per_line) * 300U);
+
+    CHECK(chip.dma_bitplane());
+    CHECK(chip.copper_pc() == list + 4U);
+}
+
 TEST_CASE("agnus copper WAIT honors disabled vertical compare mask bits", "[agnus]") {
     agnus chip;
     std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);

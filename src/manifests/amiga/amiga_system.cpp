@@ -569,6 +569,7 @@ namespace mnemos::manifests::amiga {
         constexpr std::uint16_t extended_adf_track_amigados = 0U;
         constexpr std::uint16_t extended_adf_track_raw_mfm = 1U;
         constexpr std::size_t extended_adf_max_tracks = 84U * 2U;
+        constexpr std::size_t amigados_index_gap_bytes = 0x80U;
 
         struct extended_adf_track_descriptor final {
             std::uint16_t type{};
@@ -1870,6 +1871,9 @@ namespace mnemos::manifests::amiga {
 
         const std::size_t track_base = track_index * floppy_sectors_per_track * floppy_sector_size;
         const auto track = static_cast<std::uint8_t>(track_index);
+        for (std::size_t i = 0U; i < amigados_index_gap_bytes / 2U; ++i) {
+            append_be16(df.track_stream, 0xAAAAU);
+        }
         for (std::uint8_t sector = 0U; sector < floppy_sectors_per_track; ++sector) {
             const std::size_t sector_base =
                 track_base + static_cast<std::size_t>(sector) * floppy_sector_size;
@@ -2063,6 +2067,11 @@ namespace mnemos::manifests::amiga {
             }
 
             drive.index_line_accumulator = 0U;
+            if (!drive.track_stream.empty()) {
+                drive.stream_offset = 0U;
+                drive.stream_bit_offset = 0U;
+                drive.byte_clock_accumulator = 0U;
+            }
             if (floppy_selected &&
                 static_cast<std::uint8_t>(drive_index) == floppy_active_drive) {
                 cia_b.flag_edge();

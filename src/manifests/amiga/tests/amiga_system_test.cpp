@@ -1461,7 +1461,9 @@ TEST_CASE("amiga500 disk DMA streams a mounted ADF track into chip RAM",
                            static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_dsken));
 
-    constexpr std::uint16_t words_to_read = 8U;
+    constexpr std::size_t index_gap_bytes = 0x80U;
+    constexpr std::size_t first_sync_offset = index_gap_bytes + 4U;
+    constexpr std::uint16_t words_to_read = 72U;
     const std::uint16_t dsklen = static_cast<std::uint16_t>(0x8000U | words_to_read);
     sys->write_custom_word(0x024U, dsklen);
     sys->write_custom_word(0x024U, dsklen);
@@ -1481,10 +1483,10 @@ TEST_CASE("amiga500 disk DMA streams a mounted ADF track into chip RAM",
     CHECK(sys->chip_ram[0x0201U] == 0xAAU);
     CHECK(sys->chip_ram[0x0202U] == 0xAAU);
     CHECK(sys->chip_ram[0x0203U] == 0xAAU);
-    CHECK(sys->chip_ram[0x0204U] == 0x44U);
-    CHECK(sys->chip_ram[0x0205U] == 0x89U);
-    CHECK(sys->chip_ram[0x0206U] == 0x44U);
-    CHECK(sys->chip_ram[0x0207U] == 0x89U);
+    CHECK(sys->chip_ram[0x0200U + first_sync_offset] == 0x44U);
+    CHECK(sys->chip_ram[0x0200U + first_sync_offset + 1U] == 0x89U);
+    CHECK(sys->chip_ram[0x0200U + first_sync_offset + 2U] == 0x44U);
+    CHECK(sys->chip_ram[0x0200U + first_sync_offset + 3U] == 0x89U);
     CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
 }
 
@@ -1496,6 +1498,7 @@ TEST_CASE("amiga500 mounted ADF sectors use AmigaDOS odd-even block layout",
 
     constexpr std::size_t gap_bytes = 4U;
     constexpr std::size_t sync_bytes = 4U;
+    constexpr std::size_t index_gap_bytes = 0x80U;
     constexpr std::size_t header_raw_longs = 5U;
     constexpr std::size_t header_encoded_longs = header_raw_longs * 2U;
     constexpr std::size_t checksum_bytes = 8U;
@@ -1506,22 +1509,25 @@ TEST_CASE("amiga500 mounted ADF sectors use AmigaDOS odd-even block layout",
     constexpr std::size_t sector_bytes = data_offset + data_encoded_longs * 4U;
     constexpr std::size_t sector_slot_bytes = 0x440U;
     static_assert(sector_bytes == sector_slot_bytes);
+    constexpr std::size_t first_sector = index_gap_bytes;
+    constexpr std::size_t second_sector = first_sector + sector_slot_bytes;
 
     const auto& track = sys->floppy_drives[0].track_stream;
-    REQUIRE(track.size() >= sector_bytes);
+    REQUIRE(track.size() >= second_sector + sector_bytes);
     CHECK(read_track_long(track, 0U) == 0xAAAAAAAAU);
-    CHECK(read_track_long(track, gap_bytes) == 0x44894489U);
-    CHECK(read_track_long(track, sector_slot_bytes) == 0xAAAAAAAAU);
-    CHECK(read_track_long(track, sector_slot_bytes + gap_bytes) == 0x44894489U);
+    CHECK(read_track_long(track, first_sector) == 0xAAAAAAAAU);
+    CHECK(read_track_long(track, first_sector + gap_bytes) == 0x44894489U);
+    CHECK(read_track_long(track, second_sector) == 0xAAAAAAAAU);
+    CHECK(read_track_long(track, second_sector + gap_bytes) == 0x44894489U);
 
     const std::uint32_t info = decode_mfm_odd_even(
-        read_track_long(track, gap_bytes + sync_bytes),
-        read_track_long(track, gap_bytes + sync_bytes + 4U));
+        read_track_long(track, first_sector + gap_bytes + sync_bytes),
+        read_track_long(track, first_sector + gap_bytes + sync_bytes + 4U));
     CHECK(info == 0xFF00000BU);
 
     const std::uint32_t first_data_long = decode_mfm_odd_even(
-        read_track_long(track, data_offset),
-        read_track_long(track, data_offset + data_raw_longs * 4U));
+        read_track_long(track, first_sector + data_offset),
+        read_track_long(track, first_sector + data_offset + data_raw_longs * 4U));
     CHECK(first_data_long == 0x00010203U);
 }
 
@@ -2560,9 +2566,11 @@ TEST_CASE("amiga500 disk write DMA decodes AmigaDOS sectors back into the ADF im
     REQUIRE(reference != nullptr);
     REQUIRE(reference->mount_floppy(patched));
 
+    constexpr std::size_t index_gap_bytes = 0x80U;
     constexpr std::size_t raw_sector_slot_bytes = 0x440U;
-    REQUIRE(reference->floppy_drives[0].track_stream.size() >= raw_sector_slot_bytes);
-    std::copy_n(reference->floppy_drives[0].track_stream.begin(), raw_sector_slot_bytes,
+    constexpr std::size_t raw_bytes_to_write = index_gap_bytes + raw_sector_slot_bytes;
+    REQUIRE(reference->floppy_drives[0].track_stream.size() >= raw_bytes_to_write);
+    std::copy_n(reference->floppy_drives[0].track_stream.begin(), raw_bytes_to_write,
                 sys->chip_ram.begin() + 0x0800U);
 
     reset_floppy_stream_phase(sys->floppy_drives[0]);
@@ -2572,7 +2580,7 @@ TEST_CASE("amiga500 disk write DMA decodes AmigaDOS sectors back into the ADF im
                            static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_dsken));
 
-    constexpr std::uint16_t words = static_cast<std::uint16_t>(raw_sector_slot_bytes / 2U);
+    constexpr std::uint16_t words = static_cast<std::uint16_t>(raw_bytes_to_write / 2U);
     const std::uint16_t write_dsklen = static_cast<std::uint16_t>(0xC000U | words);
     sys->write_custom_word(0x024U, write_dsklen);
     sys->write_custom_word(0x024U, write_dsklen);
@@ -2612,7 +2620,9 @@ TEST_CASE("amiga500 paced disk DMA survives system save state", "[manifests][ami
     sys->write_custom_word(0x096U,
                            static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_dsken));
-    constexpr std::uint16_t words_to_read = 8U;
+    constexpr std::size_t index_gap_bytes = 0x80U;
+    constexpr std::size_t first_sync_offset = index_gap_bytes + 4U;
+    constexpr std::uint16_t words_to_read = 72U;
     const std::uint16_t dsklen = static_cast<std::uint16_t>(0x8000U | words_to_read);
     sys->write_custom_word(0x024U, dsklen);
     sys->write_custom_word(0x024U, dsklen);
@@ -2636,10 +2646,10 @@ TEST_CASE("amiga500 paced disk DMA survives system save state", "[manifests][ami
     CHECK(sys->chip_ram[0x0301U] == 0xAAU);
     CHECK(sys->chip_ram[0x0302U] == 0xAAU);
     CHECK(sys->chip_ram[0x0303U] == 0xAAU);
-    CHECK(sys->chip_ram[0x0304U] == 0x44U);
-    CHECK(sys->chip_ram[0x0305U] == 0x89U);
-    CHECK(sys->chip_ram[0x0306U] == 0x44U);
-    CHECK(sys->chip_ram[0x0307U] == 0x89U);
+    CHECK(sys->chip_ram[0x0300U + first_sync_offset] == 0x44U);
+    CHECK(sys->chip_ram[0x0300U + first_sync_offset + 1U] == 0x89U);
+    CHECK(sys->chip_ram[0x0300U + first_sync_offset + 2U] == 0x44U);
+    CHECK(sys->chip_ram[0x0300U + first_sync_offset + 3U] == 0x89U);
     CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
 }
 
@@ -2928,6 +2938,49 @@ TEST_CASE("amiga500 selected disk rotation pulses CIAB FLAG at index",
     run_scanlines(*sys, lines_per_revolution - 1U);
     sys->cia_b.tick(1U);
     CHECK_FALSE(sys->cia_b.irq_asserted());
+}
+
+TEST_CASE("amiga500 floppy index pulse aligns the raw ADF track phase",
+          "[manifests][amiga500][disk]") {
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+    REQUIRE(sys->mount_floppy(tiny_adf()));
+    select_df0(*sys);
+
+    const std::uint32_t lines_per_revolution = sys->floppy_index_lines_per_revolution();
+    REQUIRE(lines_per_revolution > 1U);
+    auto& drive = sys->floppy_drives[0];
+    REQUIRE(drive.track_stream.size() > 0x1200U);
+
+    drive.stream_offset = 0x115EU;
+    drive.stream_bit_offset = 5U;
+    drive.byte_clock_accumulator = 1234U;
+    drive.index_line_accumulator = lines_per_revolution - 1U;
+
+    sys->tick_floppy_scanline();
+    CHECK(drive.stream_offset == 0U);
+    CHECK(drive.stream_bit_offset == 0U);
+    CHECK(drive.byte_clock_accumulator == 0U);
+
+    constexpr std::uint32_t dma_base = 0x1406U;
+    constexpr std::uint16_t words_to_read = 2U;
+    const std::uint16_t dsklen = static_cast<std::uint16_t>(0x8000U | words_to_read);
+    sys->write_custom_word(0x020U, static_cast<std::uint16_t>(dma_base >> 16U));
+    sys->write_custom_word(0x022U, static_cast<std::uint16_t>(dma_base));
+    sys->write_custom_word(0x07EU, 0x4489U);
+    sys->write_custom_word(0x09EU, static_cast<std::uint16_t>(amiga_system::setclr_bit | 0x1500U));
+    sys->write_custom_word(0x096U,
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                      agnus::dmacon_dmaen | agnus::dmacon_dsken));
+    sys->write_custom_word(0x024U, dsklen);
+    sys->write_custom_word(0x024U, dsklen);
+    REQUIRE(sys->disk_wordsync_waiting);
+
+    run_scanlines(*sys, 80U);
+    CHECK_FALSE(sys->disk_wordsync_waiting);
+    CHECK(sys->disk_dma_bytes_remaining == 0U);
+    CHECK(read_chip_word(*sys, dma_base) == 0x4489U);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
 }
 
 TEST_CASE("amiga500 floppy index phase survives system save state", "[manifests][amiga500][disk]") {
