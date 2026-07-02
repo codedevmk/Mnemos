@@ -36,6 +36,7 @@ param(
     [switch]$RequireDiskProgress,
     [int]$MinimumDiskCylinder = -1,
     [switch]$RejectKickstartPrompt,
+    [switch]$RejectSoftwareFailure,
     [switch]$RequireRenderedAudio,
     [int]$AudioFrames = 0,
     [string[]]$AudioPress = @(),
@@ -699,11 +700,21 @@ function Get-PpmStats {
     $colorCounts = @{}
     $dominantColor = 0
     $dominantColorPixels = 0
+    $topBandRows = [Math]::Min(48, $height)
+    $topBandPixels = $width * $topBandRows
+    $topBandRed = 0
+    $pixelIndex = 0
     for ($i = $offset.Value; $i -lt $needed; $i += 3) {
-        if ($bytes[$i] -ne 0 -or $bytes[$i + 1] -ne 0 -or $bytes[$i + 2] -ne 0) {
+        $r = $bytes[$i]
+        $g = $bytes[$i + 1]
+        $b = $bytes[$i + 2]
+        if ($r -ne 0 -or $g -ne 0 -or $b -ne 0) {
             ++$nonBlack
         }
-        $color = ($bytes[$i] -shl 16) -bor ($bytes[$i + 1] -shl 8) -bor $bytes[$i + 2]
+        if ($pixelIndex -lt $topBandPixels -and $r -ge 180 -and $g -le 80 -and $b -le 80) {
+            ++$topBandRed
+        }
+        $color = ($r -shl 16) -bor ($g -shl 8) -bor $b
         if ($colorCounts.ContainsKey($color)) {
             $colorCounts[$color] = [int]$colorCounts[$color] + 1
         } else {
@@ -713,6 +724,7 @@ function Get-PpmStats {
             $dominantColor = $color
             $dominantColorPixels = [int]$colorCounts[$color]
         }
+        ++$pixelIndex
     }
 
     return [pscustomobject]@{
@@ -724,6 +736,8 @@ function Get-PpmStats {
         DominantColor = ("#{0:X6}" -f $dominantColor)
         DominantColorPixels = $dominantColorPixels
         DominantColorRatio = if ($pixels -gt 0) { [double]$dominantColorPixels / [double]$pixels } else { 0.0 }
+        TopBandRedPixels = $topBandRed
+        TopBandRedRatio = if ($topBandPixels -gt 0) { [double]$topBandRed / [double]$topBandPixels } else { 0.0 }
         Sha256 = Get-FileSha256 -Path $Path
     }
 }
@@ -747,6 +761,11 @@ function Get-AmigaDisplayClassification {
         "F92ACD05C21EF970120F7D66B06E876188D82D5D046DBD9EB8EAF65330F93E22" {
             return "kickstart_3_1_or_4_0_insert_disk_prompt"
         }
+    }
+    if ($Stats.TopBandRedRatio -ge 0.04 -and
+        $Stats.UniqueColors -le 8 -and
+        $Stats.DominantColorRatio -ge 0.70) {
+        return "amiga_software_failure"
     }
     return "unknown_or_booted"
 }
@@ -884,7 +903,8 @@ function Get-AmigaContentProbeScore {
     )
 
     [int64]$score = 0
-    if ($DisplayClassification -notlike "kickstart_*_insert_disk_prompt") {
+    if ($DisplayClassification -notlike "kickstart_*_insert_disk_prompt" -and
+        $DisplayClassification -ne "amiga_software_failure") {
         $score += 1000000000
     }
     if ($Stats.NonBlackPixels -gt 0) {
@@ -1134,6 +1154,18 @@ try {
                     })
                 }
 
+                if ($RejectSoftwareFailure) {
+                    $softwareFailureProbe = @($probeResults |
+                        Where-Object { $_.Run.ExitCode -eq 0 -and $_.DisplayClassification -eq "amiga_software_failure" } |
+                        Sort-Object -Property Frames -Descending |
+                        Select-Object -First 1)
+                    if ($softwareFailureProbe.Count -gt 0) {
+                        $probe = $softwareFailureProbe[0]
+                        $failures.Add("$systemName reached Amiga software failure for '$mediaDisplay' at frame $($probe.Frames). See $($probe.Screenshot)")
+                        continue
+                    }
+                }
+
                 $selectedProbe = if ($useContentProbe) {
                     @($probeResults |
                         Where-Object { $_.Run.ExitCode -eq 0 -and $null -ne $_.Stats -and [string]::IsNullOrWhiteSpace($_.ValidationError) } |
@@ -1280,6 +1312,8 @@ try {
                         DominantColor = $stats.DominantColor
                         DominantColorPixels = $stats.DominantColorPixels
                         DominantColorRatio = [Math]::Round($stats.DominantColorRatio, 4)
+                        TopBandRedPixels = $stats.TopBandRedPixels
+                        TopBandRedRatio = [Math]::Round($stats.TopBandRedRatio, 4)
                         ScreenshotSha256 = $stats.Sha256
                         DisplayClassification = $displayClassification
                         DiskPointer = if ($null -ne $boardStats) { $boardStats.DiskPointer } else { $null }

@@ -98,11 +98,12 @@ Currently wired:
   nonzero disk DMA pointer, active DMA remainder, or observed head movement;
   optionally require head movement beyond a requested cylinder. Add
   `-RejectKickstartPrompt` when promoting compatibility rows so known insert-disk
-  prompt frames do not count as operational software. Add `-RejectFlatFrame`,
-  `-MinimumUniqueColors`, or `-MaximumDominantColorRatio` to keep black, white,
-  or otherwise flat loading frames from being mistaken for visual proof. Use
-  `-AllowBlackFrame` only for non-visual probes such as audio-only gates. Add
-  `-RequireRenderedAudio`
+  prompt frames do not count as operational software. Add
+  `-RejectSoftwareFailure` for input-gated probes that must fail on Amiga
+  Software Failure/Guru screens. Add `-RejectFlatFrame`, `-MinimumUniqueColors`,
+  or `-MaximumDominantColorRatio` to keep black, white, or otherwise flat
+  loading frames from being mistaken for visual proof. Use `-AllowBlackFrame`
+  only for non-visual probes such as audio-only gates. Add `-RequireRenderedAudio`
   with optional `-AudioFrames`, `-AudioPress`,
   `-MinimumAudioFramesWithSignal`, and `-MinimumAudioPeakAbs` to gate titles
   that should produce Paula output after scripted input. Per-run timing and
