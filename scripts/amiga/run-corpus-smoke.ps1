@@ -1,5 +1,7 @@
 #!/usr/bin/env pwsh
 # Data-gated Amiga ADF/ADZ/IPF/HDF/archive player smoke runner.
+# Use -ContentProbeFrames with comma-separated frame counts to capture multiple
+# screenshot candidates and keep the most useful one in the summary.
 #
 # Kickstart ROMs and Amiga software are never committed. Point this at one or
 # more disk or hard-drive images with -Rom, or at local corpus directories with -RomDir,
@@ -21,6 +23,7 @@ param(
     [string]$BiosDir = $env:MNEMOS_AMIGA_BIOS_DIR,
     [string]$KickstartDir = $env:MNEMOS_AMIGA_KICKSTART_DIR,
     [int]$Frames = 120,
+    [string[]]$ContentProbeFrames = @(),
     [int]$MaxSets = 0,
     [string]$StartAfter = "",
     [double]$MinimumHeadlessFps = 0.0,
@@ -818,9 +821,73 @@ function Get-AmigaBoardStats {
     }
 }
 
+function Get-ContentProbeFrameList {
+    param(
+        [Parameter(Mandatory = $true)][int]$DefaultFrames,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$ProbeFrames
+    )
+
+    $frames = [System.Collections.Generic.HashSet[int]]::new()
+    [void]$frames.Add($DefaultFrames)
+    foreach ($value in $ProbeFrames) {
+        foreach ($token in $value.Split(",", [System.StringSplitOptions]::RemoveEmptyEntries)) {
+            $trimmed = $token.Trim()
+            if ([string]::IsNullOrWhiteSpace($trimmed)) {
+                continue
+            }
+            $frame = 0
+            if (-not [int]::TryParse(
+                    $trimmed,
+                    [System.Globalization.NumberStyles]::Integer,
+                    [System.Globalization.CultureInfo]::InvariantCulture,
+                    [ref]$frame)) {
+                throw "-ContentProbeFrames contains a non-integer value: $trimmed"
+            }
+            if ($frame -le 0) {
+                throw "-ContentProbeFrames values must be positive."
+            }
+            [void]$frames.Add($frame)
+        }
+    }
+    return @($frames | Sort-Object)
+}
+
+function Get-AmigaContentProbeScore {
+    param(
+        [Parameter(Mandatory = $true)]$Stats,
+        [Parameter(Mandatory = $true)][string]$DisplayClassification,
+        $BoardStats
+    )
+
+    [int64]$score = 0
+    if ($DisplayClassification -notlike "kickstart_*_insert_disk_prompt") {
+        $score += 1000000000
+    }
+    if ($Stats.NonBlackPixels -gt 0) {
+        $score += 100000000
+    }
+    if ($Stats.UniqueColors -gt 1) {
+        $score += 10000000
+    }
+    if ($null -ne $BoardStats) {
+        if ($BoardStats.DiskPointer -ne 0 -or
+            $BoardStats.DiskDmaBytesRemaining -ne 0 -or
+            $BoardStats.DriveCylinder -ne 0) {
+            $score += 1000000
+        }
+        $score += [int64]([Math]::Min(999, [int]$BoardStats.DriveCylinder) * 1000)
+    }
+
+    $score += [int64][Math]::Min(999999, $Stats.UniqueColors * 1000)
+    $score += [int64][Math]::Min(999999, [Math]::Floor($Stats.NonBlackPixels / 10.0))
+    $score += [int64][Math]::Floor((1.0 - [Math]::Min(1.0, $Stats.DominantColorRatio)) * 100000.0)
+    return $score
+}
+
 if ($Frames -le 0) {
     throw "-Frames must be positive."
 }
+$contentProbeFrameList = Get-ContentProbeFrameList -DefaultFrames $Frames -ProbeFrames $ContentProbeFrames
 if ($MaxSets -lt 0) {
     throw "-MaxSets cannot be negative."
 }
@@ -974,28 +1041,105 @@ try {
                 $mediaLabel = [string]$mediaSet.Label
                 $mediaDisplay = [string]$mediaSet.Display
                 $safeName = "{0}-{1}" -f $systemName, (Get-SafeName -Path $mediaLabel)
-                $screenshot = Join-Path $artifactDir "$safeName.ppm"
-                $log = Join-Path $artifactDir "$safeName.log"
-                $args = @(
-                    "--system", $systemName,
-                    "--rom", $path,
-                    "--frames", $Frames.ToString([System.Globalization.CultureInfo]::InvariantCulture),
-                    "--screenshot", $screenshot
-                )
-                if (-not [string]::IsNullOrWhiteSpace($effectiveKickstartPath)) {
-                    $args += @("--amiga-kickstart", $effectiveKickstartPath)
-                }
-                for ($mediaIndex = 1; $mediaIndex -lt $paths.Count; ++$mediaIndex) {
-                    $args += @("--disk", $paths[$mediaIndex])
+                $useContentProbe = $ContentProbeFrames.Count -gt 0
+                $probeResults = [System.Collections.Generic.List[object]]::new()
+                foreach ($probeFrames in $contentProbeFrameList) {
+                    $probeSuffix = if ($useContentProbe) {
+                        ".f$probeFrames"
+                    } else {
+                        ""
+                    }
+                    $screenshot = Join-Path $artifactDir "$safeName$probeSuffix.ppm"
+                    $log = Join-Path $artifactDir "$safeName$probeSuffix.log"
+                    $args = @(
+                        "--system", $systemName,
+                        "--rom", $path,
+                        "--frames", $probeFrames.ToString([System.Globalization.CultureInfo]::InvariantCulture),
+                        "--screenshot", $screenshot
+                    )
+                    if (-not [string]::IsNullOrWhiteSpace($effectiveKickstartPath)) {
+                        $args += @("--amiga-kickstart", $effectiveKickstartPath)
+                    }
+                    for ($mediaIndex = 1; $mediaIndex -lt $paths.Count; ++$mediaIndex) {
+                        $args += @("--disk", $paths[$mediaIndex])
+                    }
+
+                    $run = Invoke-Player -Player $player -LogPath $log -Arguments $args
+                    $headlessFps = 0.0
+                    if ($run.ElapsedSeconds -gt 0.0) {
+                        $headlessFps = [double]$probeFrames / [double]$run.ElapsedSeconds
+                    }
+                    $stats = $null
+                    $displayClassification = ""
+                    $boardStats = $null
+                    $validationError = ""
+                    $score = [int64]::MinValue
+                    if ($run.ExitCode -eq 0) {
+                        try {
+                            $stats = Get-PpmStats -Path $screenshot
+                            $displayClassification = Get-AmigaDisplayClassification -Stats $stats
+                            if ($RequireDiskProgress) {
+                                $boardStats = Get-AmigaBoardStats -ScreenshotPath $screenshot
+                            }
+                            $score = Get-AmigaContentProbeScore `
+                                -Stats $stats `
+                                -DisplayClassification $displayClassification `
+                                -BoardStats $boardStats
+                        } catch {
+                            $validationError = $_.Exception.Message
+                        }
+                    }
+
+                    $probeResults.Add([pscustomobject]@{
+                        Frames = $probeFrames
+                        Screenshot = $screenshot
+                        Log = $log
+                        Run = $run
+                        HeadlessFps = $headlessFps
+                        Stats = $stats
+                        DisplayClassification = $displayClassification
+                        BoardStats = $boardStats
+                        ValidationError = $validationError
+                        Score = $score
+                    })
                 }
 
-                $run = Invoke-Player -Player $player -LogPath $log -Arguments $args
-                $headlessFps = 0.0
-                if ($run.ElapsedSeconds -gt 0.0) {
-                    $headlessFps = [double]$Frames / [double]$run.ElapsedSeconds
+                $selectedProbe = if ($useContentProbe) {
+                    @($probeResults |
+                        Where-Object { $_.Run.ExitCode -eq 0 -and $null -ne $_.Stats -and [string]::IsNullOrWhiteSpace($_.ValidationError) } |
+                        Sort-Object -Property Score, Frames -Descending |
+                        Select-Object -First 1)
+                } else {
+                    $probeResults[0]
                 }
+                if ($null -eq $selectedProbe -or @($selectedProbe).Count -eq 0) {
+                    $probeErrors = @($probeResults | ForEach-Object {
+                            if ($_.Run.ExitCode -ne 0) {
+                                "frame $($_.Frames): exit code $($_.Run.ExitCode), see $($_.Log)"
+                            } elseif (-not [string]::IsNullOrWhiteSpace($_.ValidationError)) {
+                                "frame $($_.Frames): $($_.ValidationError), see $($_.Screenshot)"
+                            } else {
+                                "frame $($_.Frames): no usable screenshot, see $($_.Screenshot)"
+                            }
+                        })
+                    $failures.Add("$systemName found no usable content probe for '$mediaDisplay'. $($probeErrors -join '; ')")
+                    continue
+                }
+                if ($selectedProbe -is [array]) {
+                    $selectedProbe = $selectedProbe[0]
+                }
+
+                $run = $selectedProbe.Run
+                $headlessFps = [double]$selectedProbe.HeadlessFps
+                $screenshot = [string]$selectedProbe.Screenshot
+                $log = [string]$selectedProbe.Log
+                $selectedFrames = [int]$selectedProbe.Frames
                 if ($run.ExitCode -ne 0) {
                     $failures.Add("$systemName failed for '$mediaDisplay' with exit code $($run.ExitCode). See $log")
+                    continue
+                }
+                if (-not [string]::IsNullOrWhiteSpace($selectedProbe.ValidationError)) {
+                    $failures.Add("$systemName could not validate screenshot for '$mediaDisplay': $($selectedProbe.ValidationError)")
                     continue
                 }
                 if ($MinimumHeadlessFps -gt 0.0 -and $headlessFps -lt $MinimumHeadlessFps) {
@@ -1005,7 +1149,7 @@ try {
                 }
 
                 try {
-                    $stats = Get-PpmStats -Path $screenshot
+                    $stats = $selectedProbe.Stats
                     if (-not $AllowBlackFrame -and $stats.NonBlackPixels -eq 0) {
                         $failures.Add("$systemName produced an all-black frame for '$mediaDisplay'. See $screenshot")
                     }
@@ -1021,15 +1165,17 @@ try {
                         $maximumText = $MaximumDominantColorRatio.ToString("P2", [System.Globalization.CultureInfo]::InvariantCulture)
                         $failures.Add("$systemName dominant color $($stats.DominantColor) covers $dominantText of '$mediaDisplay', above -MaximumDominantColorRatio $maximumText. See $screenshot")
                     }
-                    $displayClassification = Get-AmigaDisplayClassification -Stats $stats
+                    $displayClassification = [string]$selectedProbe.DisplayClassification
                     if ($RejectKickstartPrompt -and
                         $displayClassification -like "kickstart_*_insert_disk_prompt") {
                         $failures.Add("$systemName stopped at $displayClassification for '$mediaDisplay'. See $screenshot")
                     }
-                    $boardStats = $null
+                    $boardStats = $selectedProbe.BoardStats
                     if ($RequireDiskProgress) {
                         try {
-                            $boardStats = Get-AmigaBoardStats -ScreenshotPath $screenshot
+                            if ($null -eq $boardStats) {
+                                $boardStats = Get-AmigaBoardStats -ScreenshotPath $screenshot
+                            }
                             if ($boardStats.DiskPointer -eq 0 -and
                                 $boardStats.DiskDmaBytesRemaining -eq 0 -and
                                 $boardStats.DriveCylinder -eq 0) {
@@ -1045,7 +1191,7 @@ try {
                     }
                     $audioStats = $null
                     if ($RequireRenderedAudio) {
-                        $audioFrameCount = if ($AudioFrames -gt 0) { $AudioFrames } else { $Frames }
+                        $audioFrameCount = if ($AudioFrames -gt 0) { $AudioFrames } else { $selectedFrames }
                         $audioBase = Join-Path $artifactDir "$safeName.audio"
                         $audioLog = Join-Path $artifactDir "$safeName.audio.log"
                         $audioArgs = @(
@@ -1089,7 +1235,10 @@ try {
                         MediaCount = $paths.Count
                         Kickstart = $effectiveKickstartLabel
                         KickstartPath = $effectiveKickstartPath
-                        Frames = $Frames
+                        Frames = $selectedFrames
+                        RequestedFrames = $Frames
+                        ContentProbeFrames = if ($useContentProbe) { ($contentProbeFrameList -join ",") } else { "" }
+                        ContentProbeScore = if ($useContentProbe) { $selectedProbe.Score } else { $null }
                         ElapsedSeconds = [Math]::Round($run.ElapsedSeconds, 3)
                         HeadlessFps = [Math]::Round($headlessFps, 2)
                         Width = $stats.Width
