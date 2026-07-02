@@ -126,6 +126,30 @@ namespace mnemos::chips::video {
             return clipped_pc >= config.first || clipped_pc <= config.last;
         }
 
+        [[nodiscard]] std::uint32_t effective_ddf_start(std::uint16_t value,
+                                                        bool hires) noexcept {
+            const std::uint32_t raw = value & 0xFFU;
+            if (!hires) {
+                return raw & ~0x07U;
+            }
+            if ((raw & 0x07U) >= 0x04U) {
+                return (raw & ~0x07U) | 0x04U;
+            }
+            return raw >= 0x08U ? ((raw - 0x08U) & ~0x07U) | 0x04U : 0U;
+        }
+
+        [[nodiscard]] std::uint32_t effective_ddf_stop(std::uint16_t value,
+                                                       bool hires) noexcept {
+            const std::uint32_t raw = value & 0xFFU;
+            if (!hires) {
+                return (raw + 0x07U) & ~0x07U;
+            }
+            if ((raw & 0x07U) <= 0x04U) {
+                return (raw & ~0x07U) | 0x04U;
+            }
+            return ((raw + 0x08U) & ~0x07U) | 0x04U;
+        }
+
         [[nodiscard]] constexpr std::uint32_t vblank_end_line(bool pal) noexcept {
             return pal ? 24U : 20U;
         }
@@ -424,13 +448,13 @@ namespace mnemos::chips::video {
             return {};
         }
 
-        const std::uint32_t ddf_start = ddfstrt_ & 0xFFU;
-        const std::uint32_t ddf_stop = ddfstop_ & 0xFFU;
+        const bool hires = hires_enabled();
+        const std::uint32_t ddf_start = effective_ddf_start(ddfstrt_, hires);
+        const std::uint32_t ddf_stop = effective_ddf_stop(ddfstop_, hires);
         if (ddf_start >= color_clocks_per_line || ddf_stop < ddf_start) {
             return {};
         }
 
-        const bool hires = hires_enabled();
         const std::uint32_t clocks_per_word = hires ? 4U : 8U;
         const std::uint32_t terminal_words = hires ? 2U : 1U;
         const std::uint32_t normal_words_per_line =
@@ -1200,9 +1224,9 @@ namespace mnemos::chips::video {
         const std::uint32_t diw_v_stop =
             diw_v_stop_raw | (((diw_v_stop_raw & 0x80U) == 0U) ? 0x100U : 0U);
 
-        const std::uint32_t ddf_start = ddfstrt_ & 0xFFU;
-        const std::uint32_t ddf_stop = ddfstop_ & 0xFFU;
         const bool hires = hires_enabled();
+        const std::uint32_t ddf_start = effective_ddf_start(ddfstrt_, hires);
+        const std::uint32_t ddf_stop = effective_ddf_stop(ddfstop_, hires);
         const std::uint32_t pixel_scale = hires ? 2U : 1U;
         constexpr std::uint32_t diw_h_origin = 0x81U;
         const std::int32_t display_start_x =

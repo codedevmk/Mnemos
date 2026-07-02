@@ -798,7 +798,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | Bubble And Squeak - CD32 | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bubble and Squeak (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bubble and Squeak (Europe) (AGA) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| Bubble Bobble | TBD | Visual defect | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
+| Bubble Bobble | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | Bubble Bobble (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bubble Bobble (Europe) (Budget - The Hit Squad) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | Bubble Bobble (Europe) (Compilation - Jatte Hits) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -2614,7 +2614,7 @@ Rows stay `TBD` until a model-specific smoke or parity probe proves them.
 | R.B.I. Two Baseball (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | R.B.I. Two Baseball (Europe) (Budget - The Hit Squad) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | R-C Aerochopper (USA) (v1.1) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| R-Type | TBD | Visual defect | TBD | TBD | TBD | Visual defect | Visual defect | TBD | TBD | TBD |
+| R-Type | TBD | Operational (visual smoke) | TBD | TBD | TBD | Operational (visual smoke) | Operational (visual smoke) | TBD | TBD | TBD |
 | R-Type (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
 | R-Type II (Europe) | TBD | Unsupported media (format pending) | TBD | TBD | TBD | Unsupported media (format pending) | Unsupported media (format pending) | TBD | TBD | TBD |
 | Raffles (Europe) | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
@@ -3663,6 +3663,7 @@ not committed.
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 3000 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Roadwar 2000/Workbench 2.04 Boot/Workbench 2.1 Boot/ProTracker v3.62 AGA/ProTracker v4.0 Beta 2 AGA/Quik The Thunder Rabbit RAR>` passed 15 mechanical launches and failed Quik before emulation due no supported media entries. Screenshot contact sheet `build/scratch/amiga-corpus/latest-smoke-contact.png` promoted Roadwar 2000 on all three models and Workbench 2.04/2.1 on A500+/A600, kept Workbench 2.04 A500 and both ProTracker A500 routes as visual defects, classified Workbench 2.1 A500 as prompt-only, and classified both ProTracker A500+/A600 routes as error prompts. |
 | 2026-07-01 | Chunked requested-title smoke runs across A500/A500+/A600 with `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <82 exact local media paths>` found 80 IPF-backed root `.7z` routes that fail before emulation with explicit `IPF/CAPS flux decoding is not implemented yet` messages, plus `Apidya - CD32.zip` and `psygnosis_demos_cdtv.rar` archives with no supported ADF/ADZ/IPF/HDF entries. Existing ADF-proven rows from the request list were not downgraded. |
 | 2026-07-01 | `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Emerald Mine/Desert Strike/Cannon Fodder/Bubble Bobble/Arthur/Alien Syndrome/P47/Pang/Pinball Dreams/Pirates/R-Type/Rainbow Islands ADF ZIP slice>` produced 33 successful disk-smoke launches and 3 black-frame Rainbow Islands failures. Manual review of `build/scratch/amiga-corpus/requested-batch-1500-contact.png` promoted Desert Strike, P47, Pang-500-NTSC, and Pinball Dreams to visual smoke; kept Cannon Fodder and Emerald Mine as previously classified; reclassified Bubble Bobble, R-Type, Rainbow Islands, and Pirates A500 as visual defects; and classified Alien Syndrome A500 as a visual defect plus Alien Syndrome A500+/A600 as Workbench error prompts. The same request batch inspected additional root `.7z` media and marked the remaining exact IPF-backed rows as `Unsupported media (format pending)`. |
+| 2026-07-02 | After high-resolution DDF start/stop quantization was added, `scripts/amiga/run-corpus-smoke.ps1 -BuildDir build/windows-msvc-release -BiosDir D:\emu\amiga\bios -Frames 1500 -MinimumHeadlessFps 50 -RequireDiskProgress -RejectKickstartPrompt -System amiga500,amiga500plus,amiga600 -Rom <Bubble Bobble/R-Type ADF ZIP slice>` passed all 6 launches. Manual review of `build/scratch/amiga-corpus/ddf-quantization-contact.png` showed readable Bubble Bobble and R-Type trainer/crack screens on A500/A500+/A600, so those aggregate ADF rows are promoted to visual smoke. |
 
 ## Update Rules
 

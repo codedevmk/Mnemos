@@ -430,6 +430,37 @@ TEST_CASE("agnus high-resolution DDF 3c-d4 advances by forty words per line", "[
     CHECK(frame.pixels[agnus::framebuffer_stride] == 0x00FF0000U);
 }
 
+TEST_CASE("agnus quantizes high-resolution DDF 38-cc to a forty-word pitch", "[agnus]") {
+    agnus chip;
+    std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
+    const auto palette = make_palette(1U, 0x0F00U);
+
+    // In hires mode DDFSTRT/DDFSTOP are quantized to positions ending in 4/C.
+    // DDFSTRT $38 therefore rounds down to $34. The resulting pitch is 40
+    // words; using the raw $38 value would advance by only 39 and shear text
+    // screens that use BPLxMOD=0.
+    write_word(chip_ram, 2U * 2U, 0x8000U);
+    write_word(chip_ram, (40U + 2U) * 2U, 0x8000U);
+    chip.attach_chip_ram(chip_ram);
+    chip.attach_palette(palette);
+    chip.set_bplcon0(0x9000U);
+    chip.set_diwstrt(0x2C81U);
+    chip.set_diwstop(0xF4C1U);
+    chip.set_ddfstrt(0x0038U);
+    chip.set_ddfstop(0x00CCU);
+    chip.set_bitplane_pointer(0U, 0U);
+    chip.write_dmacon(
+        static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
+
+    chip.tick(frame_ticks);
+    const auto frame = chip.framebuffer();
+
+    CHECK(frame.pixels[0] == 0x00FF0000U);
+    CHECK(frame.pixels[agnus::framebuffer_stride] == 0x00FF0000U);
+    constexpr std::uint32_t visible_diw_lines = 0xF4U - agnus::display_line_origin;
+    CHECK(chip.bitplane_pointer(0U) == visible_diw_lines * 40U * 2U);
+}
+
 TEST_CASE("agnus latches high-resolution frame width across low-resolution footer copper",
           "[agnus]") {
     agnus chip;
@@ -468,15 +499,15 @@ TEST_CASE("agnus clips high-resolution fetch guard words to the horizontal displ
     const auto palette = make_palette(1U, 0x0F00U);
 
     write_word(chip_ram, 0U, 0xFFFFU);        // fetched before DIW, must stay hidden
-    write_word(chip_ram, 1U * 2U, 0xFFFFU);   // straddles the DIW left edge
-    write_word(chip_ram, 37U * 2U, 0xFFFFU);  // fetched after DIW, must stay hidden
+    write_word(chip_ram, 2U * 2U, 0xFFFFU);   // straddles the DIW left edge
+    write_word(chip_ram, 39U * 2U, 0xFFFFU);  // fetched after DIW, must stay hidden
     chip.attach_chip_ram(chip_ram);
     chip.attach_palette(palette);
     chip.set_bplcon0(0x9000U);
     chip.set_diwstrt(0x2C95U);
     chip.set_diwstop(0xF4ADU);
-    chip.set_ddfstrt(0x0040U);
-    chip.set_ddfstop(0x00D0U);
+    chip.set_ddfstrt(0x003CU);
+    chip.set_ddfstop(0x00D4U);
     chip.set_bitplane_pointer(0U, 0U);
     chip.write_dmacon(
         static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen | agnus::dmacon_bplen));
@@ -1039,23 +1070,23 @@ TEST_CASE("agnus display DMA stealing second zero-height reload word preserves n
     agnus chip;
     std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
     std::vector<std::uint8_t> palette(agnus::palette_entries * 2U, 0U);
-    set_palette_word(palette, 25U, 0x00F0U); // SPR5 value 1 if the next block renders.
+    set_palette_word(palette, 25U, 0x00F0U); // SPR4 value 1 if the next block renders.
 
-    constexpr std::uint32_t sprite5_base = 0x380U;
-    write_word(chip_ram, sprite5_base + 0U, sprite_pos(0U, 0U));
-    write_word(chip_ram, sprite5_base + 2U, sprite_ctl(0U, 0U, 0U));
-    write_word(chip_ram, sprite5_base + 4U, sprite_pos(1U, 0U));
-    write_word(chip_ram, sprite5_base + 6U, sprite_ctl(1U, 0U, 1U));
-    write_word(chip_ram, sprite5_base + 8U, 0x8000U);
-    write_word(chip_ram, sprite5_base + 10U, 0x0000U);
-    write_word(chip_ram, sprite5_base + 12U, 0x0000U);
-    write_word(chip_ram, sprite5_base + 14U, 0x0000U);
+    constexpr std::uint32_t sprite4_base = 0x380U;
+    write_word(chip_ram, sprite4_base + 0U, sprite_pos(0U, 0U));
+    write_word(chip_ram, sprite4_base + 2U, sprite_ctl(0U, 0U, 0U));
+    write_word(chip_ram, sprite4_base + 4U, sprite_pos(1U, 0U));
+    write_word(chip_ram, sprite4_base + 6U, sprite_ctl(1U, 0U, 1U));
+    write_word(chip_ram, sprite4_base + 8U, 0x8000U);
+    write_word(chip_ram, sprite4_base + 10U, 0x0000U);
+    write_word(chip_ram, sprite4_base + 12U, 0x0000U);
+    write_word(chip_ram, sprite4_base + 14U, 0x0000U);
 
     chip.attach_chip_ram(chip_ram);
     chip.attach_palette(palette);
     program_full_window(chip, 0x6000U);
-    chip.set_ddfstrt(0x001EU); // SPR5 POS reload slot is open, CTL is display-owned.
-    chip.set_sprite_pointer(5U, sprite5_base);
+    chip.set_ddfstrt(0x0018U); // SPR4 POS reload slot is open, CTL is display-owned.
+    chip.set_sprite_pointer(4U, sprite4_base);
     chip.write_dmacon(static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen |
                                                  agnus::dmacon_bplen | agnus::dmacon_spren));
 
@@ -1063,7 +1094,7 @@ TEST_CASE("agnus display DMA stealing second zero-height reload word preserves n
     const auto frame = chip.framebuffer();
 
     CHECK(frame.pixels[frame.effective_stride()] == 0x00000000U);
-    CHECK(chip.sprite_pointer(5U) == sprite5_base + 6U);
+    CHECK(chip.sprite_pointer(4U) == sprite4_base + 6U);
 }
 
 TEST_CASE("agnus display DMA stealing first zero-height reload word preserves next pointer",
@@ -1724,7 +1755,7 @@ TEST_CASE("agnus one-plane left-extended display DMA leaves high sprite slots op
     CHECK(frame.pixels[4] == 0x00FF0000U);
 }
 
-TEST_CASE("agnus six-plane left-extended display DMA steals high sprite DMA slots", "[agnus]") {
+TEST_CASE("agnus six-plane left-extended display DMA steals high sprite DMA words", "[agnus]") {
     agnus chip;
     std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
     std::vector<std::uint8_t> palette(agnus::palette_entries * 2U, 0U);
@@ -1759,9 +1790,9 @@ TEST_CASE("agnus six-plane left-extended display DMA steals high sprite DMA slot
     chip.tick(frame_ticks);
     const auto frame = chip.framebuffer();
 
-    CHECK(frame.pixels[0] == 0x0000FF00U);
+    CHECK(frame.pixels[0] == 0x00000000U);
     CHECK(frame.pixels[4] == 0x00000000U);
-    CHECK(chip.sprite_pointer(5U) == sprite5_base + 12U);
+    CHECK(chip.sprite_pointer(5U) == sprite5_base + 4U);
     CHECK(chip.sprite_pointer(7U) == sprite7_base + 4U);
 }
 
@@ -1769,28 +1800,28 @@ TEST_CASE("agnus display DMA stealing second sprite data word preserves next poi
     agnus chip;
     std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
     std::vector<std::uint8_t> palette(agnus::palette_entries * 2U, 0U);
-    set_palette_word(palette, 25U, 0x00F0U); // SPR5 value 1 if both words arrive.
+    set_palette_word(palette, 25U, 0x00F0U); // SPR4 value 1 if both words arrive.
 
-    constexpr std::uint32_t sprite5_base = 0x300U;
-    write_word(chip_ram, sprite5_base + 0U, sprite_pos(0U, 0U));
-    write_word(chip_ram, sprite5_base + 2U, sprite_ctl(0U, 0U, 1U));
-    write_word(chip_ram, sprite5_base + 4U, 0x8000U);
-    write_word(chip_ram, sprite5_base + 6U, 0x0000U);
-    write_word(chip_ram, sprite5_base + 8U, 0x0000U);
-    write_word(chip_ram, sprite5_base + 10U, 0x0000U);
+    constexpr std::uint32_t sprite4_base = 0x300U;
+    write_word(chip_ram, sprite4_base + 0U, sprite_pos(0U, 0U));
+    write_word(chip_ram, sprite4_base + 2U, sprite_ctl(0U, 0U, 1U));
+    write_word(chip_ram, sprite4_base + 4U, 0x8000U);
+    write_word(chip_ram, sprite4_base + 6U, 0x0000U);
+    write_word(chip_ram, sprite4_base + 8U, 0x0000U);
+    write_word(chip_ram, sprite4_base + 10U, 0x0000U);
 
     chip.attach_chip_ram(chip_ram);
     chip.attach_palette(palette);
     program_full_window(chip, 0x6000U);
-    chip.set_ddfstrt(0x001EU); // SPR5 DATA slot is open, DATB is display-owned.
-    chip.set_sprite_pointer(5U, sprite5_base);
+    chip.set_ddfstrt(0x0018U); // SPR4 DATA slot is open, DATB is display-owned.
+    chip.set_sprite_pointer(4U, sprite4_base);
     chip.write_dmacon(static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen |
                                                  agnus::dmacon_bplen | agnus::dmacon_spren));
 
     chip.tick(frame_ticks);
 
     CHECK(chip.framebuffer().pixels[0] == 0x00000000U);
-    CHECK(chip.sprite_pointer(5U) == sprite5_base + 6U);
+    CHECK(chip.sprite_pointer(4U) == sprite4_base + 6U);
 }
 
 TEST_CASE("agnus display DMA steals a sprite stop-line control reload", "[agnus]") {
@@ -1830,7 +1861,7 @@ TEST_CASE("agnus display DMA stealing second sprite control word preserves next 
     agnus chip;
     std::vector<std::uint8_t> chip_ram(512U * 1024U, 0U);
 
-    constexpr std::uint32_t sprite5_base = 0x340U;
+    constexpr std::uint32_t sprite4_base = 0x340U;
     constexpr std::uint32_t beam_y = agnus::display_line_origin - 1U;
     constexpr std::uint32_t stop_y = agnus::display_line_origin;
     constexpr std::uint32_t beam_x = agnus::sprite_hstart_origin;
@@ -1839,25 +1870,25 @@ TEST_CASE("agnus display DMA stealing second sprite control word preserves next 
     const auto ctl = static_cast<std::uint16_t>(
         ((stop_y & 0xFFU) << 8U) | ((beam_x & 0x01U) != 0U ? 0x0001U : 0U) |
         ((stop_y & 0x100U) != 0U ? 0x0002U : 0U) | ((beam_y & 0x100U) != 0U ? 0x0004U : 0U));
-    write_word(chip_ram, sprite5_base + 0U, pos);
-    write_word(chip_ram, sprite5_base + 2U, ctl);
-    write_word(chip_ram, sprite5_base + 4U, 0x8000U);
-    write_word(chip_ram, sprite5_base + 6U, 0x0000U);
-    write_word(chip_ram, sprite5_base + 8U, sprite_pos(1U, 0U));
-    write_word(chip_ram, sprite5_base + 10U, sprite_ctl(1U, 0U, 1U));
-    write_word(chip_ram, sprite5_base + 12U, 0x0000U);
-    write_word(chip_ram, sprite5_base + 14U, 0x0000U);
+    write_word(chip_ram, sprite4_base + 0U, pos);
+    write_word(chip_ram, sprite4_base + 2U, ctl);
+    write_word(chip_ram, sprite4_base + 4U, 0x8000U);
+    write_word(chip_ram, sprite4_base + 6U, 0x0000U);
+    write_word(chip_ram, sprite4_base + 8U, sprite_pos(1U, 0U));
+    write_word(chip_ram, sprite4_base + 10U, sprite_ctl(1U, 0U, 1U));
+    write_word(chip_ram, sprite4_base + 12U, 0x0000U);
+    write_word(chip_ram, sprite4_base + 14U, 0x0000U);
 
     chip.attach_chip_ram(chip_ram);
     program_full_window(chip, 0x6000U);
-    chip.set_ddfstrt(0x001EU); // SPR5 POS reload slot is open, CTL is display-owned.
-    chip.set_sprite_pointer(5U, sprite5_base);
+    chip.set_ddfstrt(0x0018U); // SPR4 POS reload slot is open, CTL is display-owned.
+    chip.set_sprite_pointer(4U, sprite4_base);
     chip.write_dmacon(static_cast<std::uint16_t>(agnus::dmacon_set | agnus::dmacon_dmaen |
                                                  agnus::dmacon_bplen | agnus::dmacon_spren));
 
     chip.tick(frame_ticks);
 
-    CHECK(chip.sprite_pointer(5U) == sprite5_base + 10U);
+    CHECK(chip.sprite_pointer(4U) == sprite4_base + 10U);
 }
 
 TEST_CASE("agnus sprite DMA still owns a high slot when display steals its neighbor", "[agnus]") {
