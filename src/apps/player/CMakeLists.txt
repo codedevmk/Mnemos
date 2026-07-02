@@ -62,6 +62,7 @@ mnemos_apply_common_target_options(mnemos_apps_player_text_overlay PUBLIC)
 add_library(
     mnemos_apps_player_core STATIC
     adapter_link.cpp
+    amiga_ipf_caps.cpp
     headless_commands.cpp
     player_audio.cpp
     system_launch.cpp
@@ -118,6 +119,7 @@ target_link_libraries(
         mnemos::chips::storage::msx_cassette
         mnemos::chips::storage::wd1793
         mnemos::debug::dump
+        ${CMAKE_DL_LIBS}
 )
 mnemos_apply_common_target_options(mnemos_apps_player_core PUBLIC)
 mnemos_declare_tier(

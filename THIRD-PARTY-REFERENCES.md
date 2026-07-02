@@ -78,6 +78,11 @@ multiple independent open-source implementations.
   checked against the MSX2 Technical Handbook / MSX Datapack references; the
   V9938 register, palette, status, and display-mode model is derived from the
   Yamaha V9938 MSX-VIDEO Technical Data Book. No emulator source was copied.
+- **SPS/CAPS IPF Access API** — Amiga IPF floppy launch support uses a native
+  dynamic bridge shaped by the Software Preservation Society's Access API
+  headers and reference documentation. The CAPSImg decoder library itself is
+  not vendored, linked at build time, or redistributed by Mnemos; users supply
+  it locally when they want IPF media support.
 - **Konami 051649 / SCC** — SCC wavetable-channel count, 32-byte waveform RAM,
   12-bit frequency, 4-bit volume, channel-enable register, and original-SCC
   shared waveform for channels 4/5 checked against public MSX hardware notes

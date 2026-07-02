@@ -64,11 +64,15 @@ Currently wired:
   aggregated in command-line order, so separate Boot/Extras archives or
   per-disk game archives mount as one disk set. The current floppy path accepts
   standard 901,120-byte DD ADF images and supported `UAE-1ADF` extended ADF
-  images with normal AmigaDOS tracks or raw MFM tracks. IPF floppy images and
-  HDF/HDZ hard-drive images are recognized as Amiga media classes, but still
-  fail with explicit unsupported-media errors until the IPF decoder and
-  hard-drive controller paths are implemented. Extended ADF overtrack payloads
-  are also rejected as unsupported media.
+  images with normal AmigaDOS tracks or raw MFM tracks. IPF floppy images are
+  decoded through the SPS/CAPS Access API when the user supplies the CAPSImg
+  library separately. Set `MNEMOS_AMIGA_CAPSIMG_DLL` or `MNEMOS_CAPSIMG_DLL` to
+  the library path, place `CAPSImg.dll` / `CAPSImg_x64.dll` in
+  `MNEMOS_AMIGA_BIOS_DIR`, or put the library beside `mnemos_player`. Mnemos
+  does not vendor or redistribute the SPS library. HDF/HDZ hard-drive images are
+  recognized as Amiga media classes, but still fail with explicit
+  unsupported-media errors until the hard-drive controller path is implemented.
+  Extended ADF overtrack payloads are also rejected as unsupported media.
   `scripts/amiga/run-corpus-smoke.ps1 -RomDir <path>` scans only direct ADF/ADZ
   files and supported archives that expose direct ADF/ADZ entries or supported
   nested ZIP candidates. Complete filename-marked disk sets such as

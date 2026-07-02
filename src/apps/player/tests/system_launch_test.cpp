@@ -2142,9 +2142,14 @@ TEST_CASE("player launch treats a 7z-wrapped Amiga ADF disk set as disk media",
     fs::remove_all(dir);
 }
 
-TEST_CASE("player launch recognizes direct Amiga IPF images as unsupported media",
+TEST_CASE("player launch reports missing CAPS library for direct Amiga IPF images",
           "[apps][player][launch][amiga500][ipf]") {
-    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT",
+                    "MNEMOS_AMIGA_CAPSIMG_DLL", "MNEMOS_CAPSIMG_DLL",
+                    "MNEMOS_IPF_CAPSIMG_DLL", "MNEMOS_AMIGA_CAPSIMG",
+                    "MNEMOS_CAPSIMG", "MNEMOS_AMIGA_CAPSIMG_DIR",
+                    "MNEMOS_CAPSIMG_DIR", "MNEMOS_AMIGA_BIOS_DIR",
+                    "MNEMOS_AMIGA_KICKSTART_DIR"});
     const fs::path dir = unique_test_dir();
     const fs::path rom_path = dir / "kick13.rom";
     const fs::path disk_path = dir / "preserved.ipf";
@@ -2180,9 +2185,14 @@ TEST_CASE("player launch recognizes direct Amiga HDF images as unsupported media
     fs::remove_all(dir);
 }
 
-TEST_CASE("player launch rejects unsupported Amiga IPF images inside 7z archives",
+TEST_CASE("player launch reports missing CAPS library for Amiga IPF images inside 7z archives",
           "[apps][player][launch][amiga500][7z]") {
-    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT"});
+    scoped_env env({"MNEMOS_AMIGA500_KICKSTART", "MNEMOS_AMIGA500_KEYBOARD_LAYOUT",
+                    "MNEMOS_AMIGA_CAPSIMG_DLL", "MNEMOS_CAPSIMG_DLL",
+                    "MNEMOS_IPF_CAPSIMG_DLL", "MNEMOS_AMIGA_CAPSIMG",
+                    "MNEMOS_CAPSIMG", "MNEMOS_AMIGA_CAPSIMG_DIR",
+                    "MNEMOS_CAPSIMG_DIR", "MNEMOS_AMIGA_BIOS_DIR",
+                    "MNEMOS_AMIGA_KICKSTART_DIR"});
     const fs::path dir = unique_test_dir();
     const fs::path rom_path = dir / "kick13.rom";
     const fs::path disk_path = dir / "ipf-only.7z";

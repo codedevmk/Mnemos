@@ -80,9 +80,10 @@ and the `R#` cross-reference to the risk register where one exists.
 > paths are now aggregated and ADF-validated as one Amiga disk set for
 > multi-archive software such as Workbench Boot/Extras. The launch path now
 > rejects non-standard-size ADFs as unsupported instead of silently falling back
-> to a Kickstart-only boot;
-> extended/raw/IPF track-image support remains a compatibility gap. Floppy
-> write/decode and exact sub-byte bitcell timing are simplified, and major OCS/ECS features remain partial (exact blitter bus
+> to a Kickstart-only boot; extended ADF raw-track images and user-supplied
+> CAPSImg-backed IPF images now mount through the Amiga floppy path. Floppy
+> write/decode, overtrack media, CAPS density/weak-bit fidelity, and exact
+> sub-byte bitcell timing are still simplified, and major OCS/ECS features remain partial (exact blitter bus
 > timing, exact sprite DMA bus-slot/hires edge-priority behavior,
 > non-saturated display DMA contention, exact non-nasty blitter/display CPU slot arbitration,
 > and remaining Copper/display bus arbitration and bitplane timing). Follow-ups in the same branch wire an adapter-level
