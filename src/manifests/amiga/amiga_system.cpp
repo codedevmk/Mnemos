@@ -921,7 +921,6 @@ namespace mnemos::manifests::amiga {
                 value = static_cast<std::uint16_t>(value | 0x1000U);
             }
             disk_byte_valid = false;
-            disk_sync_match = false;
             return value;
         }
         case reg_intenar:
@@ -1945,10 +1944,10 @@ namespace mnemos::manifests::amiga {
 
     bool amiga_system::accept_floppy_bit(std::uint8_t bit) noexcept {
         disk_shift = static_cast<std::uint16_t>((disk_shift << 1U) | (bit & 0x01U));
-        if (disk_shift != disk_sync) {
+        disk_sync_match = disk_shift == disk_sync;
+        if (!disk_sync_match) {
             return false;
         }
-        disk_sync_match = true;
         if ((disk_adkcon & adkcon_wordsync) != 0U) {
             request_interrupt(int_dsksyn);
         }
@@ -2031,8 +2030,8 @@ namespace mnemos::manifests::amiga {
         disk_data = static_cast<std::uint16_t>((disk_data << 8U) | drive->stream_write_latch);
         disk_shift = static_cast<std::uint16_t>((disk_shift << 8U) | drive->stream_write_latch);
         disk_byte_valid = true;
-        if (disk_shift == disk_sync) {
-            disk_sync_match = true;
+        disk_sync_match = disk_shift == disk_sync;
+        if (disk_sync_match) {
             if ((disk_adkcon & adkcon_wordsync) != 0U) {
                 request_interrupt(int_dsksyn);
             }

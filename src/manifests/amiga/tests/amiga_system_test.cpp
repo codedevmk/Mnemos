@@ -1728,7 +1728,7 @@ TEST_CASE("amiga500 WORDSYNC disk DMA finds DSKSYNC at bit granularity",
     CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
 }
 
-TEST_CASE("amiga500 WORDSYNC disk DMA can start from a latched DSKSYN",
+TEST_CASE("amiga500 WORDSYNC disk DMA waits for a fresh DSKSYNC match",
           "[manifests][amiga500][disk]") {
     auto sys = assemble_amiga(tiny_kickstart());
     REQUIRE(sys != nullptr);
@@ -1745,6 +1745,12 @@ TEST_CASE("amiga500 WORDSYNC disk DMA can start from a latched DSKSYN",
     drive.track_stream[3] = 0xBBU;
     drive.track_stream[4] = 0xCCU;
     drive.track_stream[5] = 0xDDU;
+    drive.track_stream[6] = 0x44U;
+    drive.track_stream[7] = 0x89U;
+    drive.track_stream[8] = 0x12U;
+    drive.track_stream[9] = 0x34U;
+    drive.track_stream[10] = 0x56U;
+    drive.track_stream[11] = 0x78U;
     reset_floppy_stream_phase(drive);
 
     sys->write_custom_word(0x020U, 0x0000U);
@@ -1755,21 +1761,32 @@ TEST_CASE("amiga500 WORDSYNC disk DMA can start from a latched DSKSYN",
                            static_cast<std::uint16_t>(amiga_system::setclr_bit |
                                                       agnus::dmacon_dmaen | agnus::dmacon_dsken));
 
-    run_scanlines(*sys, 2U);
+    for (std::size_t bit = 0U; bit < 16U; ++bit) {
+        static_cast<void>(sys->shift_floppy_read_bit());
+    }
     REQUIRE(sys->disk_sync_match);
     REQUIRE((sys->read_custom_word(0x01EU) & amiga_system::int_dsksyn) != 0U);
+    for (std::size_t bit = 0U; bit < 8U; ++bit) {
+        static_cast<void>(sys->shift_floppy_read_bit());
+    }
+    REQUIRE_FALSE(sys->disk_sync_match);
 
     constexpr std::uint16_t words_to_read = 2U;
     const std::uint16_t dsklen = static_cast<std::uint16_t>(0x8000U | words_to_read);
     sys->write_custom_word(0x024U, dsklen);
     sys->write_custom_word(0x024U, dsklen);
-    CHECK_FALSE(sys->disk_wordsync_waiting);
+    CHECK(sys->disk_wordsync_waiting);
+    CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) == 0U);
 
-    run_scanlines(*sys, 4U);
-    CHECK(sys->chip_ram[0x0660U] == 0xAAU);
-    CHECK(sys->chip_ram[0x0661U] == 0xBBU);
-    CHECK(sys->chip_ram[0x0662U] == 0xCCU);
-    CHECK(sys->chip_ram[0x0663U] == 0xDDU);
+    for (std::uint32_t line = 0U;
+         line < lines_per_revolution && sys->disk_dma_bytes_remaining != 0U; ++line) {
+        run_scanlines(*sys, 1U);
+    }
+    REQUIRE(sys->disk_dma_bytes_remaining == 0U);
+    CHECK(sys->chip_ram[0x0660U] == 0x12U);
+    CHECK(sys->chip_ram[0x0661U] == 0x34U);
+    CHECK(sys->chip_ram[0x0662U] == 0x56U);
+    CHECK(sys->chip_ram[0x0663U] == 0x78U);
     CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
 }
 
@@ -1789,7 +1806,6 @@ TEST_CASE("amiga500 DSKSYN interrupt requires ADKCON WORDSYNC",
     reset_floppy_stream_phase(drive);
 
     run_scanlines(*sys, 2U);
-    CHECK((sys->read_custom_word(0x01AU) & 0x1000U) != 0U);
     CHECK((sys->read_custom_word(0x01EU) & amiga_system::int_dsksyn) == 0U);
 
     reset_floppy_stream_phase(sys->floppy_drives[0]);
@@ -1863,6 +1879,61 @@ TEST_CASE("amiga500 WORDSYNC disk DMA preserves decodable AmigaDOS sectors",
 
     CHECK(decoded_count == amiga_system::floppy_sectors_per_track);
     CHECK(std::all_of(decoded.begin(), decoded.end(), [](bool found) { return found; }));
+}
+
+TEST_CASE("amiga500 WORDSYNC disk DMA releases after a cylinder-one seek",
+          "[manifests][amiga500][disk]") {
+    auto adf = tiny_adf();
+    constexpr std::size_t track_index = 2U;
+    const std::size_t track_base =
+        track_index * amiga_system::floppy_sectors_per_track * amiga_system::floppy_sector_size;
+    for (std::uint8_t sector = 0U; sector < amiga_system::floppy_sectors_per_track; ++sector) {
+        const std::size_t base =
+            track_base + static_cast<std::size_t>(sector) * amiga_system::floppy_sector_size;
+        for (std::size_t i = 0U; i < amiga_system::floppy_sector_size; ++i) {
+            adf[base + i] = static_cast<std::uint8_t>((0x80U + sector * 7U + i) & 0xFFU);
+        }
+    }
+
+    auto sys = assemble_amiga(tiny_kickstart());
+    REQUIRE(sys != nullptr);
+    REQUIRE(sys->mount_floppy(adf));
+    select_df0(*sys);
+
+    run_scanlines(*sys, 60U);
+    sys->cia_b.write(0x01U, 0x74U); // Step inward while DF0 stays selected and motor-on.
+    sys->cia_b.write(0x01U, 0x75U);
+    REQUIRE(sys->floppy_cylinder() == 1U);
+    REQUIRE(sys->floppy_drives[0].track_stream_track_index == track_index);
+
+    constexpr std::uint32_t dma_base = 0x1406U;
+    constexpr std::uint16_t words_to_read = 0x1F40U;
+    constexpr std::uint16_t dsklen = static_cast<std::uint16_t>(0x8000U | words_to_read);
+
+    sys->write_custom_word(0x020U, static_cast<std::uint16_t>(dma_base >> 16U));
+    sys->write_custom_word(0x022U, static_cast<std::uint16_t>(dma_base));
+    sys->write_custom_word(0x07EU, 0x4489U);
+    sys->write_custom_word(0x09EU, static_cast<std::uint16_t>(amiga_system::setclr_bit | 0x1500U));
+    sys->write_custom_word(0x096U,
+                           static_cast<std::uint16_t>(amiga_system::setclr_bit |
+                                                      agnus::dmacon_dmaen | agnus::dmacon_dsken));
+    sys->write_custom_word(0x024U, dsklen);
+    sys->write_custom_word(0x024U, dsklen);
+    REQUIRE(sys->disk_wordsync_waiting);
+
+    run_scanlines(*sys, sys->floppy_index_lines_per_revolution() * 3U);
+    REQUIRE_FALSE(sys->disk_wordsync_waiting);
+    REQUIRE((sys->read_custom_word(0x01EU) & amiga_system::int_dskblk) != 0U);
+
+    bool saw_sync = false;
+    for (std::uint32_t offset = 0U; offset + 2U < static_cast<std::uint32_t>(words_to_read) * 2U;
+         ++offset) {
+        if (read_chip_word(*sys, dma_base + offset) == 0x4489U) {
+            saw_sync = true;
+            break;
+        }
+    }
+    CHECK(saw_sync);
 }
 
 TEST_CASE("amiga500 disk write DMA patches and saves the raw track stream",
