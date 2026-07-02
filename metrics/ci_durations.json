@@ -1,6 +1,6 @@
 {
   "schema": "mnemos-ci-durations/1",
-  "captured": "2026-07-01T05:03:00+00:00",
+  "captured": "2026-07-02T04:51:41+00:00",
   "window_days": 7,
   "runs": [
     {
@@ -239,18 +239,6 @@
     },
     {
       "id": 28360611339,
-      "event": "push",
-      "conclusion": "failure",
-      "seconds": 19
-    },
-    {
-      "id": 28082497906,
-      "event": "push",
-      "conclusion": "failure",
-      "seconds": 15
-    },
-    {
-      "id": 28080359314,
       "event": "push",
       "conclusion": "failure",
       "seconds": 19
